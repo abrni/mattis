@@ -55,12 +55,12 @@ fn run_go(board: &mut Board, go: uci::Go, search_tables: &mut SearchTables) {
         Color::Both => todo!(),
     };
 
-    let movestogo = go.movestogo.unwrap_or(40) as f64;
+    let movestogo = go.movestogo.unwrap_or(30) as f64;
     let (time, inc) = (time.or(go.movetime), inc.unwrap_or(0) as f64);
 
     let max_time = time
         .map(|t| t as f64)
-        .map(|t| (t + (movestogo * inc)) / movestogo - inc)
+        .map(|t| (t + (movestogo * inc)) / (movestogo / 3.0 * 2.0) - inc)
         .map(|t| Duration::from_micros((t * 1000.0) as u64));
 
     let params = SearchParams {
