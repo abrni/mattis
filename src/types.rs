@@ -151,51 +151,21 @@ impl Piece {
         Self::BlackKing,
     ];
 
-    pub const fn pawn(color: Color) -> Self {
-        match color {
-            Color::White => Self::WhitePawn,
-            Color::Black => Self::BlackPawn,
-            Color::Both => todo!(),
-        }
-    }
-
-    pub const fn knight(color: Color) -> Self {
-        match color {
-            Color::White => Self::WhiteKnight,
-            Color::Black => Self::BlackKnight,
-            Color::Both => todo!(),
-        }
-    }
-
-    pub const fn bishop(color: Color) -> Self {
-        match color {
-            Color::White => Self::WhiteBishop,
-            Color::Black => Self::BlackBishop,
-            Color::Both => todo!(),
-        }
-    }
-
-    pub const fn rook(color: Color) -> Self {
-        match color {
-            Color::White => Self::WhiteRook,
-            Color::Black => Self::BlackRook,
-            Color::Both => todo!(),
-        }
-    }
-
-    pub const fn queen(color: Color) -> Self {
-        match color {
-            Color::White => Self::WhiteQueen,
-            Color::Black => Self::BlackQueen,
-            Color::Both => todo!(),
-        }
-    }
-
-    pub const fn king(color: Color) -> Self {
-        match color {
-            Color::White => Self::WhiteKing,
-            Color::Black => Self::BlackKing,
-            Color::Both => todo!(),
+    pub fn new(ty: PieceType, color: Color) -> Self {
+        match (ty, color) {
+            (_, Color::Both) => panic!("cant create a piece with Color::BOTH"),
+            (PieceType::Pawn, Color::White) => Piece::WhitePawn,
+            (PieceType::Pawn, Color::Black) => Piece::BlackPawn,
+            (PieceType::Knight, Color::White) => Piece::WhiteKnight,
+            (PieceType::Knight, Color::Black) => Piece::BlackKnight,
+            (PieceType::Bishop, Color::White) => Piece::WhiteBishop,
+            (PieceType::Bishop, Color::Black) => Piece::BlackBishop,
+            (PieceType::Rook, Color::White) => Piece::WhiteRook,
+            (PieceType::Rook, Color::Black) => Piece::BlackRook,
+            (PieceType::Queen, Color::White) => Piece::WhiteQueen,
+            (PieceType::Queen, Color::Black) => Piece::BlackQueen,
+            (PieceType::King, Color::White) => Piece::WhiteKing,
+            (PieceType::King, Color::Black) => Piece::BlackKing,
         }
     }
 

@@ -1,7 +1,7 @@
 use crate::{
     bitboard::{BLACK_PAWN_PASSED_MASKS, FILE_BITBOARDS, ISOLATED_PAWN_MASKS, WHITE_PAWN_PASSED_MASKS},
     board::Board,
-    types::{Color, Piece, Square64},
+    types::{Color, Piece, PieceType, Square64},
 };
 
 // First and last entry should never be used, because pawns cant be on the first or last rank
@@ -48,19 +48,19 @@ pub fn evaluation(board: &Board) -> i16 {
         &KING_SQUARE_TABLE
     };
 
-    eval += my_fn(Piece::pawn(my_color), board, &PAWN_SQUARE_TABLE);
-    eval += my_fn(Piece::knight(my_color), board, &KNIGHT_SQUARE_TABLE);
-    eval += my_fn(Piece::bishop(my_color), board, &BISHOP_SQUARE_TABLE);
-    eval += my_fn(Piece::rook(my_color), board, &ROOK_SQUARE_TABLE);
-    eval += my_fn(Piece::queen(my_color), board, &QUEEN_SQUARE_TABLE);
-    eval += my_fn(Piece::king(my_color), board, my_king_table);
+    eval += my_fn(Piece::new(PieceType::Pawn, my_color), board, &PAWN_SQUARE_TABLE);
+    eval += my_fn(Piece::new(PieceType::Knight, my_color), board, &KNIGHT_SQUARE_TABLE);
+    eval += my_fn(Piece::new(PieceType::Bishop, my_color), board, &BISHOP_SQUARE_TABLE);
+    eval += my_fn(Piece::new(PieceType::Rook, my_color), board, &ROOK_SQUARE_TABLE);
+    eval += my_fn(Piece::new(PieceType::Queen, my_color), board, &QUEEN_SQUARE_TABLE);
+    eval += my_fn(Piece::new(PieceType::King, my_color), board, my_king_table);
 
-    eval -= op_fn(Piece::pawn(op_color), board, &PAWN_SQUARE_TABLE);
-    eval -= op_fn(Piece::knight(op_color), board, &KNIGHT_SQUARE_TABLE);
-    eval -= op_fn(Piece::bishop(op_color), board, &BISHOP_SQUARE_TABLE);
-    eval -= op_fn(Piece::rook(op_color), board, &ROOK_SQUARE_TABLE);
-    eval -= op_fn(Piece::queen(op_color), board, &QUEEN_SQUARE_TABLE);
-    eval -= op_fn(Piece::king(op_color), board, op_king_table);
+    eval -= op_fn(Piece::new(PieceType::Pawn, op_color), board, &PAWN_SQUARE_TABLE);
+    eval -= op_fn(Piece::new(PieceType::Knight, op_color), board, &KNIGHT_SQUARE_TABLE);
+    eval -= op_fn(Piece::new(PieceType::Bishop, op_color), board, &BISHOP_SQUARE_TABLE);
+    eval -= op_fn(Piece::new(PieceType::Rook, op_color), board, &ROOK_SQUARE_TABLE);
+    eval -= op_fn(Piece::new(PieceType::Queen, op_color), board, &QUEEN_SQUARE_TABLE);
+    eval -= op_fn(Piece::new(PieceType::King, op_color), board, op_king_table);
 
     // STEP 3: Apply penalties for isolated pawns & passed pawns
 
@@ -70,8 +70,8 @@ pub fn evaluation(board: &Board) -> i16 {
         Color::Both => unreachable!(),
     };
 
-    let bb_my_pawns = board.bitboards[Piece::pawn(my_color)];
-    let bb_op_pawns = board.bitboards[Piece::pawn(op_color)];
+    let bb_my_pawns = board.bitboards[Piece::new(PieceType::Pawn, my_color)];
+    let bb_op_pawns = board.bitboards[Piece::new(PieceType::Pawn, op_color)];
 
     for square in bb_my_pawns.iter_bit_indices() {
         if ISOLATED_PAWN_MASKS[square].intersection(bb_my_pawns).is_empty() {
@@ -96,7 +96,7 @@ pub fn evaluation(board: &Board) -> i16 {
     // STEP 4: Apply bonuses for rooks & queens on open files
     let bb_all_pawns = bb_my_pawns.union(bb_op_pawns);
 
-    for square in board.bitboards[Piece::rook(my_color)].iter_bit_indices() {
+    for square in board.bitboards[Piece::new(PieceType::Rook, my_color)].iter_bit_indices() {
         let file = square.file().unwrap();
         if bb_all_pawns.intersection(FILE_BITBOARDS[file]).is_empty() {
             eval += ROOK_ON_OPEN_FILE_BONUS;
@@ -105,7 +105,7 @@ pub fn evaluation(board: &Board) -> i16 {
         }
     }
 
-    for square in board.bitboards[Piece::rook(op_color)].iter_bit_indices() {
+    for square in board.bitboards[Piece::new(PieceType::Rook, op_color)].iter_bit_indices() {
         let file = square.file().unwrap();
         if bb_all_pawns.intersection(FILE_BITBOARDS[file]).is_empty() {
             eval -= ROOK_ON_OPEN_FILE_BONUS;
@@ -114,7 +114,7 @@ pub fn evaluation(board: &Board) -> i16 {
         }
     }
 
-    for square in board.bitboards[Piece::queen(my_color)].iter_bit_indices() {
+    for square in board.bitboards[Piece::new(PieceType::Queen, my_color)].iter_bit_indices() {
         let file = square.file().unwrap();
         if bb_all_pawns.intersection(FILE_BITBOARDS[file]).is_empty() {
             eval += QUEEN_ON_OPEN_FILE_BONUS;
@@ -123,7 +123,7 @@ pub fn evaluation(board: &Board) -> i16 {
         }
     }
 
-    for square in board.bitboards[Piece::queen(op_color)].iter_bit_indices() {
+    for square in board.bitboards[Piece::new(PieceType::Queen, op_color)].iter_bit_indices() {
         let file = square.file().unwrap();
         if bb_all_pawns.intersection(FILE_BITBOARDS[file]).is_empty() {
             eval -= QUEEN_ON_OPEN_FILE_BONUS;
@@ -133,11 +133,11 @@ pub fn evaluation(board: &Board) -> i16 {
     }
 
     // STEP 5: Apply a bonus for the bishop pair
-    if board.bitboards[Piece::bishop(my_color)].bit_count() >= 2 {
+    if board.bitboards[Piece::new(PieceType::Bishop, my_color)].bit_count() >= 2 {
         eval += BISHOP_PAIR_BONUS;
     }
 
-    if board.bitboards[Piece::bishop(op_color)].bit_count() >= 2 {
+    if board.bitboards[Piece::new(PieceType::Bishop, op_color)].bit_count() >= 2 {
         eval -= BISHOP_PAIR_BONUS;
     }
 
