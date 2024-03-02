@@ -453,6 +453,10 @@ impl CastlePerms {
     pub fn as_u8(self) -> u8 {
         self.0
     }
+
+    pub fn from_u8(v: u8) -> Self {
+        Self(v)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, FromPrimitive, IntoPrimitive)]

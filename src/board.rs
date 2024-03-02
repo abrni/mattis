@@ -1,7 +1,9 @@
+pub mod makemove;
 pub mod movegen;
 
 use crate::{
     bitboard::BitBoard,
+    moves::Move32,
     types::{CastlePerm, CastlePerms, Color, File, Piece, Rank, Square120, Square64},
 };
 use lazy_static::lazy_static;
@@ -11,17 +13,27 @@ use std::{fmt::Display, sync::Mutex};
 use thiserror::Error;
 
 lazy_static! {
-    static ref KEY_RNG: Mutex<StdRng> = Mutex::new(StdRng::seed_from_u64(0)); // always produce the same keys
+    pub static ref KEY_RNG: Mutex<StdRng> = Mutex::new(StdRng::seed_from_u64(0)); // always produce the same keys
 
-    static ref PIECE_KEYS: [[u64; 12]; 120] = [KEY_RNG.lock().unwrap().gen(); 120];
-    static ref COLOR_KEY: u64 = KEY_RNG.lock().unwrap().gen();
-    static ref CASTLE_KEYS: [u64; 16] = {
+    pub static ref PIECE_KEYS: [[u64; 12]; 120] = {
+        let mut rng = KEY_RNG.lock().unwrap();
+        let mut keys = [[0; 12]; 120];
+        keys.iter_mut().for_each(|l| *l = rng.gen());
+        keys
+    };
+    pub static ref COLOR_KEY: u64 = KEY_RNG.lock().unwrap().gen();
+    pub static ref CASTLE_KEYS: [u64; 16] = {
         let mut keys: [u64; 16]  = KEY_RNG.lock().unwrap().gen();
         // an unitialized board should always have position key 0
         keys[CastlePerms::NONE.as_u8() as usize] = 0;
         keys
     };
-    static ref EN_PASSANT_KEYS: [u64; 120] = [KEY_RNG.lock().unwrap().gen(); 120];
+    pub static ref EN_PASSANT_KEYS: [u64; 120] = {
+        let mut rng = KEY_RNG.lock().unwrap();
+        let mut keys = [0; 120];
+        keys.iter_mut().for_each(|k| *k = rng.gen());
+        keys
+    };
 }
 
 #[derive(Debug, Error)]
@@ -47,6 +59,16 @@ pub enum FenError {
     InvalidEnPassantSquare,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct HistoryEntry {
+    pub move32: Move32,
+    pub fifty_move: usize,
+    pub en_passant: Option<Square120>,
+    pub castle_perms: CastlePerms,
+    pub position_key: u64,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Board {
     pub pieces: [Option<Piece>; 120], // the main representation of pieces on the board
     pub color: Color,                 // the current active color
@@ -65,6 +87,8 @@ pub struct Board {
     pub count_major_pieces: [usize; 2], // counts the number of major pieces for both sides (rooks, queens, king)
     pub count_minor_pieces: [usize; 2], // counts the number of minor pieces for both sides (bishops, knights)
     pub material: [u32; 2],             // the material in centipawns for both sides
+
+    pub history: Vec<HistoryEntry>, // stores the board history
 }
 
 impl Board {
@@ -85,6 +109,7 @@ impl Board {
             count_major_pieces: [0; 2],
             count_minor_pieces: [0; 2],
             material: [0; 2],
+            history: vec![],
         }
     }
 
@@ -420,7 +445,10 @@ impl Board {
             }
         }
 
-        assert_eq!(check_bitboards, self.bitboards);
+        for (check_bb, bb) in check_bitboards.iter().zip(self.bitboards.iter()) {
+            assert_eq!(check_bb, bb);
+        }
+
         assert_eq!(check_bb_all_pieces, self.bb_all_pieces);
         assert_eq!(check_count_pieces, self.count_pieces);
         assert_eq!(check_count_big_pieces, self.count_big_pieces);
@@ -490,7 +518,7 @@ impl Display for Board {
                         write!(f, " * en passant: -")?;
                     }
                 }
-                4 => write!(f, " * ply: {}", self.fifty_move)?,
+                4 => write!(f, " * ply: {}", self.ply)?,
                 3 => write!(f, " * fifty-move: {}", self.fifty_move)?,
                 2 => {
                     write!(f, " * castle permitions: ")?;
