@@ -176,7 +176,9 @@ pub fn alpha_beta(
         return quiescence(alpha, beta, board, stats, tables);
     }
 
-    if board.is_repetition() || board.fifty_move >= 100 {
+    stats.nodes += 1;
+
+    if board.ply >= 1 && (board.is_repetition() || board.fifty_move >= 100) {
         return 0;
     }
 
@@ -261,6 +263,11 @@ pub fn quiescence(
     tables: &mut SearchTables,
 ) -> i32 {
     stats.nodes += 1;
+
+    if board.is_repetition() || board.fifty_move >= 100 {
+        return 0;
+    }
+
     let standing_pat = evaluation(board);
     let in_check = board.in_check();
 
