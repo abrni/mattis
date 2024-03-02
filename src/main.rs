@@ -2,12 +2,12 @@ use std::{
     io::{BufRead, BufReader},
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc::{Receiver, Sender},
         Arc,
     },
     time::Duration,
 };
 
+use bus::{Bus, BusReader};
 use mattis::{
     board::Board,
     hashtable::TranspositionTable,
@@ -18,13 +18,20 @@ use mattis::{
 };
 
 const FEN_STARTPOS: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+const HASHTABLE_SIZE_MB: usize = 256;
 
 fn main() {
-    let (tx, thread_rx) = std::sync::mpsc::channel::<ThreadCommand>();
-    let (thread_tx, _rx) = std::sync::mpsc::channel::<ThreadAnswer>();
+    let mut bus = Bus::new(1024);
     let search_stop = Arc::new(AtomicBool::new(false));
-    let thread_search_stop = Arc::clone(&search_stop);
-    std::thread::spawn(|| search_thread(thread_rx, thread_tx, thread_search_stop));
+    let ttable = Arc::new(TranspositionTable::new(HASHTABLE_SIZE_MB));
+
+    for i in 0..16 {
+        let rx = bus.add_rx();
+        let search_stop = Arc::clone(&search_stop);
+        let ttable = Arc::clone(&ttable);
+        let is_primary = i == 0;
+        std::thread::spawn(move || search_thread(is_primary, rx, search_stop, ttable));
+    }
 
     let mut stdin = BufReader::new(std::io::stdin());
     let mut input = String::new();
@@ -40,14 +47,20 @@ fn main() {
 
         match message {
             GuiMessage::Uci => print_uci_info(),
-            GuiMessage::Ucinewgame => tx.send(ThreadCommand::NewGame).unwrap(),
+            GuiMessage::Ucinewgame => {
+                ttable.reset();
+                bus.broadcast(ThreadCommand::NewGame)
+            }
             GuiMessage::Isready => println!("{}", EngineMessage::Readyok),
-            GuiMessage::Position { pos, moves } => tx.send(ThreadCommand::SetupPosition(pos, moves)).unwrap(),
-            GuiMessage::Go(go) => tx.send(ThreadCommand::Go(go.clone())).unwrap(),
+            GuiMessage::Position { pos, moves } => bus.broadcast(ThreadCommand::SetupPosition(pos, moves)),
+            GuiMessage::Go(go) => {
+                ttable.next_age();
+                bus.broadcast(ThreadCommand::Go(go.clone()))
+            }
             GuiMessage::Stop => search_stop.store(true, Ordering::Release),
             GuiMessage::Quit => {
                 search_stop.store(true, Ordering::Release);
-                tx.send(ThreadCommand::Quit).unwrap();
+                bus.broadcast(ThreadCommand::Quit);
                 return;
             }
             _ => println!("This uci command is currently not supported."),
@@ -55,7 +68,7 @@ fn main() {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum ThreadCommand {
     Quit,
     SetupPosition(uci::Position, Vec<String>),
@@ -63,16 +76,16 @@ enum ThreadCommand {
     Go(uci::Go),
 }
 
-#[derive(Debug)]
-enum ThreadAnswer {}
-
-fn search_thread(rx: Receiver<ThreadCommand>, _tx: Sender<ThreadAnswer>, search_stop: Arc<AtomicBool>) {
-    const HASHTABLE_SIZE_MB: usize = 256;
-
+fn search_thread(
+    is_primary: bool,
+    mut rx: BusReader<ThreadCommand>,
+    search_stop: Arc<AtomicBool>,
+    ttable: Arc<TranspositionTable>,
+) {
     let mut board = Board::from_fen(FEN_STARTPOS).unwrap();
 
     let mut search_tables = SearchTables {
-        transposition_table: TranspositionTable::new(HASHTABLE_SIZE_MB),
+        transposition_table: ttable,
         search_killers: vec![[Move32::default(); 2]; 1024],
         search_history: [[0; 64]; 12],
     };
@@ -83,14 +96,13 @@ fn search_thread(rx: Receiver<ThreadCommand>, _tx: Sender<ThreadAnswer>, search_
         match command {
             ThreadCommand::Quit => return,
             ThreadCommand::SetupPosition(pos, moves) => setup_position(&mut board, pos, &moves),
-            ThreadCommand::Go(go) => run_go(&mut board, go, &mut search_tables, Arc::clone(&search_stop)),
-            ThreadCommand::NewGame => search_tables.transposition_table = TranspositionTable::new(HASHTABLE_SIZE_MB),
+            ThreadCommand::Go(go) => run_go(is_primary, &mut board, go, &mut search_tables, Arc::clone(&search_stop)),
+            ThreadCommand::NewGame => (),
         }
     }
 }
 
-fn run_go(board: &mut Board, go: uci::Go, search_tables: &mut SearchTables, stop: Arc<AtomicBool>) {
-    search_tables.transposition_table.next_age();
+fn run_go(print_output: bool, board: &mut Board, go: uci::Go, search_tables: &mut SearchTables, stop: Arc<AtomicBool>) {
     search_tables.search_history = [[0; 64]; 12];
     search_tables
         .search_killers
@@ -121,6 +133,7 @@ fn run_go(board: &mut Board, go: uci::Go, search_tables: &mut SearchTables, stop
 
     let mut bestmove = Move32::default();
     for stats in iterative_deepening(board, params, search_tables) {
+        bestmove = stats.bestmove;
         let info = EngineMessage::Info(uci::Info {
             depth: Some(stats.depth as u32),
             nodes: Some(stats.nodes as u32),
@@ -129,9 +142,10 @@ fn run_go(board: &mut Board, go: uci::Go, search_tables: &mut SearchTables, stop
             ..Default::default()
         });
 
-        println!("{info}");
-        println!("Ordering: {:.2}", stats.fhf as f64 / stats.fh as f64);
-        bestmove = stats.bestmove;
+        if print_output {
+            println!("{info}");
+            println!("Ordering: {:.2}", stats.fhf as f64 / stats.fh as f64);
+        }
     }
 
     // let hashfull = tptable.len() as f64 / tptable.capacity() as f64;
@@ -148,12 +162,14 @@ fn run_go(board: &mut Board, go: uci::Go, search_tables: &mut SearchTables, stop
     //
     // println!("{info}");
 
-    let bestmove = EngineMessage::Bestmove {
-        move_: format!("{bestmove}"),
-        ponder: None,
-    };
+    if print_output {
+        let bestmove = EngineMessage::Bestmove {
+            move_: format!("{bestmove}"),
+            ponder: None,
+        };
 
-    println!("{bestmove}");
+        println!("{bestmove}");
+    }
 }
 
 fn print_uci_info() {

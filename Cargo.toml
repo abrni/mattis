@@ -9,6 +9,7 @@ name = "perft_bench"
 harness = false
 
 [dependencies]
+bus = "2.4.1"
 criterion = { version = "0.5.1", features = ["html_reports"] }
 lazy_static = "1.4.0"
 num_enum = { version = "0.7.1", features = ["complex-expressions"] }

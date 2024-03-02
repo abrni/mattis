@@ -15,7 +15,7 @@ use std::{
 };
 
 pub struct SearchTables {
-    pub transposition_table: TranspositionTable,
+    pub transposition_table: Arc<TranspositionTable>,
     pub search_killers: Vec<[Move32; 2]>,
     pub search_history: [[u32; 64]; 12],
 }

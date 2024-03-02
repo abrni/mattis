@@ -2,7 +2,7 @@ use crate::{
     board::Board,
     moves::{Move16, Move32},
 };
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum HEKind {
@@ -59,7 +59,7 @@ pub struct TranspositionTable {
     data: Box<[Entry]>,
     capacity: usize,
     shift: u32,
-    current_age: u8,
+    current_age: AtomicU8,
 }
 
 impl TranspositionTable {
@@ -84,7 +84,14 @@ impl TranspositionTable {
             data,
             capacity,
             shift,
-            current_age: 0,
+            current_age: AtomicU8::new(0),
+        }
+    }
+
+    pub fn reset(&self) {
+        for entry in self.data.iter() {
+            entry.key.store(0, Ordering::Relaxed);
+            entry.data.store(0, Ordering::Relaxed);
         }
     }
 
@@ -93,6 +100,7 @@ impl TranspositionTable {
     }
 
     pub fn store(&self, position_key: u64, score: i16, m: Move16, depth: u16, kind: HEKind) {
+        let current_table_age = self.current_age.load(Ordering::Relaxed);
         let index = self.index(position_key);
         debug_assert!(index < self.capacity);
 
@@ -110,7 +118,7 @@ impl TranspositionTable {
         // - TODO: the old entry is corrupted by a data race
         // - the old entry is not from the current age
         // - the old entry has a lower depth than we are trying to write
-        let replace = entry_key == 0 || entry_data.age < self.current_age || entry_data.depth <= depth;
+        let replace = entry_key == 0 || entry_data.age < current_table_age || entry_data.depth <= depth;
         // TODO: What happens if current_age rolls over?
 
         if !replace {
@@ -122,7 +130,7 @@ impl TranspositionTable {
             m16: m,
             depth,
             kind,
-            age: self.current_age,
+            age: current_table_age,
         };
 
         table_entry.store(position_key, new_data);
@@ -159,8 +167,8 @@ impl TranspositionTable {
         }
     }
 
-    pub fn next_age(&mut self) {
-        self.current_age += 1;
+    pub fn next_age(&self) {
+        self.current_age.fetch_add(1, Ordering::Relaxed);
     }
 }
 
