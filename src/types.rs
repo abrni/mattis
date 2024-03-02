@@ -1,4 +1,25 @@
 use num_enum::{FromPrimitive, IntoPrimitive, TryFromPrimitive, UnsafeFromPrimitive};
+use std::ops::{Index, IndexMut};
+
+macro_rules! impl_array_indexing {
+    ($type:ty, $repr:ty, $len:expr) => {
+        impl<T> Index<$type> for [T; $len] {
+            type Output = T;
+
+            fn index(&self, index: $type) -> &Self::Output {
+                let index: $repr = index.into();
+                &self[index as usize]
+            }
+        }
+
+        impl<T> IndexMut<$type> for [T; $len] {
+            fn index_mut(&mut self, index: $type) -> &mut Self::Output {
+                let index: $repr = index.into();
+                &mut self[index as usize]
+            }
+        }
+    };
+}
 
 #[derive(
     Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive,
@@ -19,6 +40,8 @@ pub enum Piece {
     BlackKing,
 }
 
+impl_array_indexing!(Piece, u8, 12);
+
 #[derive(
     Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive,
 )]
@@ -28,6 +51,9 @@ pub enum Color {
     Black,
     Both,
 }
+
+impl_array_indexing!(Color, u8, 2);
+impl_array_indexing!(Color, u8, 3);
 
 #[derive(
     Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive,
@@ -44,6 +70,8 @@ pub enum File {
     H,
 }
 
+impl_array_indexing!(File, u8, 8);
+
 #[derive(
     Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive,
 )]
@@ -57,6 +85,46 @@ pub enum Rank {
     R6,
     R7,
     R8,
+}
+
+impl_array_indexing!(Rank, u8, 8);
+
+#[derive(
+    Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive,
+)]
+#[repr(u8)]
+pub enum CastlePerm {
+    WhiteKingside = 1,
+    WhiteQueenside = 2,
+    BlackKingside = 4,
+    BlackQueenside = 8,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Default)]
+pub struct CastlePerms(u8);
+
+impl CastlePerms {
+    pub const None: Self = Self(0);
+    pub const ALL: Self = Self(0x0F);
+
+    pub fn set(&mut self, perm: CastlePerm) {
+        let perm: u8 = perm.into();
+        self.0 |= perm;
+    }
+
+    pub fn clear(&mut self, perm: CastlePerm) {
+        let perm: u8 = perm.into();
+        self.0 &= !perm;
+    }
+
+    pub fn get(&self, perm: CastlePerm) -> bool {
+        let perm: u8 = perm.into();
+        (self.0 & perm) > 0
+    }
+
+    pub fn as_u8(self) -> u8 {
+        self.0
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, FromPrimitive, IntoPrimitive)]
@@ -74,6 +142,8 @@ pub enum Square120 {
     #[num_enum(default)]
     Invalid
 }
+
+impl_array_indexing!(Square120, usize, 120);
 
 impl Square120 {
     pub fn from_file_rank(file: File, rank: Rank) -> Self {
@@ -131,6 +201,8 @@ pub enum Square64 {
     #[num_enum(default)]
     Invalid
 }
+
+impl_array_indexing!(Square64, usize, 64);
 
 impl Square64 {
     pub fn from_file_rank(file: File, rank: Rank) -> Self {
