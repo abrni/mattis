@@ -125,6 +125,54 @@ impl Piece {
         Self::BlackKing,
     ];
 
+    pub fn pawn(color: Color) -> Self {
+        match color {
+            Color::White => Self::WhitePawn,
+            Color::Black => Self::BlackPawn,
+            Color::Both => todo!(),
+        }
+    }
+
+    pub fn knight(color: Color) -> Self {
+        match color {
+            Color::White => Self::WhiteKnight,
+            Color::Black => Self::BlackKnight,
+            Color::Both => todo!(),
+        }
+    }
+
+    pub fn bishop(color: Color) -> Self {
+        match color {
+            Color::White => Self::WhiteBishop,
+            Color::Black => Self::BlackBishop,
+            Color::Both => todo!(),
+        }
+    }
+
+    pub fn rook(color: Color) -> Self {
+        match color {
+            Color::White => Self::WhiteRook,
+            Color::Black => Self::BlackRook,
+            Color::Both => todo!(),
+        }
+    }
+
+    pub fn queen(color: Color) -> Self {
+        match color {
+            Color::White => Self::WhiteQueen,
+            Color::Black => Self::BlackQueen,
+            Color::Both => todo!(),
+        }
+    }
+
+    pub fn king(color: Color) -> Self {
+        match color {
+            Color::White => Self::WhiteKing,
+            Color::Black => Self::BlackKing,
+            Color::Both => todo!(),
+        }
+    }
+
     pub fn from_char(c: char) -> Option<Self> {
         match c {
             'P' => Some(Self::WhitePawn),
@@ -183,7 +231,7 @@ impl Piece {
         )
     }
 
-    pub fn value(self) -> u32 {
+    pub fn value(self) -> i32 {
         match self {
             Self::WhitePawn | Self::BlackPawn => 100,
             Self::WhiteKnight | Self::WhiteBishop | Self::BlackKnight | Self::BlackBishop => 325,
