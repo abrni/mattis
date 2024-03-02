@@ -237,7 +237,6 @@ impl Display for EngineMessage {
                 }
                 Ok(())
             }
-            _ => todo!(),
         }
     }
 }

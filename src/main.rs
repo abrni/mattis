@@ -2,7 +2,6 @@ use std::io::{BufRead, BufReader};
 
 use mattis::{
     board::Board,
-    moves::Move16,
     search::{iterative_deepening, SearchParams},
     tptable::TpTable,
     uci::{self, EngineMessage, GuiMessage, Id},
