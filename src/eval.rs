@@ -1,5 +1,5 @@
 use crate::{
-    bitboard::{BLACK_PAWN_PASSED_MASKS, ISOLATED_PAWN_MASKS, WHITE_PAWN_PASSED_MASKS},
+    bitboard::{BLACK_PAWN_PASSED_MASKS, FILE_BITBOARDS, ISOLATED_PAWN_MASKS, WHITE_PAWN_PASSED_MASKS},
     board::Board,
     types::{Color, Piece, Square64},
 };
@@ -8,7 +8,10 @@ use crate::{
 const PASSED_PAWN_BONUS: [i32; 8] = [0, 5, 10, 20, 35, 60, 100, 0];
 
 const ISOLATED_PAWN_PENALTY: i32 = -10;
-const ROOK_ON_OPEN_FILE_BONUS: i32 = 5;
+const ROOK_ON_OPEN_FILE_BONUS: i32 = 10;
+const ROOK_ON_SEMI_OPEN_FILE_BONUS: i32 = 5;
+const QUEEN_ON_OPEN_FILE_BONUS: i32 = 5;
+const QUEEN_ON_SEMI_OPEN_FILE_BONUS: i32 = 3;
 
 pub fn evaluation(board: &Board) -> i32 {
     if is_draw_by_material(board) {
@@ -80,6 +83,45 @@ pub fn evaluation(board: &Board) -> i32 {
 
         if op_passed_masks[square].intersection(bb_my_pawns).is_empty() {
             eval -= PASSED_PAWN_BONUS[square.rank().unwrap().mirrored()];
+        }
+    }
+
+    // STEP 4: Apply bonuses for rooks & queens on open files
+    let bb_all_pawns = bb_my_pawns.union(bb_op_pawns);
+
+    for square in board.bitboards[Piece::rook(my_color)].iter_bit_indices() {
+        let file = square.file().unwrap();
+        if bb_all_pawns.intersection(FILE_BITBOARDS[file]).is_empty() {
+            eval += ROOK_ON_OPEN_FILE_BONUS;
+        } else if bb_op_pawns.intersection(FILE_BITBOARDS[file]).is_empty() {
+            eval += ROOK_ON_SEMI_OPEN_FILE_BONUS;
+        }
+    }
+
+    for square in board.bitboards[Piece::rook(op_color)].iter_bit_indices() {
+        let file = square.file().unwrap();
+        if bb_all_pawns.intersection(FILE_BITBOARDS[file]).is_empty() {
+            eval -= ROOK_ON_OPEN_FILE_BONUS;
+        } else if bb_my_pawns.intersection(FILE_BITBOARDS[file]).is_empty() {
+            eval -= ROOK_ON_SEMI_OPEN_FILE_BONUS;
+        }
+    }
+
+    for square in board.bitboards[Piece::queen(my_color)].iter_bit_indices() {
+        let file = square.file().unwrap();
+        if bb_all_pawns.intersection(FILE_BITBOARDS[file]).is_empty() {
+            eval += QUEEN_ON_OPEN_FILE_BONUS;
+        } else if bb_op_pawns.intersection(FILE_BITBOARDS[file]).is_empty() {
+            eval += QUEEN_ON_SEMI_OPEN_FILE_BONUS;
+        }
+    }
+
+    for square in board.bitboards[Piece::queen(op_color)].iter_bit_indices() {
+        let file = square.file().unwrap();
+        if bb_all_pawns.intersection(FILE_BITBOARDS[file]).is_empty() {
+            eval -= QUEEN_ON_OPEN_FILE_BONUS;
+        } else if bb_my_pawns.intersection(FILE_BITBOARDS[file]).is_empty() {
+            eval -= QUEEN_ON_SEMI_OPEN_FILE_BONUS;
         }
     }
 
