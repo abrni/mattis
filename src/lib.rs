@@ -1,5 +1,5 @@
 #![allow(unused)]
 
-mod bitboard;
-mod board;
-mod types;
+pub mod bitboard;
+pub mod board;
+pub mod types;
