@@ -40,7 +40,7 @@ fn run_go(board: &mut Board, _go: uci::Go, tptable: &mut TpTable) {
     let params = SearchParams {
         max_time: None,
         max_nodes: None,
-        max_depth: Some(5),
+        max_depth: Some(7),
     };
 
     for stats in iterative_deepening(board, params, tptable) {
@@ -49,12 +49,13 @@ fn run_go(board: &mut Board, _go: uci::Go, tptable: &mut TpTable) {
             nodes: Some(stats.nodes as u32),
             pv: stats.pv.into_iter().map(|m| format!("{m}")).collect(),
             score: Some(uci::Score::Cp(stats.score)),
-            string: Some(format!(
-                "fhf/fh = {}/{}={:.2}",
-                stats.fhf,
-                stats.fh,
-                stats.fhf as f64 / stats.fh as f64
-            )),
+            ..Default::default()
+        });
+
+        println!("{info}");
+
+        let info = EngineMessage::Info(uci::Info {
+            string: Some(format!("fhf/fh={:.2}", stats.fhf as f64 / stats.fh as f64)),
             ..Default::default()
         });
 
@@ -65,6 +66,11 @@ fn run_go(board: &mut Board, _go: uci::Go, tptable: &mut TpTable) {
     let hashfull = (hashfull * 1000.0) as u32;
     let info = EngineMessage::Info(uci::Info {
         hashfull: Some(hashfull),
+        string: Some(format!(
+            "f {} c {}",
+            tptable.fill_level(),
+            tptable.collisions()
+        )),
         ..Default::default()
     });
 

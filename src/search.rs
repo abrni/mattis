@@ -1,4 +1,4 @@
-use crate::{board::Board, eval::evaluation, moves::Move32, tptable::TpTable};
+use crate::{board::Board, eval::evaluation, moves::Move32, tptable::TpTable, types::Piece};
 use std::time::{Duration, Instant};
 
 pub struct SearchParams {
@@ -88,11 +88,7 @@ pub fn alpha_beta(
 
     let mut moves = Vec::with_capacity(32); // TODO: reuse a preallocated vec
     board.generate_all_moves(&mut moves);
-
-    if let Some(m) = tptable.get(board.position_key) {
-        let pos = moves.iter().position(|m32| m32.m16 == m).unwrap();
-        moves.swap(0, pos);
-    }
+    moves.sort_by_key(|m| -score_move(*m, tptable, board));
 
     let mut new_best_move = None;
     let mut legal_moves = 0;
@@ -137,4 +133,21 @@ pub fn alpha_beta(
     }
 
     alpha
+}
+
+fn score_move(m: Move32, tptable: &TpTable, board: &Board) -> i32 {
+    if Some(m.m16) == tptable.get(board.position_key) {
+        1_000_000
+    } else if let Some(victim) = m.captured() {
+        //SAFETY: A chess move always moves a piece
+        let attacker = unsafe { board.pieces[m.m16.start()].unwrap_unchecked() };
+        mvv_lva(attacker, victim)
+    } else {
+        0
+    }
+}
+
+fn mvv_lva(attacker: Piece, victim: Piece) -> i32 {
+    const SCORES: [i32; Piece::ALL.len()] = [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6];
+    (SCORES[victim] << 3) - SCORES[attacker]
 }
