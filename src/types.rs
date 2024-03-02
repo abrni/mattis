@@ -58,6 +58,57 @@ impl Piece {
             _ => None,
         }
     }
+
+    pub fn is_big(self) -> bool {
+        !matches!(self, Self::BlackPawn | Self::WhitePawn)
+    }
+
+    pub fn is_major(self) -> bool {
+        matches!(
+            self,
+            Self::WhiteRook
+                | Self::WhiteQueen
+                | Self::WhiteKing
+                | Self::BlackRook
+                | Self::BlackQueen
+                | Self::BlackKing
+        )
+    }
+
+    pub fn is_minor(self) -> bool {
+        matches!(
+            self,
+            Self::WhiteBishop | Self::WhiteKnight | Self::BlackBishop | Self::BlackKnight
+        )
+    }
+
+    pub fn value(self) -> u32 {
+        match self {
+            Self::WhitePawn | Self::BlackPawn => 100,
+            Self::WhiteKnight | Self::WhiteBishop | Self::BlackKnight | Self::BlackBishop => 325,
+            Self::WhiteRook | Self::BlackRook => 550,
+            Self::WhiteQueen | Self::BlackQueen => 1000,
+            Self::WhiteKing | Self::BlackKing => 50_000,
+        }
+    }
+
+    pub fn color(self) -> Color {
+        match self {
+            Self::WhitePawn
+            | Self::WhiteKnight
+            | Self::WhiteBishop
+            | Self::WhiteRook
+            | Self::WhiteQueen
+            | Self::WhiteKing => Color::White,
+
+            Self::BlackPawn
+            | Self::BlackKnight
+            | Self::BlackBishop
+            | Self::BlackRook
+            | Self::BlackQueen
+            | Self::BlackKing => Color::Black,
+        }
+    }
 }
 
 impl_array_indexing!(Piece, u8, 12);

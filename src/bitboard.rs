@@ -37,6 +37,14 @@ impl BitBoard {
         }
     }
 
+    pub fn set_to(&mut self, idx: Square64, value: bool) {
+        if value {
+            self.set(idx)
+        } else {
+            self.clear(idx)
+        }
+    }
+
     pub fn clear(&mut self, idx: Square64) {
         let idx: usize = idx.into();
 

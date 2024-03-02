@@ -1,8 +1,11 @@
 use std::sync::Mutex;
 
-use crate::types::{CastlePerm, CastlePerms, Color, File, Piece, Rank, Square120};
+use crate::{
+    bitboard::BitBoard,
+    types::{CastlePerm, CastlePerms, Color, File, Piece, Rank, Square120, Square64},
+};
 use lazy_static::lazy_static;
-use num_enum::TryFromPrimitive;
+use num_enum::{FromPrimitive, TryFromPrimitive};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use thiserror::Error;
 
@@ -44,16 +47,22 @@ pub enum FenError {
 }
 
 pub struct Board {
-    pub pieces: [Option<Piece>; 120],
+    pub pieces: [Option<Piece>; 120], // the main representation of pieces on the board
+    pub color: Color,                 // the current active color
+    pub en_passant: Option<Square120>, // the current en passant square, if there is one
+    pub castle_perms: CastlePerms,    // the current castle permitions
 
-    pub king_square: [Square120; 2],
-    pub color: Color,
-    pub en_passant: Option<Square120>,
-    pub fifty_move: usize,
-    pub castle_perms: CastlePerms,
+    pub fifty_move: usize, // the amount of *halfmoves* (triggers the rule at 100) since a fifty-move-rule reset
+    pub ply: usize,        // the number of halfmoves since the start of the game (currently unused)
+    pub position_key: u64, // the current zobrist position key
 
-    pub ply: usize,
-    pub position_key: u64,
+    pub king_square: [Square120; 2], // the position of the white and black kings
+    pub bitboards: [BitBoard; 12],   // bitboards for each piece type
+    pub count_pieces: [usize; 12], // counts the number of pieces on the board fore each piece type
+    pub count_big_pieces: [usize; 2], // counts the number of big pieces for both sides (everything exept pawns)
+    pub count_major_pieces: [usize; 2], // counts the number of major pieces for both sides (rooks, queens, king)
+    pub count_minor_pieces: [usize; 2], // counts the number of minor pieces for both sides (bishops, knights)
+    pub material: [u32; 2],             // the material in centipawns for both sides
 }
 
 impl Board {
@@ -67,6 +76,12 @@ impl Board {
             castle_perms: CastlePerms::NONE,
             ply: 0,
             position_key: 0,
+            bitboards: [BitBoard::EMPTY; 12],
+            count_pieces: [0; 12],
+            count_big_pieces: [0; 2],
+            count_major_pieces: [0; 2],
+            count_minor_pieces: [0; 2],
+            material: [0; 2],
         }
     }
 
@@ -165,6 +180,40 @@ impl Board {
 
         board.position_key = board.generate_position_key();
         Ok(board)
+    }
+
+    pub fn update_redundant_data(&mut self) {
+        // clear all redundant data first
+        self.bitboards = [BitBoard::EMPTY; 12];
+        self.count_pieces = [0; 12];
+        self.count_big_pieces = [0; 2];
+        self.count_major_pieces = [0; 2];
+        self.count_minor_pieces = [0; 2];
+        self.material = [0; 2];
+
+        for i in 0..120 {
+            let square = Square120::from_primitive(i);
+            let piece = self.pieces[square];
+
+            if square == Square120::Invalid || piece.is_none() {
+                continue;
+            }
+
+            let piece = piece.unwrap(); // safe, because we test if it is none before
+            let sq64 = Square64::try_from(square).unwrap(); // safe, because we test if the quare is invalid before
+            let color = piece.color();
+
+            self.bitboards[piece].set(sq64);
+            self.count_pieces[piece] += 1;
+            self.count_big_pieces[color] += piece.is_big() as usize;
+            self.count_major_pieces[color] += piece.is_major() as usize;
+            self.count_minor_pieces[color] += piece.is_minor() as usize;
+            self.material[color] += piece.value();
+
+            if let Piece::WhiteKing | Piece::BlackKing = piece {
+                self.king_square[color] = square;
+            }
+        }
     }
 }
 
