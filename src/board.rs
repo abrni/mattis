@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::{fmt::Display, sync::Mutex};
 
 use crate::{
     bitboard::BitBoard,
@@ -215,11 +215,143 @@ impl Board {
             }
         }
     }
+
+    pub fn as_fen(&self) -> String {
+        let mut fen = String::new();
+
+        for rank in (0..8).rev() {
+            let rank = Rank::try_from_primitive(rank).unwrap();
+            let mut empty = 0;
+
+            for file in 0..8 {
+                let file = File::try_from_primitive(file).unwrap();
+                let sq = Square120::from_file_rank(file, rank);
+
+                if let Some(piece) = self.pieces[sq] {
+                    if empty > 0 {
+                        fen.push(char::from_digit(empty, 10).unwrap());
+                        empty = 0;
+                    }
+
+                    fen.push(piece.to_char());
+                } else {
+                    empty += 1;
+                }
+            }
+            if empty > 0 {
+                fen.push(char::from_digit(empty, 10).unwrap());
+            }
+
+            if rank != Rank::R1 {
+                fen.push('/');
+            }
+        }
+
+        fen.push(' ');
+        fen.push(self.color.to_char());
+        fen.push(' ');
+
+        if self.castle_perms == CastlePerms::NONE {
+            fen.push('-');
+        } else {
+            for p in [
+                CastlePerm::WhiteKingside,
+                CastlePerm::WhiteQueenside,
+                CastlePerm::BlackKingside,
+                CastlePerm::BlackQueenside,
+            ] {
+                if self.castle_perms.get(p) {
+                    fen.push(p.to_char());
+                }
+            }
+        }
+
+        fen.push(' ');
+
+        if let Some(sq) = self.en_passant {
+            fen.push(sq.file().unwrap().to_char()); // safe, because en passant square is never an invalid square
+            fen.push(sq.rank().unwrap().to_char());
+        } else {
+            fen.push('-');
+        }
+
+        // TODO: halfmove and fullmove clock
+        fen.push(' ');
+        fen.push('0');
+        fen.push(' ');
+        fen.push('0');
+
+        fen
+    }
 }
 
 impl Default for Board {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Display for Board {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !f.alternate() {
+            return write!(f, "{}", self.as_fen());
+        }
+
+        for rank in (0..8).rev() {
+            for file in 0..8 {
+                let rank = Rank::try_from_primitive(rank).unwrap();
+                let file = File::try_from_primitive(file).unwrap();
+                let sq = Square120::from_file_rank(file, rank);
+                let piece = self.pieces[sq];
+
+                if let Some(piece) = piece {
+                    write!(f, "{} ", piece.to_char())?;
+                } else {
+                    write!(f, ". ")?;
+                };
+            }
+
+            match rank {
+                6 => write!(f, " * active color: {}", self.color.to_char())?,
+                5 => {
+                    if let Some(sq) = self.en_passant {
+                        write!(
+                            f,
+                            " * en passant: {}{}",
+                            sq.file().unwrap().to_char(),
+                            sq.rank().unwrap().to_char()
+                        )?;
+                    } else {
+                        write!(f, " * en passant: -")?;
+                    }
+                }
+                4 => write!(f, " * ply: {}", self.fifty_move)?,
+                3 => write!(f, " * fifty-move: {}", self.fifty_move)?,
+                2 => {
+                    write!(f, " * castle permitions: ")?;
+                    if self.castle_perms == CastlePerms::NONE {
+                        write!(f, "-")?;
+                    } else {
+                        for p in [
+                            CastlePerm::WhiteKingside,
+                            CastlePerm::WhiteQueenside,
+                            CastlePerm::BlackKingside,
+                            CastlePerm::BlackQueenside,
+                        ] {
+                            if self.castle_perms.get(p) {
+                                write!(f, "{}", p.to_char());
+                            }
+                        }
+                    }
+                }
+                1 => write!(f, " * tpos key: {:#08x}", self.position_key)?,
+                _ => (),
+            }
+
+            writeln!(f)?;
+        }
+
+        Ok(())
     }
 }
 

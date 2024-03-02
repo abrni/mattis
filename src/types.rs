@@ -59,6 +59,23 @@ impl Piece {
         }
     }
 
+    pub fn to_char(self) -> char {
+        match self {
+            Self::WhitePawn => 'P',
+            Self::WhiteKnight => 'N',
+            Self::WhiteBishop => 'B',
+            Self::WhiteRook => 'R',
+            Self::WhiteQueen => 'Q',
+            Self::WhiteKing => 'K',
+            Self::BlackPawn => 'p',
+            Self::BlackKnight => 'n',
+            Self::BlackBishop => 'b',
+            Self::BlackRook => 'r',
+            Self::BlackQueen => 'q',
+            Self::BlackKing => 'k',
+        }
+    }
+
     pub fn is_big(self) -> bool {
         !matches!(self, Self::BlackPawn | Self::WhitePawn)
     }
@@ -131,6 +148,14 @@ impl Color {
             _ => None,
         }
     }
+
+    pub fn to_char(self) -> char {
+        match self {
+            Self::White => 'w',
+            Self::Black => 'b',
+            Self::Both => '-',
+        }
+    }
 }
 
 impl_array_indexing!(Color, u8, 2);
@@ -163,6 +188,19 @@ impl File {
             'g' => Some(Self::G),
             'h' => Some(Self::H),
             _ => None,
+        }
+    }
+
+    pub fn to_char(self) -> char {
+        match self {
+            Self::A => 'a',
+            Self::B => 'b',
+            Self::C => 'c',
+            Self::D => 'd',
+            Self::E => 'e',
+            Self::F => 'f',
+            Self::G => 'g',
+            Self::H => 'h',
         }
     }
 }
@@ -198,6 +236,19 @@ impl Rank {
             _ => None,
         }
     }
+
+    pub fn to_char(self) -> char {
+        match self {
+            Self::R1 => '1',
+            Self::R2 => '2',
+            Self::R3 => '3',
+            Self::R4 => '4',
+            Self::R5 => '5',
+            Self::R6 => '6',
+            Self::R7 => '7',
+            Self::R8 => '8',
+        }
+    }
 }
 
 impl_array_indexing!(Rank, u8, 8);
@@ -221,6 +272,15 @@ impl CastlePerm {
             'k' => Some(Self::BlackKingside),
             'q' => Some(Self::BlackQueenside),
             _ => None,
+        }
+    }
+
+    pub fn to_char(self) -> char {
+        match self {
+            Self::WhiteKingside => 'K',
+            Self::WhiteQueenside => 'Q',
+            Self::BlackKingside => 'k',
+            Self::BlackQueenside => 'q',
         }
     }
 }
