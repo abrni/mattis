@@ -11,7 +11,7 @@ It is heavily inspired by the [Vice Chess Engine](https://github.com/bluefeverso
 - Transposition Table
 - LazySMP
 - MVV/LVA Move Ordering
-- Search Killer and Search Histroy Heuristics
+- Search Killer and Search History Heuristics
 - Basic Evaluation using Piece-Square-Tables
 
 You can learn about these features on the [Chess Programming Wiki](https://www.chessprogramming.org)
