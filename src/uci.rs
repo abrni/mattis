@@ -1,5 +1,19 @@
 use std::fmt::Display;
 
+#[derive(Debug, thiserror::Error)]
+pub enum ParseError {
+    #[error("input text is empty")]
+    EmptyText,
+    #[error("unknown gui command")]
+    UnknownCommand,
+    #[error("debug must be set to `on` or `off`")]
+    DebugInvalid,
+    #[error("position must be `startpos` or `fen <fenstring>`")]
+    PositionInvalid,
+    #[error("go command contained an unknown setting")]
+    UnknownGoSetting,
+}
+
 #[derive(Debug)]
 pub enum GuiMessage {
     Uci,
@@ -41,8 +55,8 @@ pub enum Position {
 }
 
 impl GuiMessage {
-    pub fn parse(text: &str) -> Result<Self, ()> {
-        let (command, rest) = split_whitespace_once(text).ok_or(())?;
+    pub fn parse(text: &str) -> Result<Self, ParseError> {
+        let (command, rest) = split_whitespace_once(text).ok_or(ParseError::EmptyText)?;
 
         match command {
             "uci" => Ok(Self::Uci),
@@ -55,19 +69,19 @@ impl GuiMessage {
             "debug" => match rest.trim() {
                 "on" => Ok(Self::Debug(true)),
                 "off" => Ok(Self::Debug(false)),
-                _ => Err(()),
+                _ => Err(ParseError::DebugInvalid),
             },
             "position" => {
                 let (pos, moves) = parse_position(rest)?;
                 Ok(Self::Position { pos, moves })
             }
-            _ => Err(()),
+            _ => Err(ParseError::UnknownCommand),
         }
     }
 }
 
-fn parse_position(text: &str) -> Result<(Position, Vec<String>), ()> {
-    let (pos_kind, rest) = split_whitespace_once(text).ok_or(())?;
+fn parse_position(text: &str) -> Result<(Position, Vec<String>), ParseError> {
+    let (pos_kind, rest) = split_whitespace_once(text).ok_or(ParseError::PositionInvalid)?;
 
     let pos = match pos_kind {
         "startpos" => Position::Startpos,
@@ -76,7 +90,7 @@ fn parse_position(text: &str) -> Result<(Position, Vec<String>), ()> {
             let fen = if let Some((fen, _)) = split_moves { fen } else { rest };
             Position::Fen(fen.trim().to_owned())
         }
-        _ => return Err(()),
+        _ => return Err(ParseError::PositionInvalid),
     };
 
     let split_moves = rest.split_once("moves");
@@ -90,7 +104,7 @@ fn parse_position(text: &str) -> Result<(Position, Vec<String>), ()> {
 }
 
 impl Go {
-    pub fn parse<'a>(text: &str) -> Result<Self, ()> {
+    pub fn parse(text: &str) -> Result<Self, ParseError> {
         let mut go = Go::default();
         let mut parts = text.split_whitespace();
 
@@ -99,52 +113,52 @@ impl Go {
                 "ponder" => go.ponder = true,
                 "infinite" => go.infinite = true,
                 "wtime" => {
-                    let t = parts.next().ok_or(())?;
-                    let t = t.parse().map_err(|_| ())?;
+                    let t = parts.next().ok_or(ParseError::UnknownGoSetting)?;
+                    let t = t.parse().map_err(|_| ParseError::UnknownGoSetting)?;
                     go.wtime = Some(t);
                 }
                 "btime" => {
-                    let t = parts.next().ok_or(())?;
-                    let t = t.parse().map_err(|_| ())?;
+                    let t = parts.next().ok_or(ParseError::UnknownGoSetting)?;
+                    let t = t.parse().map_err(|_| ParseError::UnknownGoSetting)?;
                     go.btime = Some(t);
                 }
                 "winc" => {
-                    let t = parts.next().ok_or(())?;
-                    let t = t.parse().map_err(|_| ())?;
+                    let t = parts.next().ok_or(ParseError::UnknownGoSetting)?;
+                    let t = t.parse().map_err(|_| ParseError::UnknownGoSetting)?;
                     go.winc = Some(t);
                 }
                 "binc" => {
-                    let t = parts.next().ok_or(())?;
-                    let t = t.parse().map_err(|_| ())?;
+                    let t = parts.next().ok_or(ParseError::UnknownGoSetting)?;
+                    let t = t.parse().map_err(|_| ParseError::UnknownGoSetting)?;
                     go.binc = Some(t);
                 }
                 "movestogo" => {
-                    let t = parts.next().ok_or(())?;
-                    let t = t.parse().map_err(|_| ())?;
+                    let t = parts.next().ok_or(ParseError::UnknownGoSetting)?;
+                    let t = t.parse().map_err(|_| ParseError::UnknownGoSetting)?;
                     go.movestogo = Some(t);
                 }
                 "depth" => {
-                    let t = parts.next().ok_or(())?;
-                    let t = t.parse().map_err(|_| ())?;
+                    let t = parts.next().ok_or(ParseError::UnknownGoSetting)?;
+                    let t = t.parse().map_err(|_| ParseError::UnknownGoSetting)?;
                     go.depth = Some(t);
                 }
                 "nodes" => {
-                    let t = parts.next().ok_or(())?;
-                    let t = t.parse().map_err(|_| ())?;
+                    let t = parts.next().ok_or(ParseError::UnknownGoSetting)?;
+                    let t = t.parse().map_err(|_| ParseError::UnknownGoSetting)?;
                     go.nodes = Some(t);
                 }
                 "mate" => {
-                    let t = parts.next().ok_or(())?;
-                    let t = t.parse().map_err(|_| ())?;
+                    let t = parts.next().ok_or(ParseError::UnknownGoSetting)?;
+                    let t = t.parse().map_err(|_| ParseError::UnknownGoSetting)?;
                     go.mate = Some(t);
                 }
                 "movetime" => {
-                    let t = parts.next().ok_or(())?;
-                    let t = t.parse().map_err(|_| ())?;
+                    let t = parts.next().ok_or(ParseError::UnknownGoSetting)?;
+                    let t = t.parse().map_err(|_| ParseError::UnknownGoSetting)?;
                     go.movetime = Some(t);
                 }
                 "searchmoves" => todo!(),
-                _ => return Err(()),
+                _ => return Err(ParseError::UnknownGoSetting),
             }
         }
 
