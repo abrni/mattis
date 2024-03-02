@@ -1,5 +1,5 @@
 use crate::{
-    bitboard::RANK_BITBOARDS,
+    bitboard::{KNIGHT_MOVE_PATTERNS, RANK_BITBOARDS},
     moves::{Move16, Move16Builder, Move32},
     types::{Color, Piece, Rank, Square120, Square64},
 };
@@ -13,6 +13,7 @@ impl Board {
         self.generate_pawn_pushes(&mut list);
         self.generate_pawn_attacks(&mut list);
         self.generate_en_passant(&mut list);
+        self.generate_knight_moves(&mut list);
 
         list
     }
@@ -202,6 +203,27 @@ impl Board {
                     .finish(),
                 Some(captured_piece),
             ))
+        }
+    }
+
+    fn generate_knight_moves(&self, list: &mut Vec<Move32>) {
+        let knights = match self.color {
+            Color::Both => return,
+            Color::White => self.bitboards[Piece::WhiteKnight],
+            Color::Black => self.bitboards[Piece::BlackKnight],
+        };
+
+        for start in knights.iter_bit_indices() {
+            let targets = KNIGHT_MOVE_PATTERNS[start].without(self.bb_all_pieces[self.color]);
+
+            for end in targets.iter_bit_indices() {
+                let capture = self.pieces[Square120::try_from(end).unwrap()];
+
+                let m = Move16::build().start(start).end(end);
+                let m = if capture.is_some() { m.capture() } else { m };
+
+                list.push(Move32::new(m.finish(), capture));
+            }
         }
     }
 }
