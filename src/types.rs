@@ -40,6 +40,26 @@ pub enum Piece {
     BlackKing,
 }
 
+impl Piece {
+    pub fn from_char(c: char) -> Option<Self> {
+        match c {
+            'P' => Some(Self::WhitePawn),
+            'N' => Some(Self::WhiteKnight),
+            'B' => Some(Self::WhiteBishop),
+            'R' => Some(Self::WhiteRook),
+            'Q' => Some(Self::WhiteQueen),
+            'K' => Some(Self::WhiteKing),
+            'p' => Some(Self::BlackPawn),
+            'n' => Some(Self::BlackKnight),
+            'b' => Some(Self::BlackBishop),
+            'r' => Some(Self::BlackRook),
+            'q' => Some(Self::BlackQueen),
+            'k' => Some(Self::BlackKing),
+            _ => None,
+        }
+    }
+}
+
 impl_array_indexing!(Piece, u8, 12);
 
 #[derive(
@@ -50,6 +70,16 @@ pub enum Color {
     White,
     Black,
     Both,
+}
+
+impl Color {
+    pub fn from_char(c: char) -> Option<Self> {
+        match c {
+            'w' => Some(Self::White),
+            'b' => Some(Self::Black),
+            _ => None,
+        }
+    }
 }
 
 impl_array_indexing!(Color, u8, 2);
@@ -70,6 +100,22 @@ pub enum File {
     H,
 }
 
+impl File {
+    pub fn from_char(c: char) -> Option<Self> {
+        match c {
+            'a' => Some(Self::A),
+            'b' => Some(Self::B),
+            'c' => Some(Self::C),
+            'd' => Some(Self::D),
+            'e' => Some(Self::E),
+            'f' => Some(Self::F),
+            'g' => Some(Self::G),
+            'h' => Some(Self::H),
+            _ => None,
+        }
+    }
+}
+
 impl_array_indexing!(File, u8, 8);
 
 #[derive(
@@ -87,6 +133,22 @@ pub enum Rank {
     R8,
 }
 
+impl Rank {
+    pub fn from_char(c: char) -> Option<Self> {
+        match c {
+            '1' => Some(Self::R1),
+            '2' => Some(Self::R2),
+            '3' => Some(Self::R3),
+            '4' => Some(Self::R4),
+            '5' => Some(Self::R5),
+            '6' => Some(Self::R6),
+            '7' => Some(Self::R7),
+            '8' => Some(Self::R8),
+            _ => None,
+        }
+    }
+}
+
 impl_array_indexing!(Rank, u8, 8);
 
 #[derive(
@@ -98,6 +160,18 @@ pub enum CastlePerm {
     WhiteQueenside = 2,
     BlackKingside = 4,
     BlackQueenside = 8,
+}
+
+impl CastlePerm {
+    pub fn from_char(c: char) -> Option<Self> {
+        match c {
+            'K' => Some(Self::WhiteKingside),
+            'Q' => Some(Self::WhiteQueenside),
+            'k' => Some(Self::BlackKingside),
+            'q' => Some(Self::BlackQueenside),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Default)]
