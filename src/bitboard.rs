@@ -6,8 +6,8 @@ use crate::types::Square64;
 pub struct BitBoard(u64);
 
 impl BitBoard {
-    const EMPTY: Self = Self(0);
-    const FULL: Self = Self(u64::MAX);
+    pub const EMPTY: Self = Self(0);
+    pub const FULL: Self = Self(u64::MAX);
 
     pub const fn is_empty(self) -> bool {
         self.0 == 0
@@ -48,8 +48,8 @@ impl BitBoard {
     pub fn get(&self, idx: Square64) -> bool {
         let idx: usize = idx.into();
 
-        if let Some(v) = self.0.checked_shr(idx as u32) {
-            v > 0
+        if let Some(v) = 1u64.checked_shl(idx as u32) {
+            (self.0 & v) > 0
         } else {
             false
         }
