@@ -140,6 +140,9 @@ impl GuiMessage {
 
                 Ok(Self::Go(go))
             }
+            "stop" => Ok(GuiMessage::Stop),
+            "ponderhit" => Ok(GuiMessage::Ponderhit),
+            "quit" => Ok(GuiMessage::Quit),
             _ => Err(()),
         }
     }

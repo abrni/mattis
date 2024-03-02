@@ -37,12 +37,15 @@ fn main() {
 
         match message {
             GuiMessage::Uci => print_uci_info(),
+            GuiMessage::Ucinewgame => (),
             GuiMessage::Isready => println!("{}", EngineMessage::Readyok),
             GuiMessage::Position { pos, moves } => {
                 setup_position(&mut board, pos, &moves);
                 dbg!(evaluation(&board));
             }
             GuiMessage::Go(go) => run_go(&mut board, go, &mut search_tables),
+            // GuiMessage::Stop => todo!(),
+            GuiMessage::Quit => return,
             _ => println!("This uci command is currently not supported."),
         }
     }
