@@ -153,7 +153,7 @@ pub fn iterative_deepening<'a>(
 
         stats.score = score;
         stats.pv = pv_line(&tables.transposition_table, board);
-        stats.bestmove = stats.pv[0];
+        stats.bestmove = stats.pv.get(0).copied().unwrap_or_default();
 
         Some(stats.clone())
     })
