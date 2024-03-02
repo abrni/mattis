@@ -127,7 +127,16 @@ pub fn iterative_deepening<'a>(
             return None;
         };
 
-        let score = alpha_beta(-i32::MAX, i32::MAX, stats.depth, board, &params, &mut stats, tables);
+        let score = alpha_beta(
+            -i32::MAX,
+            i32::MAX,
+            stats.depth,
+            board,
+            &params,
+            &mut stats,
+            tables,
+            true,
+        );
 
         if stats.stop {
             return None;
@@ -141,6 +150,7 @@ pub fn iterative_deepening<'a>(
     })
 }
 
+#[allow(clippy::too_many_arguments)] // TODO: reduce the number of arguments into an args struct or something
 pub fn alpha_beta(
     mut alpha: i32,
     beta: i32,
@@ -149,6 +159,7 @@ pub fn alpha_beta(
     params: &SearchParams,
     stats: &mut SearchStats,
     tables: &mut SearchTables,
+    allow_null_move: bool,
 ) -> i32 {
     if stats.stop {
         return 0;
@@ -169,6 +180,20 @@ pub fn alpha_beta(
         return 0;
     }
 
+    if allow_null_move && !board.in_check() && board.ply != 0 && board.count_big_pieces[board.color] > 0 && depth >= 4 {
+        board.make_null_move();
+        let score = -alpha_beta(-beta, -alpha + 1, depth - 4, board, params, stats, tables, false);
+        board.take_null_move();
+
+        if stats.stop {
+            return 0;
+        }
+
+        if score >= beta {
+            return beta;
+        }
+    }
+
     let mut moves = Vec::with_capacity(32); // TODO: reuse a preallocated vec
     board.generate_all_moves(&mut moves);
     moves.sort_unstable_by_key(|m| -score_move(*m, tables, board));
@@ -184,7 +209,7 @@ pub fn alpha_beta(
         }
 
         legal_moves += 1;
-        let score = -alpha_beta(-beta, -alpha, depth - 1, board, params, stats, tables);
+        let score = -alpha_beta(-beta, -alpha, depth - 1, board, params, stats, tables, allow_null_move);
         board.take_move();
 
         if score >= beta {
