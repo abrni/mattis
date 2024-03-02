@@ -12,6 +12,7 @@ const ROOK_ON_OPEN_FILE_BONUS: i32 = 15;
 const ROOK_ON_SEMI_OPEN_FILE_BONUS: i32 = 10;
 const QUEEN_ON_OPEN_FILE_BONUS: i32 = 10;
 const QUEEN_ON_SEMI_OPEN_FILE_BONUS: i32 = 5;
+const BISHOP_PAIR_BONUS: i32 = 30;
 
 pub fn evaluation(board: &Board) -> i32 {
     if is_draw_by_material(board) {
@@ -129,6 +130,15 @@ pub fn evaluation(board: &Board) -> i32 {
         } else if bb_my_pawns.intersection(FILE_BITBOARDS[file]).is_empty() {
             eval -= QUEEN_ON_SEMI_OPEN_FILE_BONUS;
         }
+    }
+
+    // STEP 5: Apply a bonus for the bishop pair
+    if board.bitboards[Piece::bishop(my_color)].bit_count() >= 2 {
+        eval += BISHOP_PAIR_BONUS;
+    }
+
+    if board.bitboards[Piece::bishop(op_color)].bit_count() >= 2 {
+        eval -= BISHOP_PAIR_BONUS;
     }
 
     eval
