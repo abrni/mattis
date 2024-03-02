@@ -1,5 +1,5 @@
 use mattis::{board::Board, moves::Move32};
-use std::fs;
+use std::{fs, io::Write};
 
 #[derive(Debug, PartialEq, Eq, Clone, Default)]
 struct Statistics {
@@ -30,6 +30,7 @@ fn main() {
             let mut stats = Statistics::default();
 
             print!("Depth {depth}: expect {expected_leaves} leaves");
+            std::io::stdout().flush().unwrap();
 
             let mut lists = vec![Vec::with_capacity(32); 8];
             perft(&mut board, depth, &mut stats, lists.as_mut_slice());
