@@ -285,6 +285,102 @@ impl Board {
         fen
     }
 
+    pub fn is_square_attacked(&self, square: Square120, color: Color) -> bool {
+        if square == Square120::Invalid {
+            return false;
+        }
+
+        // attacked by white pawns?
+        if self.color == Color::White
+            && (self.pieces[square - 11usize] == Some(Piece::WhitePawn)
+                || self.pieces[square - 9usize] == Some(Piece::WhitePawn))
+        {
+            return true;
+        }
+
+        // attacked by black pawns?
+        if self.color == Color::Black
+            && (self.pieces[square + 11usize] == Some(Piece::BlackPawn)
+                || self.pieces[square + 9usize] == Some(Piece::BlackPawn))
+        {
+            return true;
+        }
+
+        // attacked by a knight?
+        const KNIGHT_DIRS: [isize; 8] = [-8, -19, -21, -12, 8, 19, 21, 12];
+        for dir in KNIGHT_DIRS {
+            let piece = self.pieces[square + dir];
+            if (piece == Some(Piece::WhiteKnight) && color == Color::White)
+                || (piece == Some(Piece::BlackKnight) && color == Color::Black)
+            {
+                return true;
+            }
+        }
+
+        // attacked by a rook or queen?
+        const ROOK_DIRS: [isize; 4] = [-1, -10, 1, 10];
+        for dir in ROOK_DIRS {
+            let mut temp_square = square + dir;
+
+            while temp_square != Square120::Invalid {
+                let mut piece = self.pieces[temp_square];
+
+                if piece.is_none() {
+                    temp_square += dir;
+                    continue;
+                }
+
+                if (matches!(piece, Some(Piece::WhiteRook | Piece::WhiteQueen))
+                    && color == Color::White)
+                    || (matches!(piece, Some(Piece::BlackRook | Piece::BlackQueen))
+                        && color == Color::Black)
+                {
+                    return true;
+                }
+
+                break;
+            }
+        }
+
+        // attacked by a bishop or queen?
+        const BISHOP_DIRS: [isize; 4] = [-9, -11, 9, 11];
+        for dir in BISHOP_DIRS {
+            let mut temp_square = square + dir;
+
+            while temp_square != Square120::Invalid {
+                let mut piece = self.pieces[temp_square];
+
+                if piece.is_none() {
+                    temp_square += dir;
+                    continue;
+                }
+
+                if (matches!(piece, Some(Piece::WhiteBishop | Piece::WhiteQueen))
+                    && color == Color::White)
+                    || (matches!(piece, Some(Piece::BlackBishop | Piece::BlackQueen))
+                        && color == Color::Black)
+                {
+                    return true;
+                }
+
+                break;
+            }
+        }
+
+        // attacked by a king?
+        const KING_DIRS: [isize; 8] = [-1, -10, 1, 10, -9, -11, 11, 9];
+        for dir in KING_DIRS {
+            let piece = self.pieces[square + dir];
+            if (piece == Some(Piece::WhiteKing) && color == Color::White)
+                || (piece == Some(Piece::BlackKing) && color == Color::Black)
+            {
+                return true;
+            }
+        }
+
+        false
+    }
+
     pub fn check_board_integrity(&self) {
         let mut check_bitboards = [BitBoard::EMPTY; 12];
         let mut check_count_pieces = [0; 12];

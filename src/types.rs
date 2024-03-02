@@ -1,5 +1,5 @@
 use num_enum::{FromPrimitive, IntoPrimitive, TryFromPrimitive, UnsafeFromPrimitive};
-use std::ops::{Index, IndexMut};
+use std::ops::{Add, AddAssign, Index, IndexMut, Sub, SubAssign};
 
 macro_rules! impl_array_indexing {
     ($type:ty, $repr:ty, $len:expr) => {
@@ -357,6 +357,66 @@ impl Square120 {
         let sq: usize = self.into();
         let rank = (sq - 21) / 10;
         unsafe { Some(Rank::unchecked_transmute_from(rank as u8)) }
+    }
+}
+
+impl Add<usize> for Square120 {
+    type Output = Square120;
+
+    fn add(self, rhs: usize) -> Self::Output {
+        let this: usize = self.into();
+        Self::from_primitive(this + rhs)
+    }
+}
+
+impl AddAssign<usize> for Square120 {
+    fn add_assign(&mut self, rhs: usize) {
+        *self = *self + rhs;
+    }
+}
+
+impl Sub<usize> for Square120 {
+    type Output = Square120;
+
+    fn sub(self, rhs: usize) -> Self::Output {
+        let this: usize = self.into();
+        Self::from_primitive(this - rhs)
+    }
+}
+
+impl SubAssign<usize> for Square120 {
+    fn sub_assign(&mut self, rhs: usize) {
+        *self = *self - rhs;
+    }
+}
+
+impl Add<isize> for Square120 {
+    type Output = Square120;
+
+    fn add(self, rhs: isize) -> Self::Output {
+        let this: usize = self.into();
+        Self::from_primitive((this as isize + rhs) as usize)
+    }
+}
+
+impl AddAssign<isize> for Square120 {
+    fn add_assign(&mut self, rhs: isize) {
+        *self = *self + rhs;
+    }
+}
+
+impl Sub<isize> for Square120 {
+    type Output = Square120;
+
+    fn sub(self, rhs: isize) -> Self::Output {
+        let this: usize = self.into();
+        Self::from_primitive((this as isize - rhs) as usize)
+    }
+}
+
+impl SubAssign<isize> for Square120 {
+    fn sub_assign(&mut self, rhs: isize) {
+        *self = *self - rhs;
     }
 }
 
