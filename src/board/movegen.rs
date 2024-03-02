@@ -1,6 +1,6 @@
 use crate::{
     bitboard::RANK_BITBOARDS,
-    moves::{Move16, Move32},
+    moves::{Move16, Move16Builder, Move32},
     types::{Color, Piece, Rank, Square120, Square64},
 };
 
@@ -36,10 +36,13 @@ impl Board {
             .intersection(RANK_BITBOARDS[Rank::R4]);
 
         for end in target_squares_single.iter_bit_indices() {
-            list.push(Move32::new(
-                Move16::build().start(end - 8usize).end(end).finish(),
-                None,
-            ));
+            let m16 = Move16::build().start(end - 8usize).end(end);
+
+            if end.rank().unwrap() == Rank::R8 {
+                insert_promotions(list, m16, Color::White, None);
+            } else {
+                list.push(Move32::new(m16.finish(), None));
+            }
         }
 
         for end in target_squares_double.iter_bit_indices() {
@@ -65,10 +68,13 @@ impl Board {
             .intersection(RANK_BITBOARDS[Rank::R5]);
 
         for end in target_squares_single.iter_bit_indices() {
-            list.push(Move32::new(
-                Move16::build().start(end + 8usize).end(end).finish(),
-                None,
-            ));
+            let m16 = Move16::build().start(end + 8usize).end(end);
+
+            if end.rank().unwrap() == Rank::R1 {
+                insert_promotions(list, m16, Color::Black, None);
+            } else {
+                list.push(Move32::new(m16.finish(), None));
+            }
         }
 
         for end in target_squares_double.iter_bit_indices() {
@@ -97,14 +103,14 @@ impl Board {
             .intersection(self.bb_all_pieces[Color::Black]);
 
         for end in targets_east.iter_bit_indices() {
-            list.push(Move32::new(
-                Move16::build()
-                    .start(end - 9usize)
-                    .end(end)
-                    .capture()
-                    .finish(),
-                self.pieces[Square120::try_from(end).unwrap()],
-            ))
+            let m16 = Move16::build().start(end - 9usize).end(end).capture();
+            let capture = self.pieces[Square120::try_from(end).unwrap()];
+
+            if end.rank().unwrap() == Rank::R8 {
+                insert_promotions(list, m16, Color::White, capture);
+            } else {
+                list.push(Move32::new(m16.finish(), capture));
+            }
         }
 
         let targets_west = self.bitboards[Piece::WhitePawn]
@@ -112,14 +118,14 @@ impl Board {
             .intersection(self.bb_all_pieces[Color::Black]);
 
         for end in targets_west.iter_bit_indices() {
-            list.push(Move32::new(
-                Move16::build()
-                    .start(end - 7usize)
-                    .end(end)
-                    .capture()
-                    .finish(),
-                self.pieces[Square120::try_from(end).unwrap()],
-            ))
+            let m16 = Move16::build().start(end - 7usize).end(end).capture();
+            let capture = self.pieces[Square120::try_from(end).unwrap()];
+
+            if end.rank().unwrap() == Rank::R8 {
+                insert_promotions(list, m16, Color::White, capture);
+            } else {
+                list.push(Move32::new(m16.finish(), capture));
+            }
         }
     }
 
@@ -129,14 +135,14 @@ impl Board {
             .intersection(self.bb_all_pieces[Color::White]);
 
         for end in targets_east.iter_bit_indices() {
-            list.push(Move32::new(
-                Move16::build()
-                    .start(end + 7usize)
-                    .end(end)
-                    .capture()
-                    .finish(),
-                self.pieces[Square120::try_from(end).unwrap()],
-            ))
+            let m16 = Move16::build().start(end + 7usize).end(end).capture();
+            let capture = self.pieces[Square120::try_from(end).unwrap()];
+
+            if end.rank().unwrap() == Rank::R1 {
+                insert_promotions(list, m16, Color::Black, capture);
+            } else {
+                list.push(Move32::new(m16.finish(), capture));
+            }
         }
 
         let targets_west = self.bitboards[Piece::BlackPawn]
@@ -144,14 +150,14 @@ impl Board {
             .intersection(self.bb_all_pieces[Color::White]);
 
         for end in targets_west.iter_bit_indices() {
-            list.push(Move32::new(
-                Move16::build()
-                    .start(end + 9usize)
-                    .end(end)
-                    .capture()
-                    .finish(),
-                self.pieces[Square120::try_from(end).unwrap()],
-            ))
+            let m16 = Move16::build().start(end + 9usize).end(end).capture();
+            let capture = self.pieces[Square120::try_from(end).unwrap()];
+
+            if end.rank().unwrap() == Rank::R1 {
+                insert_promotions(list, m16, Color::Black, capture);
+            } else {
+                list.push(Move32::new(m16.finish(), capture));
+            }
         }
     }
 
@@ -197,5 +203,38 @@ impl Board {
                 Some(captured_piece),
             ))
         }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+// UTILITY -------------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+
+fn insert_promotions(
+    list: &mut Vec<Move32>,
+    builder: Move16Builder,
+    color: Color,
+    capture: Option<Piece>,
+) {
+    let pieces = if color == Color::White {
+        [
+            Piece::WhiteKnight,
+            Piece::WhiteBishop,
+            Piece::WhiteRook,
+            Piece::WhiteQueen,
+        ]
+    } else {
+        [
+            Piece::BlackKnight,
+            Piece::BlackBishop,
+            Piece::BlackRook,
+            Piece::BlackQueen,
+        ]
+    };
+
+    for p in pieces {
+        list.push(Move32::new(builder.promote(p).finish(), capture));
     }
 }
