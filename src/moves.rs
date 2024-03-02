@@ -8,7 +8,7 @@ use std::fmt::{Debug, Display};
 /// 0000 0000 0000 XXXX 0000 0000 0000 0000  -  Captured Piece
 /// XXXX XXXX XXXX 0000 0000 0000 0000 0000  -  *Unused*
 /// ```
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(PartialEq, Eq, Clone, Copy, Hash)]
 pub struct Move32 {
     v: u16,
     pub m16: Move16,
@@ -31,6 +31,15 @@ impl Move32 {
         } else {
             unsafe { Some(Piece::unchecked_transmute_from(self.v as u8 - 1)) }
         }
+    }
+}
+
+impl Debug for Move32 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Move32")
+            .field("captured", &self.captured())
+            .field("m16", &self.m16)
+            .finish()
     }
 }
 
