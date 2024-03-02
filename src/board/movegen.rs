@@ -12,14 +12,24 @@ use crate::{
 use super::Board;
 
 impl Board {
+    pub fn generate_capture_moves(&self, list: &mut Vec<Move32>) {
+        self.generate_pawn_attacks(list);
+        self.generate_en_passant(list);
+
+        self.generate_knight_moves(list, true);
+        self.generate_bishop_queen_moves(list, true);
+        self.generate_rook_queen_moves(list, true);
+        self.generate_king_moves(list, true);
+    }
+
     pub fn generate_all_moves(&self, list: &mut Vec<Move32>) {
         self.generate_pawn_attacks(list);
         self.generate_en_passant(list);
         self.generate_pawn_pushes(list);
-        self.generate_knight_moves(list);
-        self.generate_bishop_queen_moves(list);
-        self.generate_rook_queen_moves(list);
-        self.generate_king_moves(list);
+        self.generate_knight_moves(list, false);
+        self.generate_bishop_queen_moves(list, false);
+        self.generate_rook_queen_moves(list, false);
+        self.generate_king_moves(list, false);
         self.generate_castling_moves(list);
     }
 
@@ -232,7 +242,7 @@ impl Board {
         }
     }
 
-    fn generate_knight_moves(&self, list: &mut Vec<Move32>) {
+    fn generate_knight_moves(&self, list: &mut Vec<Move32>, captures_only: bool) {
         let knights = match self.color {
             Color::Both => return,
             Color::White => self.bitboards[Piece::WhiteKnight],
@@ -245,20 +255,27 @@ impl Board {
             for end in targets.iter_bit_indices() {
                 let capture = self.pieces[end];
 
+                if capture.is_none() && captures_only {
+                    continue;
+                }
+
                 let m = Move16::build().start(start).end(end);
                 let m = if capture.is_some() { m.capture() } else { m };
-
                 list.push(Move32::new(m.finish(), capture));
             }
         }
     }
 
-    fn generate_king_moves(&self, list: &mut Vec<Move32>) {
+    fn generate_king_moves(&self, list: &mut Vec<Move32>, captures_only: bool) {
         let start = self.king_square[self.color];
         let targets = KING_MOVE_PATTERNS[start].without(self.bb_all_pieces[self.color]);
 
         for end in targets.iter_bit_indices() {
             let capture = self.pieces[end];
+
+            if capture.is_none() && captures_only {
+                continue;
+            }
 
             let m = Move16::build().start(start).end(end);
             let m = if capture.is_some() { m.capture() } else { m };
@@ -267,7 +284,7 @@ impl Board {
         }
     }
 
-    fn generate_rook_queen_moves(&self, list: &mut Vec<Move32>) {
+    fn generate_rook_queen_moves(&self, list: &mut Vec<Move32>, captures_only: bool) {
         let rooks_and_queens = match self.color {
             Color::Both => return,
             Color::White => {
@@ -285,13 +302,6 @@ impl Board {
             let quiet_moves = attack_pattern.without(self.bb_all_pieces[Color::Both]);
             let captures = attack_pattern.intersection(self.bb_all_pieces[self.color.flipped()]);
 
-            for end in quiet_moves.iter_bit_indices() {
-                list.push(Move32::new(
-                    Move16::build().start(start).end(end).finish(),
-                    None,
-                ));
-            }
-
             for end in captures.iter_bit_indices() {
                 let capture = self.pieces[end];
                 list.push(Move32::new(
@@ -299,10 +309,21 @@ impl Board {
                     capture,
                 ));
             }
+
+            if captures_only {
+                continue;
+            }
+
+            for end in quiet_moves.iter_bit_indices() {
+                list.push(Move32::new(
+                    Move16::build().start(start).end(end).finish(),
+                    None,
+                ));
+            }
         }
     }
 
-    fn generate_bishop_queen_moves(&self, list: &mut Vec<Move32>) {
+    fn generate_bishop_queen_moves(&self, list: &mut Vec<Move32>, captures_only: bool) {
         let bishops_and_qeens = match self.color {
             Color::Both => return,
             Color::White => {
@@ -320,18 +341,22 @@ impl Board {
             let quiet_moves = attack_pattern.without(self.bb_all_pieces[Color::Both]);
             let captures = attack_pattern.intersection(self.bb_all_pieces[self.color.flipped()]);
 
-            for end in quiet_moves.iter_bit_indices() {
-                list.push(Move32::new(
-                    Move16::build().start(start).end(end).finish(),
-                    None,
-                ));
-            }
-
             for end in captures.iter_bit_indices() {
                 let capture = self.pieces[end];
                 list.push(Move32::new(
                     Move16::build().start(start).end(end).capture().finish(),
                     capture,
+                ));
+            }
+
+            if captures_only {
+                continue;
+            }
+
+            for end in quiet_moves.iter_bit_indices() {
+                list.push(Move32::new(
+                    Move16::build().start(start).end(end).finish(),
+                    None,
                 ));
             }
         }

@@ -35,6 +35,23 @@ pub fn pv_line(tptable: &TpTable, board: &mut Board) -> Vec<Move32> {
     pvline
 }
 
+fn score_move(m: Move32, tptable: &TpTable, board: &Board) -> i32 {
+    if Some(m.m16) == tptable.get(board.position_key) {
+        1_000_000
+    } else if let Some(victim) = m.captured() {
+        //SAFETY: A chess move always moves a piece
+        let attacker = unsafe { board.pieces[m.m16.start()].unwrap_unchecked() };
+        mvv_lva(attacker, victim)
+    } else {
+        0
+    }
+}
+
+fn mvv_lva(attacker: Piece, victim: Piece) -> i32 {
+    const SCORES: [i32; Piece::ALL.len()] = [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6];
+    (SCORES[victim] << 3) - SCORES[attacker]
+}
+
 pub fn iterative_deepening<'a>(
     board: &'a mut Board,
     params: SearchParams,
@@ -83,7 +100,7 @@ pub fn alpha_beta(
 
     if depth == 0 {
         stats.leaves += 1;
-        return evaluation(board); // TODO: use quiescence search
+        return quiescence(alpha, beta, board, stats, tptable);
     }
 
     let mut moves = Vec::with_capacity(32); // TODO: reuse a preallocated vec
@@ -121,7 +138,7 @@ pub fn alpha_beta(
     }
 
     if legal_moves == 0 {
-        if board.is_square_attacked(board.king_square[board.color], board.color.flipped()) {
+        if board.in_check() {
             return -30_000;
         } else {
             return 0;
@@ -135,19 +152,44 @@ pub fn alpha_beta(
     alpha
 }
 
-fn score_move(m: Move32, tptable: &TpTable, board: &Board) -> i32 {
-    if Some(m.m16) == tptable.get(board.position_key) {
-        1_000_000
-    } else if let Some(victim) = m.captured() {
-        //SAFETY: A chess move always moves a piece
-        let attacker = unsafe { board.pieces[m.m16.start()].unwrap_unchecked() };
-        mvv_lva(attacker, victim)
-    } else {
-        0
-    }
-}
+pub fn quiescence(
+    mut alpha: i32,
+    beta: i32,
+    board: &mut Board,
+    stats: &mut SearchStats,
+    tptable: &mut TpTable,
+) -> i32 {
+    stats.nodes += 1;
+    let standing_pat = evaluation(board);
 
-fn mvv_lva(attacker: Piece, victim: Piece) -> i32 {
-    const SCORES: [i32; Piece::ALL.len()] = [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6];
-    (SCORES[victim] << 3) - SCORES[attacker]
+    if standing_pat >= beta {
+        return beta;
+    } else if alpha < standing_pat {
+        alpha = standing_pat;
+    }
+
+    let mut moves = Vec::with_capacity(32); // TODO: reuse a preallocated vec
+    board.generate_capture_moves(&mut moves);
+    moves.sort_by_key(|m| -score_move(*m, tptable, board));
+
+    for m in moves.into_iter() {
+        let is_valid_move = board.make_move(m);
+
+        if !is_valid_move {
+            continue;
+        }
+
+        let score = -quiescence(-beta, -alpha, board, stats, tptable);
+        board.take_move();
+
+        if score >= beta {
+            return beta; // fail hard beta-cutoff
+        }
+
+        if score > alpha {
+            alpha = score;
+        }
+    }
+
+    alpha
 }

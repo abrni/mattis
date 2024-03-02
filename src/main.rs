@@ -2,6 +2,7 @@ use std::io::{BufRead, BufReader};
 
 use mattis::{
     board::Board,
+    eval::evaluation,
     search::{iterative_deepening, SearchParams},
     tptable::TpTable,
     uci::{self, EngineMessage, GuiMessage, Id},
@@ -29,7 +30,10 @@ fn main() {
         match message {
             GuiMessage::Uci => print_uci_info(),
             GuiMessage::Isready => println!("{}", EngineMessage::Readyok),
-            GuiMessage::Position { pos, moves } => setup_position(&mut board, pos, &moves),
+            GuiMessage::Position { pos, moves } => {
+                setup_position(&mut board, pos, &moves);
+                dbg!(evaluation(&board));
+            }
             GuiMessage::Go(go) => run_go(&mut board, go, &mut tptable),
             _ => println!("This uci command is currently not supported."),
         }
@@ -40,7 +44,7 @@ fn run_go(board: &mut Board, _go: uci::Go, tptable: &mut TpTable) {
     let params = SearchParams {
         max_time: None,
         max_nodes: None,
-        max_depth: Some(7),
+        max_depth: Some(6),
     };
 
     for stats in iterative_deepening(board, params, tptable) {
