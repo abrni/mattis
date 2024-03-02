@@ -214,6 +214,10 @@ pub fn alpha_beta(
         let score = -alpha_beta(-beta, -alpha, depth - 1, board, params, stats, tables, allow_null_move);
         board.take_move();
 
+        if stats.stop {
+            return 0;
+        }
+
         if score >= beta {
             stats.fh += 1;
 
@@ -300,6 +304,10 @@ pub fn quiescence(
         legal_moves += 1;
         let score = -quiescence(-beta, -alpha, board, stats, tables);
         board.take_move();
+
+        if stats.stop {
+            return 0;
+        }
 
         if score >= beta {
             return beta; // fail hard beta-cutoff
