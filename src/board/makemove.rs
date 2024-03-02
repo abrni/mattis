@@ -67,7 +67,7 @@ impl Board {
         self.ply += 1;
 
         // remove any captured pieces and update fifty move counter accordingly
-        if m.m16.is_capture() {
+        if m.m16.is_capture() && !m.m16.is_en_passant() {
             self.clear_piece(to120);
             self.fifty_move = 0;
         }
@@ -170,8 +170,8 @@ impl Board {
         }
 
         // add the captured piece back in, if there is one
-        if let Some(captured_piece) = m.captured() {
-            self.add_piece(to120, captured_piece);
+        if m.m16.is_capture() && !m.m16.is_en_passant() {
+            self.add_piece(to120, m.captured().unwrap());
         }
 
         if m.m16.is_promotion() {
