@@ -14,4 +14,5 @@ criterion = { version = "0.5.1", features = ["html_reports"] }
 lazy_static = "1.4.0"
 num_enum = { version = "0.7.1", features = ["complex-expressions"] }
 rand = "0.8.5"
+smallvec = "1.13.1"
 thiserror = "1.0.40"

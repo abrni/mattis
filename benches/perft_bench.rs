@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use mattis::{board::Board, moves::Move32};
+use mattis::board::{movegen::MoveList, Board};
 
 const MAX_LEAVES: u32 = 999_999;
 
@@ -20,7 +20,7 @@ fn perf_bench(c: &mut Criterion) {
             }
 
             let id = BenchmarkId::from_parameter(format!("{fen}: {depth}"));
-            let mut lists = vec![Vec::with_capacity(32); 8];
+            let mut lists = vec![MoveList::with_capacity(32); 8];
 
             group.bench_with_input(id, &(fen, depth), |b, (fen, depth)| {
                 let mut board = Board::from_fen(fen).unwrap();
@@ -36,7 +36,7 @@ fn perf_bench(c: &mut Criterion) {
     group.finish();
 }
 
-fn perft(board: &mut Board, depth: usize, lists: &mut [Vec<Move32>]) -> u32 {
+fn perft(board: &mut Board, depth: usize, lists: &mut [MoveList]) -> u32 {
     #[cfg(debug_assertions)]
     board.check_board_integrity();
 

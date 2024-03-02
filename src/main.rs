@@ -9,7 +9,7 @@ use std::{
 
 use bus::{Bus, BusReader};
 use mattis::{
-    board::Board,
+    board::{movegen::MoveList, Board},
     hashtable::TranspositionTable,
     moves::Move32,
     search::{iterative_deepening, SearchParams, SearchTables},
@@ -190,7 +190,7 @@ fn setup_position(board: &mut Board, pos: uci::Position, moves: &[String]) {
     *board = Board::from_fen(fen).unwrap();
 
     'outer: for m in moves {
-        let mut movelist = vec![];
+        let mut movelist = MoveList::new();
         board.generate_all_moves(&mut movelist);
 
         for bm in movelist {

@@ -1,4 +1,4 @@
-use mattis::{board::Board, moves::Move32};
+use mattis::board::{movegen::MoveList, Board};
 use std::{fs, io::Write};
 
 #[derive(Debug, PartialEq, Eq, Clone, Default)]
@@ -34,7 +34,7 @@ fn main() {
             print!("    Depth {depth}: expect {expected_leaves:>print_width$} leaves");
             std::io::stdout().flush().unwrap();
 
-            let mut lists = vec![Vec::with_capacity(32); 8];
+            let mut lists = vec![MoveList::with_capacity(32); 8];
             perft(&mut board, depth, &mut stats, lists.as_mut_slice());
             let actual_leaves = stats.leaves;
             let success = expected_leaves == actual_leaves;
@@ -52,7 +52,7 @@ fn main() {
     }
 }
 
-fn perft(board: &mut Board, depth: usize, stats: &mut Statistics, lists: &mut [Vec<Move32>]) {
+fn perft(board: &mut Board, depth: usize, stats: &mut Statistics, lists: &mut [MoveList]) {
     #[cfg(debug_assertions)]
     board.check_board_integrity();
 

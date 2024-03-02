@@ -322,6 +322,7 @@ dependencies = [
  "lazy_static",
  "num_enum",
  "rand",
+ "smallvec",
  "thiserror",
 ]
 

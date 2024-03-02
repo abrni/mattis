@@ -229,9 +229,8 @@ pub fn alpha_beta(
         }
     }
 
-    let mut moves = Vec::with_capacity(32); // TODO: reuse a preallocated vec
+    let mut moves = MoveList::with_capacity(64);
     board.generate_all_moves(&mut moves);
-    // moves.sort_unstable_by_key(|m| -score_move(*m, pv_move, tables, board));
 
     let mut best_move = Move32::default();
     let mut best_score = -30_000;
@@ -329,15 +328,13 @@ pub fn quiescence(
         }
     }
 
-    let mut moves = Vec::with_capacity(32); // TODO: reuse a preallocated vec
+    let mut moves = MoveList::with_capacity(64);
 
     if in_check {
         board.generate_all_moves(&mut moves);
     } else {
         board.generate_capture_moves(&mut moves);
     }
-
-    // moves.sort_by_key(|m| -score_move(*m, None, tables, board));
 
     let mut legal_moves = 0;
     while let Some(m) = take_next_move(&mut moves, None, tables, board) {
