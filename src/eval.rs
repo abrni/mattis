@@ -7,15 +7,18 @@ use crate::{
 };
 
 pub fn evaluation(board: &Board) -> i32 {
+    if is_draw_by_material(board) {
+        return 0;
+    }
+
     let my_color = board.color;
     let op_color = board.color.flipped();
-
     let mut eval = board.material[my_color] - board.material[op_color];
 
-    let (my_fn, op_fn): (PieceSquareFn, PieceSquareFn) = if my_color == Color::White {
-        (piece_square, piece_square_mirrored)
-    } else {
-        (piece_square_mirrored, piece_square)
+    let (my_fn, op_fn): (PieceSquareFn, PieceSquareFn) = match my_color {
+        Color::White => (piece_square, piece_square_mirrored),
+        Color::Black => (piece_square_mirrored, piece_square),
+        _ => unreachable!(),
     };
 
     eval += my_fn(Piece::pawn(my_color), board, &PAWN_SQUARE_TABLE);
@@ -61,6 +64,71 @@ fn bishop_queen_mobility(square: Square64, color: Color, board: &Board) -> i32 {
     magic_bishop_moves(square, board.bb_all_pieces[Color::Both])
         .without(board.bb_all_pieces[color])
         .bit_count() as i32
+}
+
+fn is_draw_by_material(board: &Board) -> bool {
+    let white_queens = board.count_pieces[Piece::WhiteQueen];
+    let white_rooks = board.count_pieces[Piece::WhiteRook];
+    let white_knights = board.count_pieces[Piece::WhiteKnight];
+    let white_bishops = board.count_pieces[Piece::WhiteBishop];
+    let white_pawns = board.count_pieces[Piece::WhitePawn];
+    let white_minors = board.count_minor_pieces[Color::White]; // Knights + Bishops
+
+    let black_queens = board.count_pieces[Piece::BlackQueen];
+    let black_rooks = board.count_pieces[Piece::BlackRook];
+    let black_knights = board.count_pieces[Piece::BlackKnight];
+    let black_bishops = board.count_pieces[Piece::BlackBishop];
+    let black_pawns = board.count_pieces[Piece::BlackPawn];
+    let black_minors = board.count_minor_pieces[Color::Black]; // Knights + Bishops
+
+    // Any Queens or Pawns on Board --> no draw
+    if white_queens + black_queens + white_pawns + black_pawns != 0 {
+        return false;
+    }
+
+    // If any Side has more than one Rook --> no draw
+    if white_rooks > 1 || black_rooks > 1 {
+        return false;
+    }
+
+    // No Side has enough material Advantage
+    if white_rooks == 1 && black_rooks == 1 && white_minors < 2 && black_minors < 2 {
+        return true;
+    }
+
+    // Only Rook against only 1 or 2 Minor pieces (White Perspective)
+    if white_rooks == 1 && black_rooks == 0 && white_minors == 0 && [1, 2].contains(&black_minors) {
+        return true;
+    }
+
+    // Only Rook against only 1 or 2 Minor pieces (Black Perspective)
+    if black_rooks == 1 && white_rooks == 0 && black_minors == 0 && [1, 2].contains(&white_minors) {
+        return true;
+    }
+
+    // At this point, we checked all possible draws with rooks
+    // All other draws by material contain no rooks
+    if black_rooks + white_rooks > 0 {
+        return false;
+    }
+
+    // Only a few knights on board is a draw
+    if white_bishops + black_bishops == 0 && white_knights < 3 && black_knights < 3 {
+        return true;
+    }
+
+    // There are only a few bishops neither side has significantly more bishops than the other
+    if white_knights + black_knights == 0 && usize::abs_diff(white_bishops, black_bishops) < 2 {
+        return true;
+    }
+
+    if ((white_knights < 3 && white_bishops == 0) || (white_bishops == 1 && white_knights == 0))
+        && ((black_knights < 3 && black_bishops == 0) || (black_bishops == 1 && black_knights == 0))
+    {
+        return true;
+    }
+
+    false
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
