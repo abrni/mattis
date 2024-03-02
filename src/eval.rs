@@ -35,7 +35,13 @@ pub fn evaluation(board: &Board) -> i32 {
     };
 
     // TODO: interpolate between midgame and endgame?
-    let king_square_table = if is_endgame(board) {
+    let my_king_table = if is_endgame_for_color(my_color, board) {
+        &KING_ENDGAME_SQUARE_TABLE
+    } else {
+        &KING_SQUARE_TABLE
+    };
+
+    let op_king_table = if is_endgame_for_color(op_color, board) {
         &KING_ENDGAME_SQUARE_TABLE
     } else {
         &KING_SQUARE_TABLE
@@ -46,14 +52,14 @@ pub fn evaluation(board: &Board) -> i32 {
     eval += my_fn(Piece::bishop(my_color), board, &BISHOP_SQUARE_TABLE);
     eval += my_fn(Piece::rook(my_color), board, &ROOK_SQUARE_TABLE);
     eval += my_fn(Piece::queen(my_color), board, &QUEEN_SQUARE_TABLE);
-    eval += my_fn(Piece::king(my_color), board, king_square_table);
+    eval += my_fn(Piece::king(my_color), board, my_king_table);
 
     eval -= op_fn(Piece::pawn(op_color), board, &PAWN_SQUARE_TABLE);
     eval -= op_fn(Piece::knight(op_color), board, &KNIGHT_SQUARE_TABLE);
     eval -= op_fn(Piece::bishop(op_color), board, &BISHOP_SQUARE_TABLE);
     eval -= op_fn(Piece::rook(op_color), board, &ROOK_SQUARE_TABLE);
     eval -= op_fn(Piece::queen(op_color), board, &QUEEN_SQUARE_TABLE);
-    eval -= op_fn(Piece::king(op_color), board, king_square_table);
+    eval -= op_fn(Piece::king(op_color), board, op_king_table);
 
     // STEP 3: Apply penalties for isolated pawns & passed pawns
 
@@ -144,13 +150,13 @@ fn piece_square_mirrored(piece: Piece, board: &Board, table: &[i32; 64]) -> i32 
         .sum()
 }
 
-fn is_endgame(board: &Board) -> bool {
+fn is_endgame_for_color(color: Color, board: &Board) -> bool {
     const MATERIAL_THRESHOLD: i32 = Piece::WhiteRook.value()
         + 2 * Piece::WhiteKnight.value()
-        + 2 * Piece::WhitePawn.value()
+        + 4 * Piece::WhitePawn.value()
         + Piece::WhiteKing.value();
 
-    board.material[Color::White] < MATERIAL_THRESHOLD && board.material[Color::Black] < MATERIAL_THRESHOLD
+    board.material[color.flipped()] < MATERIAL_THRESHOLD
 }
 
 fn is_draw_by_material(board: &Board) -> bool {
