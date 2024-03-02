@@ -1,5 +1,5 @@
 use crate::{
-    board::Board,
+    board::{movegen::MoveList, Board},
     eval::evaluation,
     hashtable::{HEKind, Probe, TranspositionTable},
     moves::Move32,
@@ -84,6 +84,21 @@ fn pv_line(tptable: &TranspositionTable, board: &mut Board) -> Vec<Move32> {
     }
 
     pvline
+}
+
+fn take_next_move(
+    list: &mut MoveList,
+    pv_move: Option<Move32>,
+    tables: &SearchTables,
+    board: &Board,
+) -> Option<Move32> {
+    let (idx, _) = list
+        .iter()
+        .enumerate()
+        .min_by_key(|(_, m)| -score_move(**m, pv_move, tables, board))?;
+
+    let m = list.swap_remove(idx);
+    Some(m)
 }
 
 fn score_move(m: Move32, pv_move: Option<Move32>, tables: &SearchTables, board: &Board) -> i32 {
@@ -216,14 +231,14 @@ pub fn alpha_beta(
 
     let mut moves = Vec::with_capacity(32); // TODO: reuse a preallocated vec
     board.generate_all_moves(&mut moves);
-    moves.sort_unstable_by_key(|m| -score_move(*m, pv_move, tables, board));
+    // moves.sort_unstable_by_key(|m| -score_move(*m, pv_move, tables, board));
 
     let mut best_move = Move32::default();
     let mut best_score = -30_000;
     let mut legal_moves = 0;
     let mut alpha_changed = false;
 
-    for m in moves.into_iter() {
+    while let Some(m) = take_next_move(&mut moves, pv_move, tables, board) {
         let is_valid_move = board.make_move(m);
 
         if !is_valid_move {
@@ -322,10 +337,10 @@ pub fn quiescence(
         board.generate_capture_moves(&mut moves);
     }
 
-    moves.sort_by_key(|m| -score_move(*m, None, tables, board));
+    // moves.sort_by_key(|m| -score_move(*m, None, tables, board));
 
     let mut legal_moves = 0;
-    for m in moves.into_iter() {
+    while let Some(m) = take_next_move(&mut moves, None, tables, board) {
         let is_valid_move = board.make_move(m);
 
         if !is_valid_move {

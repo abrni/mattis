@@ -548,6 +548,7 @@ impl Display for Board {
 mod tests {
     use super::Board;
     use crate::{
+        board::movegen::MoveList,
         moves::Move16,
         types::{Piece, Square64},
     };
@@ -571,7 +572,7 @@ mod tests {
             .finish();
 
         let ep_move32 = board.move_16_to_32(ep_move16);
-        let mut movelist = vec![];
+        let mut movelist = MoveList::new();
         board.generate_all_moves(&mut movelist);
         assert!(movelist.contains(&ep_move32));
         assert_eq!(ep_move32.captured(), Some(Piece::BlackPawn));

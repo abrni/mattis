@@ -8,8 +8,11 @@ use crate::{
 
 use super::Board;
 
+// type MoveList = SmallVec<[Move32; 256]>;
+pub type MoveList = Vec<Move32>;
+
 impl Board {
-    pub fn generate_capture_moves(&self, list: &mut Vec<Move32>) {
+    pub fn generate_capture_moves(&self, list: &mut MoveList) {
         self.generate_pawn_attacks(list);
         self.generate_en_passant(list);
 
@@ -19,7 +22,7 @@ impl Board {
         self.generate_king_moves(list, true);
     }
 
-    pub fn generate_all_moves(&self, list: &mut Vec<Move32>) {
+    pub fn generate_all_moves(&self, list: &mut MoveList) {
         self.generate_pawn_attacks(list);
         self.generate_en_passant(list);
         self.generate_pawn_pushes(list);
@@ -30,7 +33,7 @@ impl Board {
         self.generate_castling_moves(list);
     }
 
-    fn generate_pawn_pushes(&self, list: &mut Vec<Move32>) {
+    fn generate_pawn_pushes(&self, list: &mut MoveList) {
         match self.color {
             Color::White => self.generate_white_pawn_pushes(list),
             Color::Black => self.generate_black_pawn_pushes(list),
@@ -38,7 +41,7 @@ impl Board {
         }
     }
 
-    fn generate_white_pawn_pushes(&self, list: &mut Vec<Move32>) {
+    fn generate_white_pawn_pushes(&self, list: &mut MoveList) {
         let target_squares_single = self.bitboards[Piece::WhitePawn]
             .shifted_north()
             .without(self.bb_all_pieces[Color::Both]);
@@ -70,7 +73,7 @@ impl Board {
         }
     }
 
-    fn generate_black_pawn_pushes(&self, list: &mut Vec<Move32>) {
+    fn generate_black_pawn_pushes(&self, list: &mut MoveList) {
         let target_squares_single = self.bitboards[Piece::BlackPawn]
             .shifted_south()
             .without(self.bb_all_pieces[Color::Both]);
@@ -102,7 +105,7 @@ impl Board {
         }
     }
 
-    fn generate_pawn_attacks(&self, list: &mut Vec<Move32>) {
+    fn generate_pawn_attacks(&self, list: &mut MoveList) {
         match self.color {
             Color::White => self.generate_white_pawn_attacks(list),
             Color::Black => self.generate_black_pawn_attacks(list),
@@ -110,7 +113,7 @@ impl Board {
         }
     }
 
-    fn generate_white_pawn_attacks(&self, list: &mut Vec<Move32>) {
+    fn generate_white_pawn_attacks(&self, list: &mut MoveList) {
         let targets_east = self.bitboards[Piece::WhitePawn]
             .shifted_northeast()
             .intersection(self.bb_all_pieces[Color::Black]);
@@ -142,7 +145,7 @@ impl Board {
         }
     }
 
-    fn generate_black_pawn_attacks(&self, list: &mut Vec<Move32>) {
+    fn generate_black_pawn_attacks(&self, list: &mut MoveList) {
         let targets_east = self.bitboards[Piece::BlackPawn]
             .shifted_southeast()
             .intersection(self.bb_all_pieces[Color::White]);
@@ -174,7 +177,7 @@ impl Board {
         }
     }
 
-    fn generate_en_passant(&self, list: &mut Vec<Move32>) {
+    fn generate_en_passant(&self, list: &mut MoveList) {
         let Some(en_pas_sq) = self.en_passant else {
             return;
         };
@@ -233,7 +236,7 @@ impl Board {
         }
     }
 
-    fn generate_knight_moves(&self, list: &mut Vec<Move32>, captures_only: bool) {
+    fn generate_knight_moves(&self, list: &mut MoveList, captures_only: bool) {
         let knights = match self.color {
             Color::Both => return,
             Color::White => self.bitboards[Piece::WhiteKnight],
@@ -257,7 +260,7 @@ impl Board {
         }
     }
 
-    fn generate_king_moves(&self, list: &mut Vec<Move32>, captures_only: bool) {
+    fn generate_king_moves(&self, list: &mut MoveList, captures_only: bool) {
         let start = self.king_square[self.color];
         let targets = KING_MOVE_PATTERNS[start].without(self.bb_all_pieces[self.color]);
 
@@ -275,7 +278,7 @@ impl Board {
         }
     }
 
-    fn generate_rook_queen_moves(&self, list: &mut Vec<Move32>, captures_only: bool) {
+    fn generate_rook_queen_moves(&self, list: &mut MoveList, captures_only: bool) {
         let rooks_and_queens = match self.color {
             Color::Both => return,
             Color::White => self.bitboards[Piece::WhiteRook].union(self.bitboards[Piece::WhiteQueen]),
@@ -307,7 +310,7 @@ impl Board {
         }
     }
 
-    fn generate_bishop_queen_moves(&self, list: &mut Vec<Move32>, captures_only: bool) {
+    fn generate_bishop_queen_moves(&self, list: &mut MoveList, captures_only: bool) {
         let bishops_and_qeens = match self.color {
             Color::Both => return,
             Color::White => self.bitboards[Piece::WhiteBishop].union(self.bitboards[Piece::WhiteQueen]),
@@ -339,7 +342,7 @@ impl Board {
         }
     }
 
-    fn generate_castling_moves(&self, list: &mut Vec<Move32>) {
+    fn generate_castling_moves(&self, list: &mut MoveList) {
         if self.color == Color::White
             && self.castle_perms.get(CastlePerm::WhiteKingside)
             && self.pieces[Square64::F1].is_none()
@@ -637,7 +640,7 @@ fn blocker_permutation(mut i: usize, mut mask: BitBoard) -> BitBoard {
     blockers
 }
 
-fn insert_promotions(list: &mut Vec<Move32>, builder: Move16Builder, color: Color, capture: Option<Piece>) {
+fn insert_promotions(list: &mut MoveList, builder: Move16Builder, color: Color, capture: Option<Piece>) {
     let pieces = if color == Color::White {
         [
             Piece::WhiteKnight,
