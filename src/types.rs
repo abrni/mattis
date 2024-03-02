@@ -71,6 +71,34 @@ macro_rules! impl_iterators {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive)]
 #[repr(u8)]
+pub enum PieceType {
+    Pawn,
+    Knight,
+    Bishop,
+    Rook,
+    Queen,
+    King,
+}
+
+impl PieceType {
+    const MIN: Self = Self::Pawn;
+    const MAX: Self = Self::King;
+
+    pub const ALL: [Self; 6] = [
+        Self::Pawn,
+        Self::Knight,
+        Self::Bishop,
+        Self::Rook,
+        Self::Queen,
+        Self::King,
+    ];
+}
+
+impl_array_indexing!(PieceType, u8, 6);
+impl_iterators!(PieceType, PieceTypeIter, u8);
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive)]
+#[repr(u8)]
 pub enum Piece {
     WhitePawn,
     WhiteKnight,
