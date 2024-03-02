@@ -6,9 +6,9 @@ use std::{
 use mattis::{
     board::Board,
     eval::evaluation,
+    hashtable::TranspositionTable,
     moves::Move32,
     search::{iterative_deepening, SearchParams, SearchTables},
-    tptable::TranspositionTable,
     types::Color,
     uci::{self, EngineMessage, GuiMessage, Id},
 };
@@ -19,7 +19,7 @@ fn main() {
     let mut board = Board::from_fen(FEN_STARTPOS).unwrap();
     let mut stdin = BufReader::new(std::io::stdin());
     let mut search_tables = SearchTables {
-        transposition_table: TranspositionTable::new(),
+        transposition_table: TranspositionTable::new(256),
         search_killers: vec![[Move32::default(); 2]; 1024],
         search_history: [[0; 64]; 12],
     };

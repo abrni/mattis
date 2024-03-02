@@ -1,4 +1,10 @@
-use crate::{board::Board, eval::evaluation, moves::Move32, tptable::TranspositionTable, types::Piece};
+use crate::{
+    board::Board,
+    eval::evaluation,
+    hashtable::{Entry, HEKind, Probe, TranspositionTable},
+    moves::Move32,
+    types::Piece,
+};
 use std::{
     collections::HashMap,
     time::{Duration, Instant},
@@ -52,7 +58,11 @@ fn pv_line(tptable: &TranspositionTable, board: &mut Board) -> Vec<Move32> {
     let mut key_counts = HashMap::new();
     let mut pvline = Vec::with_capacity(8);
 
-    while let Some(m16) = tptable.get(board.position_key) {
+    while let Some(entry) = tptable.get(board.position_key) {
+        if entry.m16.is_nomove() {
+            break;
+        }
+
         let kc = key_counts.entry(board.position_key).or_insert(0);
         *kc += 1;
 
@@ -60,7 +70,7 @@ fn pv_line(tptable: &TranspositionTable, board: &mut Board) -> Vec<Move32> {
             break;
         }
 
-        let m32 = board.move_16_to_32(m16);
+        let m32 = board.move_16_to_32(entry.m16);
         board.make_move(m32);
         pvline.push(m32);
     }
@@ -72,8 +82,8 @@ fn pv_line(tptable: &TranspositionTable, board: &mut Board) -> Vec<Move32> {
     pvline
 }
 
-fn score_move(m: Move32, tables: &SearchTables, board: &Board) -> i32 {
-    if Some(m.m16) == tables.transposition_table.get(board.position_key) {
+fn score_move(m: Move32, pv_move: Option<Move32>, tables: &SearchTables, board: &Board) -> i32 {
+    if Some(m) == pv_move {
         2_000_000
     } else if let Some(victim) = m.captured() {
         //SAFETY: A chess move always moves a piece
@@ -169,8 +179,6 @@ pub fn alpha_beta(
         stats.stop = should_search_stop(params, stats);
     }
 
-    stats.nodes += 1;
-
     if depth == 0 {
         stats.leaves += 1;
         return quiescence(alpha, beta, board, stats, tables);
@@ -181,6 +189,13 @@ pub fn alpha_beta(
     if board.ply >= 1 && (board.is_repetition() || board.fifty_move >= 100) {
         return 0;
     }
+
+    let hashtable_probe = tables.transposition_table.probe(board, alpha, beta, depth as u8);
+    let pv_move = match hashtable_probe {
+        Probe::NoHit => None,
+        Probe::PV(m32, _) => Some(m32),
+        Probe::CutOff(_, score) => return score,
+    };
 
     if allow_null_move && !board.in_check() && board.ply != 0 && board.count_big_pieces[board.color] > 0 && depth >= 4 {
         board.make_null_move();
@@ -198,10 +213,11 @@ pub fn alpha_beta(
 
     let mut moves = Vec::with_capacity(32); // TODO: reuse a preallocated vec
     board.generate_all_moves(&mut moves);
-    moves.sort_unstable_by_key(|m| -score_move(*m, tables, board));
+    moves.sort_unstable_by_key(|m| -score_move(*m, pv_move, tables, board));
 
-    let mut new_best_move = None;
+    let mut best_move = Move32::default();
     let mut legal_moves = 0;
+    let mut alpha_changed = false;
 
     for m in moves.into_iter() {
         let is_valid_move = board.make_move(m);
@@ -230,12 +246,23 @@ pub fn alpha_beta(
                 tables.search_killers[board.ply][0] = m;
             }
 
+            let entry = Entry {
+                position_key: board.position_key,
+                score: alpha,
+                m16: m.m16,
+                depth: depth as u8,
+                kind: HEKind::Beta,
+            };
+
+            tables.transposition_table.store(entry);
+
             return beta; // fail hard beta-cutoff
         }
 
         if score > alpha {
             alpha = score;
-            new_best_move = Some(m);
+            alpha_changed = true;
+            best_move = m;
 
             if !m.m16.is_capture() {
                 let piece = board.pieces[m.m16.start()].unwrap();
@@ -252,9 +279,16 @@ pub fn alpha_beta(
         }
     }
 
-    if let Some(m) = new_best_move {
-        tables.transposition_table.insert(board.position_key, m.m16);
-    }
+    let hashentry_kind = if alpha_changed { HEKind::Exact } else { HEKind::Alpha };
+    let entry = Entry {
+        position_key: board.position_key,
+        score: alpha,
+        m16: best_move.m16,
+        depth: depth as u8,
+        kind: hashentry_kind,
+    };
+
+    tables.transposition_table.store(entry);
 
     alpha
 }
@@ -291,7 +325,7 @@ pub fn quiescence(
         board.generate_capture_moves(&mut moves);
     }
 
-    moves.sort_by_key(|m| -score_move(*m, tables, board));
+    moves.sort_by_key(|m| -score_move(*m, None, tables, board));
 
     let mut legal_moves = 0;
     for m in moves.into_iter() {
