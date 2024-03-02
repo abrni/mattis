@@ -9,7 +9,6 @@ use std::fmt::{Debug, Display};
 /// XXXX XXXX XXXX 0000 0000 0000 0000 0000  -  *Unused*
 /// ```
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-#[repr(packed)]
 pub struct Move32 {
     v: u16,
     pub m16: Move16,
@@ -32,6 +31,12 @@ impl Move32 {
         } else {
             unsafe { Some(Piece::unchecked_transmute_from(self.v as u8 - 1)) }
         }
+    }
+}
+
+impl Display for Move32 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.m16, f)
     }
 }
 
