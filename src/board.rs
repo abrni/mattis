@@ -322,7 +322,7 @@ impl Board {
         }
 
         // attacked by white pawns?
-        if self.color == Color::White
+        if color == Color::White
             && (self.pieces[square - 11usize] == Some(Piece::WhitePawn)
                 || self.pieces[square - 9usize] == Some(Piece::WhitePawn))
         {
@@ -330,7 +330,7 @@ impl Board {
         }
 
         // attacked by black pawns?
-        if self.color == Color::Black
+        if color == Color::Black
             && (self.pieces[square + 11usize] == Some(Piece::BlackPawn)
                 || self.pieces[square + 9usize] == Some(Piece::BlackPawn))
         {
