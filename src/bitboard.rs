@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Display};
 
+use crate::types::{File, Rank, Square64};
 use num_enum::{FromPrimitive, UnsafeFromPrimitive};
-use crate::types::{Square64, Rank, File};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct BitBoard(u64);
@@ -77,20 +77,20 @@ impl BitBoard {
     }
 
     /// Clears the least significant 1-bit and returns its index
+    #[rustfmt::skip]
     pub fn pop(&mut self) -> Square64 {
         if self.is_empty() {
             return Square64::Invalid
         }
 
-        #[rustfmt::skip]
-        const MAGIC_TABLE: [usize ; 64] = [
-            63, 30,  3, 32, 25, 41, 22, 33, 
-            15, 50, 42, 13, 11, 53, 19, 34, 
-            61, 29,  2, 51, 21, 43, 45, 10, 
-            18, 47,  1, 54,  9, 57,  0, 35, 
-            62, 31, 40,  4, 49,  5, 52, 26, 
-            60,  6, 23, 44, 46, 27, 56, 16, 
-             7, 39, 48, 24, 59, 14, 12, 55, 
+        const POP_MAGIC_TABLE: [usize ; 64] = [
+            63, 30,  3, 32, 25, 41, 22, 33,
+            15, 50, 42, 13, 11, 53, 19, 34,
+            61, 29,  2, 51, 21, 43, 45, 10,
+            18, 47,  1, 54,  9, 57,  0, 35,
+            62, 31, 40,  4, 49,  5, 52, 26,
+            60,  6, 23, 44, 46, 27, 56, 16,
+             7, 39, 48, 24, 59, 14, 12, 55,
             38, 28, 58, 20, 37, 17, 36,  8,
         ];
 
@@ -98,12 +98,57 @@ impl BitBoard {
         let fold: u32 = ((b & u64::MAX) ^ (b >> 32)) as u32;
         self.0 &= self.0 - 1;
 
-        let idx = MAGIC_TABLE[(fold.wrapping_mul(0x783a9b23) >> 26)  as usize];
+        let idx = POP_MAGIC_TABLE[(fold.wrapping_mul(0x783a9b23) >> 26)  as usize];
         Square64::from_primitive(idx)
+    }
+
+    pub fn iter_bit_indices(self) -> impl Iterator<Item = Square64> {
+        let mut b = self;
+        std::iter::from_fn(move || {
+            let sq = b.pop();
+
+            if sq == Square64::Invalid {
+                None
+            } else {
+                Some(sq)
+            }
+        })
     }
 
     pub fn bit_count(self) -> u32 {
         self.0.count_ones()
+    }
+
+    pub fn shifted_north(self) -> Self {
+        Self(self.0 << 8)
+    }
+
+    pub fn shifted_south(self) -> Self {
+        Self(self.0 >> 8)
+    }
+
+    pub fn shifted_east(self) -> Self {
+        Self((self.0 << 1) & NOT_FILE_BITBOARDS[File::A].to_u64())
+    }
+
+    pub fn shifted_west(self) -> Self {
+        Self((self.0 >> 1) & NOT_FILE_BITBOARDS[File::H].to_u64())
+    }
+
+    pub fn shifted_northeast(self) -> Self {
+        Self((self.0 << 9) & NOT_FILE_BITBOARDS[File::A].to_u64())
+    }
+
+    pub fn shifted_southeast(self) -> Self {
+        Self((self.0 >> 7) & NOT_FILE_BITBOARDS[File::A].to_u64())
+    }
+
+    pub fn shifted_southwest(self) -> Self {
+        Self((self.0 >> 9) & NOT_FILE_BITBOARDS[File::H].to_u64())
+    }
+
+    pub fn shifted_northwest(self) -> Self {
+        Self((self.0 << 7) & NOT_FILE_BITBOARDS[File::H].to_u64())
     }
 }
 
@@ -115,7 +160,7 @@ impl Display for BitBoard {
                 let file = unsafe { File::unchecked_transmute_from(file) };
                 let sq = Square64::from_file_rank(file, rank);
 
-                write!(f, "{} ", if self.get(sq) {"X"} else {"."})?;
+                write!(f, "{} ", if self.get(sq) { "X" } else { "." })?;
             }
 
             writeln!(f)?;
@@ -131,7 +176,6 @@ impl Display for BitBoard {
 // ---------------------------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 
-
 lazy_static::lazy_static! {
     pub static ref FILE_BITBOARDS: [BitBoard; 8] = {
         let mut boards = [BitBoard::EMPTY; 8];
@@ -140,6 +184,16 @@ lazy_static::lazy_static! {
             for r in Rank::iter_all() {
                 boards[f].set(Square64::from_file_rank(f, r));
             }
+        }
+
+        boards
+    };
+
+    pub static ref NOT_FILE_BITBOARDS: [BitBoard; 8] = {
+        let mut boards = *FILE_BITBOARDS;
+
+        for m in boards.iter_mut() {
+            *m = m.complement();
         }
 
         boards
@@ -156,6 +210,17 @@ lazy_static::lazy_static! {
 
         boards
     };
+
+    pub static ref NOT_RANK_BITBOARDS: [BitBoard; 8] = {
+        let mut boards = *RANK_BITBOARDS;
+
+        for m in boards.iter_mut() {
+            *m = m.complement();
+        }
+
+        boards
+    };
+
 
     pub static ref BORDER: BitBoard = {
         FILE_BITBOARDS[File::A]
@@ -264,8 +329,6 @@ lazy_static::lazy_static! {
     };
 }
 
-
-
 // ---------------------------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 // # TESTS -------------------------------------------------------------------------------------------------------------
@@ -274,9 +337,9 @@ lazy_static::lazy_static! {
 
 #[cfg(test)]
 mod tests {
-    use num_enum::FromPrimitive;
-    use crate::types::Square64;
     use super::BitBoard;
+    use crate::types::Square64;
+    use num_enum::FromPrimitive;
 
     #[test]
     fn invalid_index() {
@@ -345,5 +408,18 @@ mod tests {
         let mut bitboard = BitBoard::EMPTY;
         let sq = bitboard.pop();
         assert_eq!(sq, Square64::Invalid);
+    }
+
+    #[test]
+    fn iter_all_indices() {
+        let bb = BitBoard::FULL;
+        let mut iter = bb.iter_bit_indices();
+
+        for sq in 0..64 {
+            let sq = Square64::from_primitive(sq);
+            assert_eq!(iter.next(), Some(sq));
+        }
+
+        assert_eq!(iter.next(), None)
     }
 }
