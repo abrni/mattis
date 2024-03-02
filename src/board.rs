@@ -179,6 +179,7 @@ impl Board {
         // TODO: Handle halfmove and fullmove clock from parts 5 and 6
 
         board.position_key = board.generate_position_key();
+        board.update_redundant_data();
         Ok(board)
     }
 
@@ -282,6 +283,64 @@ impl Board {
         fen.push('0');
 
         fen
+    }
+
+    pub fn check_board_integrity(&self) {
+        let mut check_bitboards = [BitBoard::EMPTY; 12];
+        let mut check_count_pieces = [0; 12];
+        let mut check_count_big_pieces = [0; 2];
+        let mut check_count_major_pieces = [0; 2];
+        let mut check_count_minor_pieces = [0; 2];
+        let mut check_material = [0; 2];
+
+        for i in 0..120 {
+            let square = Square120::from_primitive(i);
+            let piece = self.pieces[square];
+
+            if square == Square120::Invalid {
+                assert!(piece.is_none());
+                continue;
+            }
+
+            if let Some(piece) = piece {
+                let color = piece.color();
+                let sq64 = Square64::try_from(square).unwrap();
+
+                check_bitboards[piece].set(sq64);
+                check_count_pieces[piece] += 1;
+                check_count_big_pieces[color] += piece.is_big() as usize;
+                check_count_major_pieces[color] += piece.is_major() as usize;
+                check_count_minor_pieces[color] += piece.is_minor() as usize;
+                check_material[color] += piece.value();
+            }
+        }
+
+        assert_eq!(check_bitboards, self.bitboards);
+        assert_eq!(check_count_pieces, self.count_pieces);
+        assert_eq!(check_count_big_pieces, self.count_big_pieces);
+        assert_eq!(check_count_major_pieces, self.count_major_pieces);
+        assert_eq!(check_count_minor_pieces, self.count_minor_pieces);
+        assert_eq!(check_material, self.material);
+
+        assert!(self.color != Color::Both);
+        assert_eq!(self.position_key, self.generate_position_key());
+
+        if let Some(sq) = self.en_passant {
+            assert!(
+                (sq.rank().unwrap() == Rank::R6 && self.color == Color::White)
+                    || (sq.rank().unwrap() == Rank::R3 && self.color == Color::Black)
+            );
+        }
+
+        assert_eq!(
+            self.pieces[self.king_square[Color::White]].unwrap(),
+            Piece::WhiteKing
+        );
+
+        assert_eq!(
+            self.pieces[self.king_square[Color::Black]].unwrap(),
+            Piece::BlackKing
+        );
     }
 }
 

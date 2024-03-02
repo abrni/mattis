@@ -1,5 +1,6 @@
-use num_enum::FromPrimitive;
+use std::fmt::Debug;
 
+use num_enum::FromPrimitive;
 use crate::types::Square64;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
