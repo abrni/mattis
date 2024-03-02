@@ -281,10 +281,7 @@ impl Board {
         let blockers = self.bb_all_pieces[Color::Both];
 
         for start in rooks_and_queens.iter_bit_indices() {
-            let blockers = blockers.intersection(ROOK_MAGIC_MASKS[start]);
-            let key = blockers.to_u64().wrapping_mul(ROOK_MAGICS[start]);
-            let key = key >> (64 - ROOK_MAGIC_BIT_COUNT[start]);
-            let attack_pattern = ROOK_ATTACK_TABLE[start][key as usize];
+            let attack_pattern = magic_rook_moves(start, blockers);
             let quiet_moves = attack_pattern.without(self.bb_all_pieces[Color::Both]);
             let captures = attack_pattern.intersection(self.bb_all_pieces[self.color.flipped()]);
 
@@ -319,10 +316,7 @@ impl Board {
         let blockers = self.bb_all_pieces[Color::Both];
 
         for start in bishops_and_qeens.iter_bit_indices() {
-            let blockers = blockers.intersection(BISHOP_MAGIC_MASKS[start]);
-            let key = blockers.to_u64().wrapping_mul(BISHOP_MAGICS[start]);
-            let key = key >> (64 - BISHOP_MAGIC_BIT_COUNT[start]);
-            let attack_pattern = BISHOP_ATTACK_TABLE[start][key as usize];
+            let attack_pattern = magic_bishop_moves(start, blockers);
             let quiet_moves = attack_pattern.without(self.bb_all_pieces[Color::Both]);
             let captures = attack_pattern.intersection(self.bb_all_pieces[self.color.flipped()]);
 
@@ -421,6 +415,20 @@ impl Board {
 // MAGIC TABLES --------------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
+
+pub fn magic_bishop_moves(square: Square64, blockers: BitBoard) -> BitBoard {
+    let blockers = blockers.intersection(BISHOP_MAGIC_MASKS[square]);
+    let key = blockers.to_u64().wrapping_mul(BISHOP_MAGICS[square]);
+    let key = key >> (64 - BISHOP_MAGIC_BIT_COUNT[square]);
+    BISHOP_ATTACK_TABLE[square][key as usize]
+}
+
+pub fn magic_rook_moves(square: Square64, blockers: BitBoard) -> BitBoard {
+    let blockers = blockers.intersection(ROOK_MAGIC_MASKS[square]);
+    let key = blockers.to_u64().wrapping_mul(ROOK_MAGICS[square]);
+    let key = key >> (64 - ROOK_MAGIC_BIT_COUNT[square]);
+    ROOK_ATTACK_TABLE[square][key as usize]
+}
 
 pub const BISHOP_MAGICS: [u64; 64] =
     unsafe { std::mem::transmute(*include_bytes!("../../bishop_magics")) };

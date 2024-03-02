@@ -1,4 +1,11 @@
-use crate::{board::Board, types::Piece};
+use crate::{
+    bitboard::BitBoard,
+    board::{
+        movegen::{magic_bishop_moves, magic_rook_moves},
+        Board,
+    },
+    types::{Color, Piece, Square64},
+};
 
 pub fn evaluation(board: &Board) -> i32 {
     let my_color = board.color;
@@ -28,6 +35,18 @@ fn piece_square(piece: Piece, board: &Board, table: &[i32; 64]) -> i32 {
         .iter_bit_indices()
         .map(|square| table[square])
         .sum()
+}
+
+fn rook_queen_mobility(square: Square64, color: Color, board: &Board) -> i32 {
+    magic_rook_moves(square, board.bb_all_pieces[Color::Both])
+        .without(board.bb_all_pieces[color])
+        .bit_count() as i32
+}
+
+fn bishop_queen_mobility(square: Square64, color: Color, board: &Board) -> i32 {
+    magic_bishop_moves(square, board.bb_all_pieces[Color::Both])
+        .without(board.bb_all_pieces[color])
+        .bit_count() as i32
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

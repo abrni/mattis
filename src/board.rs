@@ -1,12 +1,9 @@
 pub mod makemove;
 pub mod movegen;
 
+use self::movegen::{magic_bishop_moves, magic_rook_moves};
 use crate::{
     bitboard::{BitBoard, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS},
-    board::movegen::{
-        BISHOP_ATTACK_TABLE, BISHOP_MAGICS, BISHOP_MAGIC_BIT_COUNT, BISHOP_MAGIC_MASKS,
-        ROOK_ATTACK_TABLE, ROOK_MAGICS, ROOK_MAGIC_BIT_COUNT, ROOK_MAGIC_MASKS,
-    },
     moves::Move32,
     types::{CastlePerm, CastlePerms, Color, File, Piece, Rank, Square64},
 };
@@ -369,34 +366,26 @@ impl Board {
         }
 
         // attacked by a rook or queen?
-        let blockers = self.bb_all_pieces[Color::Both].intersection(ROOK_MAGIC_MASKS[square]);
-        let key = blockers.to_u64().wrapping_mul(ROOK_MAGICS[square]);
-        let key = key >> (64 - ROOK_MAGIC_BIT_COUNT[square]);
-        let attack_pattern = ROOK_ATTACK_TABLE[square][key as usize];
-
         let (queen_piece, rook_piece) = match color {
             Color::Black => (Piece::BlackQueen, Piece::BlackRook),
             Color::White => (Piece::WhiteQueen, Piece::WhiteRook),
             Color::Both => unreachable!(),
         };
 
+        let attack_pattern = magic_rook_moves(square, self.bb_all_pieces[Color::Both]);
         let rooks_and_queens = self.bitboards[queen_piece].union(self.bitboards[rook_piece]);
         if !attack_pattern.intersection(rooks_and_queens).is_empty() {
             return true;
         }
 
         // attacked by a bishop or queen?
-        let blockers = self.bb_all_pieces[Color::Both].intersection(BISHOP_MAGIC_MASKS[square]);
-        let key = blockers.to_u64().wrapping_mul(BISHOP_MAGICS[square]);
-        let key = key >> (64 - BISHOP_MAGIC_BIT_COUNT[square]);
-        let attack_pattern = BISHOP_ATTACK_TABLE[square][key as usize];
-
         let (queen_piece, bishop_piece) = match color {
             Color::Black => (Piece::BlackQueen, Piece::BlackBishop),
             Color::White => (Piece::WhiteQueen, Piece::WhiteBishop),
             Color::Both => unreachable!(),
         };
 
+        let attack_pattern = magic_bishop_moves(square, self.bb_all_pieces[Color::Both]);
         let bishops_and_queens = self.bitboards[queen_piece].union(self.bitboards[bishop_piece]);
         if !attack_pattern.intersection(bishops_and_queens).is_empty() {
             return true;
