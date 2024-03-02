@@ -1,4 +1,4 @@
-use std::{fmt::Display, sync::Mutex};
+mod movegen;
 
 use crate::{
     bitboard::BitBoard,
@@ -7,6 +7,7 @@ use crate::{
 use lazy_static::lazy_static;
 use num_enum::{FromPrimitive, TryFromPrimitive};
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use std::{fmt::Display, sync::Mutex};
 use thiserror::Error;
 
 lazy_static! {
@@ -58,6 +59,7 @@ pub struct Board {
 
     pub king_square: [Square120; 2], // the position of the white and black kings
     pub bitboards: [BitBoard; 12],   // bitboards for each piece type
+    pub bb_all_pieces: [BitBoard; 3], // bitboards of all pieces per color
     pub count_pieces: [usize; 12], // counts the number of pieces on the board fore each piece type
     pub count_big_pieces: [usize; 2], // counts the number of big pieces for both sides (everything exept pawns)
     pub count_major_pieces: [usize; 2], // counts the number of major pieces for both sides (rooks, queens, king)
@@ -77,6 +79,7 @@ impl Board {
             ply: 0,
             position_key: 0,
             bitboards: [BitBoard::EMPTY; 12],
+            bb_all_pieces: [BitBoard::EMPTY; 3],
             count_pieces: [0; 12],
             count_big_pieces: [0; 2],
             count_major_pieces: [0; 2],
@@ -186,6 +189,7 @@ impl Board {
     pub fn update_redundant_data(&mut self) {
         // clear all redundant data first
         self.bitboards = [BitBoard::EMPTY; 12];
+        self.bb_all_pieces = [BitBoard::EMPTY; 3];
         self.count_pieces = [0; 12];
         self.count_big_pieces = [0; 2];
         self.count_major_pieces = [0; 2];
@@ -205,6 +209,8 @@ impl Board {
             let color = piece.color();
 
             self.bitboards[piece].set(sq64);
+            self.bb_all_pieces[color].set(sq64);
+            self.bb_all_pieces[Color::Both].set(sq64);
             self.count_pieces[piece] += 1;
             self.count_big_pieces[color] += piece.is_big() as usize;
             self.count_major_pieces[color] += piece.is_major() as usize;
@@ -383,6 +389,7 @@ impl Board {
 
     pub fn check_board_integrity(&self) {
         let mut check_bitboards = [BitBoard::EMPTY; 12];
+        let mut check_bb_all_pieces = [BitBoard::EMPTY; 3];
         let mut check_count_pieces = [0; 12];
         let mut check_count_big_pieces = [0; 2];
         let mut check_count_major_pieces = [0; 2];
@@ -403,6 +410,8 @@ impl Board {
                 let sq64 = Square64::try_from(square).unwrap();
 
                 check_bitboards[piece].set(sq64);
+                check_bb_all_pieces[color].set(sq64);
+                check_bb_all_pieces[Color::Both].set(sq64);
                 check_count_pieces[piece] += 1;
                 check_count_big_pieces[color] += piece.is_big() as usize;
                 check_count_major_pieces[color] += piece.is_major() as usize;
@@ -412,6 +421,7 @@ impl Board {
         }
 
         assert_eq!(check_bitboards, self.bitboards);
+        assert_eq!(check_bb_all_pieces, self.bb_all_pieces);
         assert_eq!(check_count_pieces, self.count_pieces);
         assert_eq!(check_count_big_pieces, self.count_big_pieces);
         assert_eq!(check_count_major_pieces, self.count_major_pieces);
