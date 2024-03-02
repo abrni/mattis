@@ -7,6 +7,10 @@ use crate::{
 };
 use std::{
     collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 
@@ -20,7 +24,7 @@ pub struct SearchParams {
     pub max_time: Option<Duration>,
     pub max_nodes: Option<u64>,
     pub max_depth: Option<u32>,
-    // TODO: Support for Mate Search
+    pub stop: Arc<AtomicBool>, // TODO: Support for Mate Search
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -117,6 +121,10 @@ fn should_search_stop(params: &SearchParams, stats: &SearchStats) -> bool {
 
     let max_depth = params.max_depth.unwrap_or(u32::MAX);
     if stats.depth > max_depth {
+        return true;
+    }
+
+    if params.stop.load(Ordering::Acquire) {
         return true;
     }
 

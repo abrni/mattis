@@ -1,11 +1,16 @@
 use std::{
     io::{BufRead, BufReader},
+    iter::FlatMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::{Receiver, Sender},
+        Arc,
+    },
     time::Duration,
 };
 
 use mattis::{
     board::Board,
-    eval::evaluation,
     hashtable::TranspositionTable,
     moves::Move32,
     search::{iterative_deepening, SearchParams, SearchTables},
@@ -16,14 +21,13 @@ use mattis::{
 const FEN_STARTPOS: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 fn main() {
-    let mut board = Board::from_fen(FEN_STARTPOS).unwrap();
-    let mut stdin = BufReader::new(std::io::stdin());
-    let mut search_tables = SearchTables {
-        transposition_table: TranspositionTable::new(256),
-        search_killers: vec![[Move32::default(); 2]; 1024],
-        search_history: [[0; 64]; 12],
-    };
+    let (tx, thread_rx) = std::sync::mpsc::channel::<ThreadCommand>();
+    let (thread_tx, _rx) = std::sync::mpsc::channel::<ThreadAnswer>();
+    let search_stop = Arc::new(AtomicBool::new(false));
+    let thread_search_stop = Arc::clone(&search_stop);
+    std::thread::spawn(|| search_thread(thread_rx, thread_tx, thread_search_stop));
 
+    let mut stdin = BufReader::new(std::io::stdin());
     let mut input = String::new();
 
     loop {
@@ -39,19 +43,50 @@ fn main() {
             GuiMessage::Uci => print_uci_info(),
             GuiMessage::Ucinewgame => (),
             GuiMessage::Isready => println!("{}", EngineMessage::Readyok),
-            GuiMessage::Position { pos, moves } => {
-                setup_position(&mut board, pos, &moves);
-                dbg!(evaluation(&board));
+            GuiMessage::Position { pos, moves } => tx.send(ThreadCommand::SetupPosition(pos, moves)).unwrap(),
+            GuiMessage::Go(go) => tx.send(ThreadCommand::Go(go.clone())).unwrap(),
+            GuiMessage::Stop => search_stop.store(true, Ordering::Release),
+            GuiMessage::Quit => {
+                search_stop.store(true, Ordering::Release);
+                tx.send(ThreadCommand::Quit).unwrap();
+                return;
             }
-            GuiMessage::Go(go) => run_go(&mut board, go, &mut search_tables),
-            // GuiMessage::Stop => todo!(),
-            GuiMessage::Quit => return,
             _ => println!("This uci command is currently not supported."),
         }
     }
 }
 
-fn run_go(board: &mut Board, go: uci::Go, search_tables: &mut SearchTables) {
+#[derive(Debug)]
+enum ThreadCommand {
+    Quit,
+    SetupPosition(uci::Position, Vec<String>),
+    Go(uci::Go),
+}
+
+#[derive(Debug)]
+enum ThreadAnswer {}
+
+fn search_thread(rx: Receiver<ThreadCommand>, _tx: Sender<ThreadAnswer>, search_stop: Arc<AtomicBool>) {
+    let mut board = Board::from_fen(FEN_STARTPOS).unwrap();
+
+    let mut search_tables = SearchTables {
+        transposition_table: TranspositionTable::new(256),
+        search_killers: vec![[Move32::default(); 2]; 1024],
+        search_history: [[0; 64]; 12],
+    };
+
+    loop {
+        let command = rx.recv().unwrap();
+
+        match command {
+            ThreadCommand::Quit => return,
+            ThreadCommand::SetupPosition(pos, moves) => setup_position(&mut board, pos, &moves),
+            ThreadCommand::Go(go) => run_go(&mut board, go, &mut search_tables, Arc::clone(&search_stop)),
+        }
+    }
+}
+
+fn run_go(board: &mut Board, go: uci::Go, search_tables: &mut SearchTables, stop: Arc<AtomicBool>) {
     let (time, inc) = match board.color {
         Color::White => (go.wtime, go.winc),
         Color::Black => (go.btime, go.binc),
@@ -66,10 +101,12 @@ fn run_go(board: &mut Board, go: uci::Go, search_tables: &mut SearchTables) {
         .map(|t| (t + (movestogo * inc)) / (movestogo / 3.0 * 2.0) - inc)
         .map(|t| Duration::from_micros((t * 1000.0) as u64));
 
+    stop.store(false, Ordering::Release);
     let params = SearchParams {
         max_time,
         max_nodes: go.nodes.map(|n| n as u64),
         max_depth: go.depth,
+        stop,
     };
 
     let mut bestmove = Move32::default();

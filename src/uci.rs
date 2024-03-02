@@ -18,7 +18,7 @@ pub enum GuiMessage {
     Quit,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Go {
     pub searchmoves: Vec<String>,
     pub ponder: bool,
@@ -34,7 +34,7 @@ pub struct Go {
     pub infinite: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Position {
     Startpos,
     Fen(String),
