@@ -6,6 +6,7 @@ use std::{
 use mattis::{
     board::Board,
     eval::evaluation,
+    moves::Move32,
     search::{iterative_deepening, SearchParams},
     tptable::TpTable,
     types::Color,
@@ -65,6 +66,7 @@ fn run_go(board: &mut Board, go: uci::Go, tptable: &mut TpTable) {
         max_depth: go.depth,
     };
 
+    let mut bestmove = Move32::default();
     for stats in iterative_deepening(board, params, tptable) {
         let info = EngineMessage::Info(uci::Info {
             depth: Some(stats.depth),
@@ -75,6 +77,7 @@ fn run_go(board: &mut Board, go: uci::Go, tptable: &mut TpTable) {
         });
 
         println!("{info}");
+        bestmove = stats.bestmove;
     }
 
     // let hashfull = tptable.len() as f64 / tptable.capacity() as f64;
@@ -91,7 +94,6 @@ fn run_go(board: &mut Board, go: uci::Go, tptable: &mut TpTable) {
     //
     // println!("{info}");
 
-    let bestmove = tptable.get(board.position_key).unwrap();
     let bestmove = EngineMessage::Bestmove {
         move_: format!("{bestmove}"),
         ponder: None,

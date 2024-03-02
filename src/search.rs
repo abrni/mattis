@@ -20,6 +20,7 @@ pub struct SearchStats {
     pub leaves: u64,         // Total count of visited leaf nodes
     pub fh: u64,             // Count of fail-highs (beta cut off)
     pub fhf: u64,            // Count of fail-highs at the first move
+    pub bestmove: Move32,    // The best move
     pub pv: Vec<Move32>,     // Principle Variation Line
     pub stop: bool,          // Should the search stop ASAP
 }
@@ -34,6 +35,7 @@ impl Default for SearchStats {
             leaves: 0,
             fh: 0,
             fhf: 0,
+            bestmove: Move32::default(),
             pv: vec![],
             stop: false,
         }
@@ -124,8 +126,13 @@ pub fn iterative_deepening<'a>(
             tptable,
         );
 
+        if stats.stop {
+            return None;
+        }
+
         stats.score = score;
         stats.pv = pv_line(tptable, board);
+        stats.bestmove = stats.pv[0];
 
         Some(stats.clone())
     })
@@ -141,7 +148,7 @@ pub fn alpha_beta(
     tptable: &mut TpTable,
 ) -> i32 {
     if stats.stop {
-        return beta;
+        return 0;
     }
 
     if stats.nodes.trailing_zeros() == 10 {
