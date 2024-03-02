@@ -323,7 +323,7 @@ impl Board {
             let mut temp_square = square + dir;
 
             while temp_square != Square120::Invalid {
-                let mut piece = self.pieces[temp_square];
+                let piece = self.pieces[temp_square];
 
                 if piece.is_none() {
                     temp_square += dir;
@@ -348,7 +348,7 @@ impl Board {
             let mut temp_square = square + dir;
 
             while temp_square != Square120::Invalid {
-                let mut piece = self.pieces[temp_square];
+                let piece = self.pieces[temp_square];
 
                 if piece.is_none() {
                     temp_square += dir;
@@ -494,7 +494,7 @@ impl Display for Board {
                             CastlePerm::BlackQueenside,
                         ] {
                             if self.castle_perms.get(p) {
-                                write!(f, "{}", p.to_char());
+                                write!(f, "{}", p.to_char())?;
                             }
                         }
                     }

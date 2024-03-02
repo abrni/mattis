@@ -1,5 +1,8 @@
 use num_enum::{FromPrimitive, IntoPrimitive, TryFromPrimitive, UnsafeFromPrimitive};
-use std::ops::{Add, AddAssign, Index, IndexMut, Sub, SubAssign};
+use std::{
+    fmt::Display,
+    ops::{Add, AddAssign, Index, IndexMut, Sub, SubAssign},
+};
 
 macro_rules! impl_array_indexing {
     ($type:ty, $repr:ty, $len:expr) => {
@@ -431,6 +434,21 @@ impl TryFrom<Square64> for Square120 {
     }
 }
 
+impl Display for Square120 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if *self == Self::Invalid {
+            write!(f, "!!")
+        } else {
+            write!(
+                f,
+                "{}{}",
+                self.file().unwrap().to_char(),
+                self.rank().unwrap().to_char()
+            )
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy, FromPrimitive, IntoPrimitive)]
 #[repr(usize)]
 #[rustfmt::skip]
@@ -486,6 +504,21 @@ impl TryFrom<Square120> for Square64 {
             value.file().ok_or(())?,
             value.rank().ok_or(())?,
         ))
+    }
+}
+
+impl Display for Square64 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if *self == Self::Invalid {
+            write!(f, "!!")
+        } else {
+            write!(
+                f,
+                "{}{}",
+                self.file().unwrap().to_char(),
+                self.rank().unwrap().to_char()
+            )
+        }
     }
 }
 

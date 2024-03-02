@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 use crate::types::{Color, Piece, Square64};
 use num_enum::FromPrimitive;
@@ -106,7 +106,7 @@ impl Move16Builder {
     pub fn start(mut self, square: Square64) -> Self {
         let square: usize = square.into();
         self.0 &= !0x3f; // Clear the bits first
-        self.0 |= (square as u16 & 0x3f); // Set the square
+        self.0 |= square as u16 & 0x3f; // Set the square
         self
     }
 
@@ -209,6 +209,18 @@ impl Debug for Move16 {
             .field("queenside_castle", &self.is_queenside_castle())
             .field("nomove", &self.is_nomove())
             .finish()
+    }
+}
+
+impl Display for Move16 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.start(), self.end())?;
+
+        if let Some(piece) = self.promoted_piece(Color::Black) {
+            write!(f, "{}", piece.to_char())?;
+        }
+
+        Ok(())
     }
 }
 
