@@ -258,6 +258,29 @@ lazy_static::lazy_static! {
         boards
     };
 
+    pub static ref KING_MOVE_PATTERNS: [BitBoard; 64] = {
+        let mut boards = [BitBoard::EMPTY; 64];
+
+        for (i, m) in boards.iter_mut().enumerate() {
+            let mut result = BitBoard::EMPTY;
+            let sq64 = Square64::from_primitive(i);
+            let sq120 = Square120::try_from(sq64).unwrap();
+
+            const DIRS: [isize; 8] = [-11, -10, -9, -1, 1, 9, 10, 11];
+            for dir in DIRS {
+                let target120 = sq120 + dir;
+
+                if let Ok(target64) = Square64::try_from(target120) {
+                    result.set(target64);
+                }
+            }
+
+            *m = result;
+        }
+
+        boards
+    };
+
     pub static ref ROOK_MOVE_PATTERNS: [BitBoard; 64] = {
         let mut boards = [BitBoard::EMPTY; 64];
 
