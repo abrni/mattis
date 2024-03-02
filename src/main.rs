@@ -21,7 +21,10 @@ fn main() {
             .read_line(&mut input)
             .expect("Could not read input line");
 
-        let message = GuiMessage::parse(&input).expect("Received unknown command");
+        let Ok(message) = GuiMessage::parse(&input) else {
+            println!("Received unknown command");
+            continue;
+        };
 
         match message {
             GuiMessage::Uci => print_uci_info(),
