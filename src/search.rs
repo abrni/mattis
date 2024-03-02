@@ -1,5 +1,8 @@
 use crate::{board::Board, eval::evaluation, moves::Move32, tptable::TpTable, types::Piece};
-use std::time::{Duration, Instant};
+use std::{
+    collections::HashMap,
+    time::{Duration, Instant},
+};
 
 pub struct SearchParams {
     pub max_time: Option<Duration>,
@@ -8,21 +11,47 @@ pub struct SearchParams {
     // TODO: Support for Mate Search
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Default)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SearchStats {
-    pub depth: u32,      // Search depth
-    pub score: i32,      // Score in centipawns
-    pub nodes: u64,      // Total count of visited nodes
-    pub leaves: u64,     // Total count of visited leaf nodes
-    pub fh: u64,         // Count of fail-highs (beta cut off)
-    pub fhf: u64,        // Count of fail-highs at the first move
-    pub pv: Vec<Move32>, // Principle Variation Line
+    pub start_time: Instant, // When we started the search
+    pub depth: u32,          // Search depth
+    pub score: i32,          // Score in centipawns
+    pub nodes: u64,          // Total count of visited nodes
+    pub leaves: u64,         // Total count of visited leaf nodes
+    pub fh: u64,             // Count of fail-highs (beta cut off)
+    pub fhf: u64,            // Count of fail-highs at the first move
+    pub pv: Vec<Move32>,     // Principle Variation Line
+    pub stop: bool,          // Should the search stop ASAP
 }
 
-pub fn pv_line(tptable: &TpTable, board: &mut Board) -> Vec<Move32> {
+impl Default for SearchStats {
+    fn default() -> Self {
+        Self {
+            start_time: Instant::now(),
+            depth: 0,
+            score: 0,
+            nodes: 0,
+            leaves: 0,
+            fh: 0,
+            fhf: 0,
+            pv: vec![],
+            stop: false,
+        }
+    }
+}
+
+fn pv_line(tptable: &TpTable, board: &mut Board) -> Vec<Move32> {
+    let mut key_counts = HashMap::new();
     let mut pvline = Vec::with_capacity(8);
 
     while let Some(m16) = tptable.get(board.position_key) {
+        let kc = key_counts.entry(board.position_key).or_insert(0);
+        *kc += 1;
+
+        if *kc >= 3 {
+            break;
+        }
+
         let m32 = board.move_16_to_32(m16);
         board.make_move(m32);
         pvline.push(m32);
@@ -52,35 +81,49 @@ fn mvv_lva(attacker: Piece, victim: Piece) -> i32 {
     (SCORES[victim] << 3) - SCORES[attacker]
 }
 
+fn should_search_stop(params: &SearchParams, stats: &SearchStats) -> bool {
+    let max_nodes = params.max_nodes.unwrap_or(u64::MAX);
+    if stats.nodes > max_nodes {
+        return true;
+    }
+
+    let max_time = params.max_time.unwrap_or(Duration::MAX);
+    if stats.start_time.elapsed() >= max_time {
+        return true;
+    };
+
+    let max_depth = params.max_depth.unwrap_or(u32::MAX);
+    if stats.depth > max_depth {
+        return true;
+    }
+
+    false
+}
+
 pub fn iterative_deepening<'a>(
     board: &'a mut Board,
     params: SearchParams,
     tptable: &'a mut TpTable,
 ) -> impl Iterator<Item = SearchStats> + 'a {
-    let max_depth = params.max_depth.unwrap_or(u32::MAX);
-    let max_nodes = params.max_nodes.unwrap_or(u64::MAX);
-    let end_time = params.max_time.map(|t| Instant::now() + t);
-
     let mut stats = SearchStats::default();
 
     std::iter::from_fn(move || {
         stats.depth += 1;
 
-        if stats.depth > max_depth {
+        if should_search_stop(&params, &stats) {
             return None;
-        }
+        };
 
-        if stats.nodes > max_nodes {
-            return None;
-        }
+        let score = alpha_beta(
+            -i32::MAX,
+            i32::MAX,
+            stats.depth,
+            board,
+            &params,
+            &mut stats,
+            tptable,
+        );
 
-        if let Some(t) = end_time {
-            if Instant::now() > t {
-                return None;
-            }
-        }
-
-        let score = alpha_beta(-i32::MAX, i32::MAX, stats.depth, board, &mut stats, tptable);
         stats.score = score;
         stats.pv = pv_line(tptable, board);
 
@@ -93,9 +136,18 @@ pub fn alpha_beta(
     beta: i32,
     depth: u32,
     board: &mut Board,
+    params: &SearchParams,
     stats: &mut SearchStats,
     tptable: &mut TpTable,
 ) -> i32 {
+    if stats.stop {
+        return beta;
+    }
+
+    if stats.nodes.trailing_zeros() == 10 {
+        stats.stop = should_search_stop(params, stats);
+    }
+
     stats.nodes += 1;
 
     if depth == 0 {
@@ -118,7 +170,7 @@ pub fn alpha_beta(
         }
 
         legal_moves += 1;
-        let score = -alpha_beta(-beta, -alpha, depth - 1, board, stats, tptable);
+        let score = -alpha_beta(-beta, -alpha, depth - 1, board, params, stats, tptable);
         board.take_move();
 
         if score >= beta {

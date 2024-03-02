@@ -1,10 +1,14 @@
-use std::io::{BufRead, BufReader};
+use std::{
+    io::{BufRead, BufReader},
+    time::Duration,
+};
 
 use mattis::{
     board::Board,
     eval::evaluation,
     search::{iterative_deepening, SearchParams},
     tptable::TpTable,
+    types::Color,
     uci::{self, EngineMessage, GuiMessage, Id},
 };
 
@@ -40,11 +44,25 @@ fn main() {
     }
 }
 
-fn run_go(board: &mut Board, _go: uci::Go, tptable: &mut TpTable) {
+fn run_go(board: &mut Board, go: uci::Go, tptable: &mut TpTable) {
+    let (time, inc) = match board.color {
+        Color::White => (go.wtime, go.winc),
+        Color::Black => (go.btime, go.binc),
+        Color::Both => todo!(),
+    };
+
+    let movestogo = go.movestogo.unwrap_or(40) as f64;
+    let (time, inc) = (time.or(go.movetime), inc.unwrap_or(0) as f64);
+
+    let max_time = time
+        .map(|t| t as f64)
+        .map(|t| (t + (movestogo * inc)) / movestogo - inc)
+        .map(|t| Duration::from_micros((t * 1000.0) as u64));
+
     let params = SearchParams {
-        max_time: None,
-        max_nodes: None,
-        max_depth: Some(6),
+        max_time,
+        max_nodes: go.nodes.map(|n| n as u64),
+        max_depth: go.depth,
     };
 
     for stats in iterative_deepening(board, params, tptable) {
@@ -57,28 +75,21 @@ fn run_go(board: &mut Board, _go: uci::Go, tptable: &mut TpTable) {
         });
 
         println!("{info}");
-
-        let info = EngineMessage::Info(uci::Info {
-            string: Some(format!("fhf/fh={:.2}", stats.fhf as f64 / stats.fh as f64)),
-            ..Default::default()
-        });
-
-        println!("{info}");
     }
 
-    let hashfull = tptable.len() as f64 / tptable.capacity() as f64;
-    let hashfull = (hashfull * 1000.0) as u32;
-    let info = EngineMessage::Info(uci::Info {
-        hashfull: Some(hashfull),
-        string: Some(format!(
-            "f {} c {}",
-            tptable.fill_level(),
-            tptable.collisions()
-        )),
-        ..Default::default()
-    });
-
-    println!("{info}");
+    // let hashfull = tptable.len() as f64 / tptable.capacity() as f64;
+    // let hashfull = (hashfull * 1000.0) as u32;
+    // let info = EngineMessage::Info(uci::Info {
+    //     hashfull: Some(hashfull),
+    //     string: Some(format!(
+    //         "f {} c {}",
+    //         tptable.fill_level(),
+    //         tptable.collisions()
+    //     )),
+    //     ..Default::default()
+    // });
+    //
+    // println!("{info}");
 
     let bestmove = tptable.get(board.position_key).unwrap();
     let bestmove = EngineMessage::Bestmove {
