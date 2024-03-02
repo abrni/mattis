@@ -466,11 +466,10 @@ impl Board {
     pub fn is_repetition(&self) -> bool {
         // We do not need to check any position from before the fifty_move counter was last reset,
         // because after a pawn move or capture the previous positions can't repeat anymore.
-        let skip = self.history.len() - self.fifty_move;
-
         self.history
             .iter()
-            .skip(skip)
+            .rev()
+            .take(self.fifty_move)
             .any(|h| h.position_key == self.position_key)
     }
 }
