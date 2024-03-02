@@ -1,4 +1,4 @@
-mod movegen;
+pub mod movegen;
 
 use crate::{
     bitboard::BitBoard,
