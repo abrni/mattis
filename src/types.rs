@@ -1,3 +1,9 @@
+use num_enum::{FromPrimitive, IntoPrimitive, TryFromPrimitive, UnsafeFromPrimitive};
+
+#[derive(
+    Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive,
+)]
+#[repr(u8)]
 pub enum Piece {
     WhitePawn,
     WhiteKnight,
@@ -13,12 +19,20 @@ pub enum Piece {
     BlackKing,
 }
 
+#[derive(
+    Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive,
+)]
+#[repr(u8)]
 pub enum Color {
     White,
     Black,
     Both,
 }
 
+#[derive(
+    Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive,
+)]
+#[repr(u8)]
 pub enum File {
     A,
     B,
@@ -30,6 +44,10 @@ pub enum File {
     H,
 }
 
+#[derive(
+    Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive,
+)]
+#[repr(u8)]
 pub enum Rank {
     R1,
     R2,
@@ -41,7 +59,8 @@ pub enum Rank {
     R8,
 }
 
-#[repr(C)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, FromPrimitive, IntoPrimitive)]
+#[repr(usize)]
 #[rustfmt::skip]
 pub enum Square {
     A1 = 21, B1, C1, D1, E1, F1, G1, H1,
@@ -52,4 +71,6 @@ pub enum Square {
     A6 = 71, B6, C6, D6, E6, F6, G6, H6,
     A7 = 81, B7, C7, D7, E7, F7, G7, H7,
     A8 = 91, B8, C8, D8, E8, F8, G8, H8,
+    #[num_enum(catch_all)]
+    Invalid(usize)
 }
