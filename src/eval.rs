@@ -7,11 +7,11 @@ use crate::{
 // First and last entry should never be used, because pawns cant be on the first or last rank
 const PASSED_PAWN_BONUS: [i32; 8] = [0, 5, 10, 20, 35, 60, 100, 0];
 
-const ISOLATED_PAWN_PENALTY: i32 = -10;
-const ROOK_ON_OPEN_FILE_BONUS: i32 = 10;
-const ROOK_ON_SEMI_OPEN_FILE_BONUS: i32 = 5;
-const QUEEN_ON_OPEN_FILE_BONUS: i32 = 5;
-const QUEEN_ON_SEMI_OPEN_FILE_BONUS: i32 = 3;
+const ISOLATED_PAWN_PENALTY: i32 = -25;
+const ROOK_ON_OPEN_FILE_BONUS: i32 = 15;
+const ROOK_ON_SEMI_OPEN_FILE_BONUS: i32 = 10;
+const QUEEN_ON_OPEN_FILE_BONUS: i32 = 10;
+const QUEEN_ON_SEMI_OPEN_FILE_BONUS: i32 = 5;
 
 pub fn evaluation(board: &Board) -> i32 {
     if is_draw_by_material(board) {
@@ -280,13 +280,13 @@ const BISHOP_SQUARE_TABLE: [i32; 64] = [
 
 #[rustfmt::skip]
 const ROOK_SQUARE_TABLE: [i32; 64] = [
-     0,  0,  0,  5,  5,  0,  0,  0,  // 1
-    -5,  0,  0,  0,  0,  0,  0, -5,  // 2
-    -5,  0,  0,  0,  0,  0,  0, -5,  // 3
-    -5,  0,  0,  0,  0,  0,  0, -5,  // 4
-    -5,  0,  0,  0,  0,  0,  0, -5,  // 5
-    -5,  0,  0,  0,  0,  0,  0, -5,  // 6
-     5, 10, 10, 10, 10, 10, 10,  5,  // 7
+     0,  0,  5, 10, 10,  5,  0,  0,  // 1
+    -5,  0,  0, 10, 10,  0,  0, -5,  // 2
+    -5,  0,  0, 10, 10,  0,  0, -5,  // 3
+    -5,  0,  0, 10, 10,  0,  0, -5,  // 4
+    -5,  0,  0, 10, 10,  0,  0, -5,  // 5
+    -5,  0,  0, 10, 10,  0,  0, -5,  // 6
+     5, 15, 15, 15, 15, 15, 15,  5,  // 7
      0,  0,  0,  0,  0,  0,  0,  0,  // 8
 ];
 
