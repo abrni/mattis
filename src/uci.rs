@@ -42,57 +42,57 @@ pub enum Position {
 
 impl GuiMessage {
     pub fn parse(text: &str) -> Result<Self, ()> {
-        let mut parts = text.trim().split_ascii_whitespace();
+        let (command, rest) = split_whitespace_once(text).ok_or(())?;
 
-        match parts.next().ok_or(())? {
+        match command {
             "uci" => Ok(Self::Uci),
-            "debug" => match parts.next().ok_or(())? {
+            "isready" => Ok(Self::Isready),
+            "ucinewgame" => Ok(Self::Ucinewgame),
+            "go" => Ok(Self::Go(Go::parse(rest)?)),
+            "stop" => Ok(GuiMessage::Stop),
+            "ponderhit" => Ok(GuiMessage::Ponderhit),
+            "quit" => Ok(GuiMessage::Quit),
+            "debug" => match rest.trim() {
                 "on" => Ok(Self::Debug(true)),
                 "off" => Ok(Self::Debug(false)),
                 _ => Err(()),
             },
-            "isready" => Ok(Self::Isready),
-            "ucinewgame" => Ok(Self::Ucinewgame),
             "position" => {
-                let pos = match parts.next().ok_or(())? {
-                    "startpos" => Position::Startpos,
-                    "fen" => {
-                        let mut fen = parts.next().unwrap().to_owned();
-                        fen.push(' ');
-                        fen.push_str(parts.next().unwrap());
-                        fen.push(' ');
-                        fen.push_str(parts.next().unwrap());
-                        fen.push(' ');
-                        fen.push_str(parts.next().unwrap());
-                        fen.push(' ');
-                        fen.push_str(parts.next().unwrap());
-                        fen.push(' ');
-                        fen.push_str(parts.next().unwrap());
-                        Position::Fen(fen)
-                    }
-                    _ => return Err(()),
-                };
-
-                let moves = if let Some("moves") = parts.next() {
-                    parts.map(str::to_owned).collect()
-                } else {
-                    vec![]
-                };
-
+                let (pos, moves) = parse_position(rest)?;
                 Ok(Self::Position { pos, moves })
             }
-            "go" => Ok(Self::Go(Go::parse(&mut parts)?)),
-            "stop" => Ok(GuiMessage::Stop),
-            "ponderhit" => Ok(GuiMessage::Ponderhit),
-            "quit" => Ok(GuiMessage::Quit),
             _ => Err(()),
         }
     }
 }
 
+fn parse_position(text: &str) -> Result<(Position, Vec<String>), ()> {
+    let (pos_kind, rest) = split_whitespace_once(text).ok_or(())?;
+
+    let pos = match pos_kind {
+        "startpos" => Position::Startpos,
+        "fen" => {
+            let split_moves = rest.split_once("moves");
+            let fen = if let Some((fen, _)) = split_moves { fen } else { rest };
+            Position::Fen(fen.trim().to_owned())
+        }
+        _ => return Err(()),
+    };
+
+    let split_moves = rest.split_once("moves");
+    let moves = if let Some((_, moves)) = split_moves {
+        moves.split_whitespace().map(str::to_owned).collect()
+    } else {
+        vec![]
+    };
+
+    Ok((pos, moves))
+}
+
 impl Go {
-    pub fn parse<'a>(parts: &mut impl Iterator<Item = &'a str>) -> Result<Self, ()> {
+    pub fn parse<'a>(text: &str) -> Result<Self, ()> {
         let mut go = Go::default();
+        let mut parts = text.split_whitespace();
 
         while let Some(p) = parts.next() {
             match p {
@@ -265,4 +265,9 @@ impl Display for Info {
 
         Ok(())
     }
+}
+
+fn split_whitespace_once(text: &str) -> Option<(&str, &str)> {
+    let (first, rest) = text.split_once(char::is_whitespace)?;
+    Some((first, rest.trim_start()))
 }
