@@ -138,5 +138,4 @@ fn setup_position(board: &mut Board, pos: uci::Position, moves: &[String]) {
     }
 
     board.ply = 0;
-    board.history.clear();
 }
