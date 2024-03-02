@@ -44,6 +44,39 @@ pub enum Piece {
 }
 
 impl Piece {
+    pub const ALL: [Self; 12] = [
+        Self::WhitePawn,
+        Self::WhiteKnight,
+        Self::WhiteBishop,
+        Self::WhiteRook,
+        Self::WhiteQueen,
+        Self::WhiteKing,
+        Self::BlackPawn,
+        Self::BlackKnight,
+        Self::BlackBishop,
+        Self::BlackRook,
+        Self::BlackQueen,
+        Self::BlackKing,
+    ];
+
+    pub const ALL_WHITE: [Self; 6] = [
+        Self::WhitePawn,
+        Self::WhiteKnight,
+        Self::WhiteBishop,
+        Self::WhiteRook,
+        Self::WhiteQueen,
+        Self::WhiteKing,
+    ];
+
+    pub const ALL_BLACK: [Self; 6] = [
+        Self::BlackPawn,
+        Self::BlackKnight,
+        Self::BlackBishop,
+        Self::BlackRook,
+        Self::BlackQueen,
+        Self::BlackKing,
+    ];
+
     pub fn from_char(c: char) -> Option<Self> {
         match c {
             'P' => Some(Self::WhitePawn),

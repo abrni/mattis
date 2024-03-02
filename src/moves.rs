@@ -1,18 +1,39 @@
+use crate::types::{Color, Piece, Square64};
+use num_enum::{FromPrimitive, UnsafeFromPrimitive};
 use std::fmt::{Debug, Display};
 
-use crate::types::{Color, Piece, Square64};
-use num_enum::FromPrimitive;
-
 /// # Fields
-/// 0000 0000 0000 0000 0000 0000 0111 1111  -  Start square (120-index)
-/// 0000 0000 0000 0000 0011 1111 1000 0000  -  End square (120-index)
-/// 0000 0000 0000 0011 1100 0000 0000 0000  -  The captured piece
-/// 0000 0000 0000 0100 0000 0000 0000 0000  -  En passant flag
-/// 0000 0000 0000 1000 0000 0000 0000 0000  -  Pawn Double Move Flag
-/// 0000 0000 1111 0000 0000 0000 0000 0000  -  Promoted Piece
-/// 0000 0001 0000 0000 0000 0000 0000 0000  -  Castling Flag
+/// ```text
+/// 0000 0000 0000 0000 XXXX XXXX XXXX XXXX  -  Move16
+/// 0000 0000 0000 XXXX 0000 0000 0000 0000  -  Captured Piece
+/// XXXX XXXX XXXX 0000 0000 0000 0000 0000  -  *Unused*
+/// ```
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-pub struct Move32(u32);
+#[repr(packed)]
+pub struct Move32 {
+    v: u16,
+    pub m16: Move16,
+}
+
+impl Move32 {
+    pub fn new(m16: Move16, captured: Option<Piece>) -> Self {
+        let v = if let Some(piece) = captured {
+            Into::<u8>::into(piece) as u16 + 1
+        } else {
+            0
+        };
+
+        Self { v, m16 }
+    }
+
+    pub fn captured(self) -> Option<Piece> {
+        if self.v == 0 {
+            None
+        } else {
+            unsafe { Some(Piece::unchecked_transmute_from(self.v as u8 - 1)) }
+        }
+    }
+}
 
 /// # Fields
 /// ```text
@@ -226,10 +247,39 @@ impl Display for Move16 {
 
 #[cfg(test)]
 mod tests {
+    use super::Move16;
+    use crate::{moves::Move32, types::*};
     use num_enum::FromPrimitive;
 
-    use super::Move16;
-    use crate::types::*;
+    #[test]
+    fn type_size() {
+        assert_eq!(std::mem::size_of::<Move16>(), 2);
+        assert_eq!(std::mem::size_of::<Move32>(), 4);
+    }
+
+    #[test]
+    fn m32_quiet() {
+        let m = Move32::new(Move16::build().finish(), None);
+        assert_eq!(m.captured(), None);
+        assert!(m.m16.is_nomove());
+    }
+
+    #[test]
+    fn m32_capture() {
+        for piece in Piece::ALL {
+            let m = Move32::new(
+                Move16::build()
+                    .start(Square64::A1)
+                    .end(Square64::A2)
+                    .capture()
+                    .finish(),
+                Some(piece),
+            );
+
+            assert_eq!(m.captured(), Some(piece));
+            assert!(m.m16.is_capture());
+        }
+    }
 
     #[test]
     fn m16_nomove() {
