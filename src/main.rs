@@ -1,6 +1,5 @@
 use std::{
     io::{BufRead, BufReader},
-    iter::FlatMap,
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::{Receiver, Sender},
@@ -41,7 +40,7 @@ fn main() {
 
         match message {
             GuiMessage::Uci => print_uci_info(),
-            GuiMessage::Ucinewgame => (),
+            GuiMessage::Ucinewgame => tx.send(ThreadCommand::NewGame).unwrap(),
             GuiMessage::Isready => println!("{}", EngineMessage::Readyok),
             GuiMessage::Position { pos, moves } => tx.send(ThreadCommand::SetupPosition(pos, moves)).unwrap(),
             GuiMessage::Go(go) => tx.send(ThreadCommand::Go(go.clone())).unwrap(),
@@ -60,6 +59,7 @@ fn main() {
 enum ThreadCommand {
     Quit,
     SetupPosition(uci::Position, Vec<String>),
+    NewGame,
     Go(uci::Go),
 }
 
@@ -67,10 +67,12 @@ enum ThreadCommand {
 enum ThreadAnswer {}
 
 fn search_thread(rx: Receiver<ThreadCommand>, _tx: Sender<ThreadAnswer>, search_stop: Arc<AtomicBool>) {
+    const HASHTABLE_SIZE_MB: usize = 256;
+
     let mut board = Board::from_fen(FEN_STARTPOS).unwrap();
 
     let mut search_tables = SearchTables {
-        transposition_table: TranspositionTable::new(256),
+        transposition_table: TranspositionTable::new(HASHTABLE_SIZE_MB),
         search_killers: vec![[Move32::default(); 2]; 1024],
         search_history: [[0; 64]; 12],
     };
@@ -82,11 +84,14 @@ fn search_thread(rx: Receiver<ThreadCommand>, _tx: Sender<ThreadAnswer>, search_
             ThreadCommand::Quit => return,
             ThreadCommand::SetupPosition(pos, moves) => setup_position(&mut board, pos, &moves),
             ThreadCommand::Go(go) => run_go(&mut board, go, &mut search_tables, Arc::clone(&search_stop)),
+            ThreadCommand::NewGame => search_tables.transposition_table = TranspositionTable::new(HASHTABLE_SIZE_MB),
         }
     }
 }
 
 fn run_go(board: &mut Board, go: uci::Go, search_tables: &mut SearchTables, stop: Arc<AtomicBool>) {
+    search_tables.transposition_table.next_age();
+
     let (time, inc) = match board.color {
         Color::White => (go.wtime, go.winc),
         Color::Black => (go.btime, go.binc),
@@ -105,17 +110,17 @@ fn run_go(board: &mut Board, go: uci::Go, search_tables: &mut SearchTables, stop
     let params = SearchParams {
         max_time,
         max_nodes: go.nodes.map(|n| n as u64),
-        max_depth: go.depth,
+        max_depth: go.depth.map(|d| d as u8), // TODO: guard against too high numbers
         stop,
     };
 
     let mut bestmove = Move32::default();
     for stats in iterative_deepening(board, params, search_tables) {
         let info = EngineMessage::Info(uci::Info {
-            depth: Some(stats.depth),
+            depth: Some(stats.depth as u32),
             nodes: Some(stats.nodes as u32),
             pv: stats.pv.into_iter().map(|m| format!("{m}")).collect(),
-            score: Some(uci::Score::Cp(stats.score)),
+            score: Some(uci::Score::Cp(stats.score as i32)),
             ..Default::default()
         });
 

@@ -85,7 +85,7 @@ pub struct Board {
     pub count_big_pieces: [usize; 2],   // counts the number of big pieces for both sides (everything exept pawns)
     pub count_major_pieces: [usize; 2], // counts the number of major pieces for both sides (rooks, queens, king)
     pub count_minor_pieces: [usize; 2], // counts the number of minor pieces for both sides (bishops, knights)
-    pub material: [i32; 2],             // the material in centipawns for both sides
+    pub material: [i16; 2],             // the material in centipawns for both sides
 
     pub history: Vec<HistoryEntry>, // stores the board history
 }

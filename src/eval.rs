@@ -5,16 +5,16 @@ use crate::{
 };
 
 // First and last entry should never be used, because pawns cant be on the first or last rank
-const PASSED_PAWN_BONUS: [i32; 8] = [0, 5, 10, 20, 35, 60, 100, 0];
+const PASSED_PAWN_BONUS: [i16; 8] = [0, 5, 10, 20, 35, 60, 100, 0];
 
-const ISOLATED_PAWN_PENALTY: i32 = -25;
-const ROOK_ON_OPEN_FILE_BONUS: i32 = 15;
-const ROOK_ON_SEMI_OPEN_FILE_BONUS: i32 = 10;
-const QUEEN_ON_OPEN_FILE_BONUS: i32 = 10;
-const QUEEN_ON_SEMI_OPEN_FILE_BONUS: i32 = 5;
-const BISHOP_PAIR_BONUS: i32 = 30;
+const ISOLATED_PAWN_PENALTY: i16 = -25;
+const ROOK_ON_OPEN_FILE_BONUS: i16 = 15;
+const ROOK_ON_SEMI_OPEN_FILE_BONUS: i16 = 10;
+const QUEEN_ON_OPEN_FILE_BONUS: i16 = 10;
+const QUEEN_ON_SEMI_OPEN_FILE_BONUS: i16 = 5;
+const BISHOP_PAIR_BONUS: i16 = 30;
 
-pub fn evaluation(board: &Board) -> i32 {
+pub fn evaluation(board: &Board) -> i16 {
     if is_draw_by_material(board) {
         return 0;
     }
@@ -144,16 +144,16 @@ pub fn evaluation(board: &Board) -> i32 {
     eval
 }
 
-type PieceSquareFn = fn(Piece, &Board, &[i32; 64]) -> i32;
+type PieceSquareFn = fn(Piece, &Board, &[i16; 64]) -> i16;
 
-fn piece_square(piece: Piece, board: &Board, table: &[i32; 64]) -> i32 {
+fn piece_square(piece: Piece, board: &Board, table: &[i16; 64]) -> i16 {
     board.bitboards[piece]
         .iter_bit_indices()
         .map(|square| table[square])
         .sum()
 }
 
-fn piece_square_mirrored(piece: Piece, board: &Board, table: &[i32; 64]) -> i32 {
+fn piece_square_mirrored(piece: Piece, board: &Board, table: &[i16; 64]) -> i16 {
     board.bitboards[piece]
         .iter_bit_indices()
         .map(|square| table[INDEX_MIRROR[square]])
@@ -161,7 +161,7 @@ fn piece_square_mirrored(piece: Piece, board: &Board, table: &[i32; 64]) -> i32 
 }
 
 fn is_endgame_for_color(color: Color, board: &Board) -> bool {
-    const MATERIAL_THRESHOLD: i32 = Piece::WhiteRook.value()
+    const MATERIAL_THRESHOLD: i16 = Piece::WhiteRook.value()
         + 2 * Piece::WhiteKnight.value()
         + 4 * Piece::WhitePawn.value()
         + Piece::WhiteKing.value();
@@ -253,7 +253,7 @@ const INDEX_MIRROR: [Square64; 64] = { use Square64::*; [
 ]};
 
 #[rustfmt::skip]
-const PAWN_SQUARE_TABLE: [i32; 64] = [
+const PAWN_SQUARE_TABLE: [i16; 64] = [
      0,  0,  0,  0,  0,  0,  0,  0, // 1  
      5, 10, 10,-20,-20, 10, 10,  5, // 2
      5, -5,-10,  0,  0,-10, -5,  5, // 3 
@@ -265,7 +265,7 @@ const PAWN_SQUARE_TABLE: [i32; 64] = [
 ];
 
 #[rustfmt::skip]
-const KNIGHT_SQUARE_TABLE: [i32; 64] = [
+const KNIGHT_SQUARE_TABLE: [i16; 64] = [
     -50,-40,-30,-30,-30,-30,-40,-50, // 1
     -40,-20,  0,  5,  5,  0,-20,-40, // 2
     -30,  5, 10, 15, 15, 10,  5,-30, // 3
@@ -277,7 +277,7 @@ const KNIGHT_SQUARE_TABLE: [i32; 64] = [
 ];
 
 #[rustfmt::skip]
-const BISHOP_SQUARE_TABLE: [i32; 64] = [
+const BISHOP_SQUARE_TABLE: [i16; 64] = [
     -20,-10,-10,-10,-10,-10,-10,-20, // 1
     -10,  5,  0,  0,  0,  0,  5,-10, // 2
     -10, 10, 10, 10, 10, 10, 10,-10, // 3
@@ -289,7 +289,7 @@ const BISHOP_SQUARE_TABLE: [i32; 64] = [
 ];
 
 #[rustfmt::skip]
-const ROOK_SQUARE_TABLE: [i32; 64] = [
+const ROOK_SQUARE_TABLE: [i16; 64] = [
      0,  0,  5, 10, 10,  5,  0,  0,  // 1
     -5,  0,  0, 10, 10,  0,  0, -5,  // 2
     -5,  0,  0, 10, 10,  0,  0, -5,  // 3
@@ -301,7 +301,7 @@ const ROOK_SQUARE_TABLE: [i32; 64] = [
 ];
 
 #[rustfmt::skip]
-const QUEEN_SQUARE_TABLE: [i32; 64] = [
+const QUEEN_SQUARE_TABLE: [i16; 64] = [
     -20,-10,-10, -5, -5,-10,-10,-20,  // 1
     -10,  0,  5,  0,  0,  0,  0,-10,  // 2
     -10,  5,  5,  5,  5,  5,  0,-10,  // 3
@@ -313,7 +313,7 @@ const QUEEN_SQUARE_TABLE: [i32; 64] = [
 ];
 
 #[rustfmt::skip]
-const KING_SQUARE_TABLE: [i32; 64] = [
+const KING_SQUARE_TABLE: [i16; 64] = [
      20, 30, 10,  0,  0, 10, 30, 20,  // 1
      20, 20,  0,  0,  0,  0, 20, 20,  // 2
     -10,-20,-20,-20,-20,-20,-20,-10,  // 3
@@ -325,7 +325,7 @@ const KING_SQUARE_TABLE: [i32; 64] = [
 ];
 
 #[rustfmt::skip]
-const KING_ENDGAME_SQUARE_TABLE: [i32; 64] = [
+const KING_ENDGAME_SQUARE_TABLE: [i16; 64] = [
     -50,-30,-30,-30,-30,-30,-30,-50,  // 1 
     -30,-30,  0,  0,  0,  0,-30,-30,  // 2
     -30,-10, 20, 30, 30, 20,-10,-30,  // 3

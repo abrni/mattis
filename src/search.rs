@@ -1,7 +1,7 @@
 use crate::{
     board::Board,
     eval::evaluation,
-    hashtable::{Entry, HEKind, Probe, TranspositionTable},
+    hashtable::{HEKind, Probe, TranspositionTable},
     moves::Move32,
     types::Piece,
 };
@@ -23,15 +23,15 @@ pub struct SearchTables {
 pub struct SearchParams {
     pub max_time: Option<Duration>,
     pub max_nodes: Option<u64>,
-    pub max_depth: Option<u32>,
+    pub max_depth: Option<u8>,
     pub stop: Arc<AtomicBool>, // TODO: Support for Mate Search
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SearchStats {
     pub start_time: Instant, // When we started the search
-    pub depth: u32,          // Search depth
-    pub score: i32,          // Score in centipawns
+    pub depth: u8,           // Search depth
+    pub score: i16,          // Score in centipawns
     pub nodes: u64,          // Total count of visited nodes
     pub leaves: u64,         // Total count of visited leaf nodes
     pub fh: u64,             // Count of fail-highs (beta cut off)
@@ -62,8 +62,8 @@ fn pv_line(tptable: &TranspositionTable, board: &mut Board) -> Vec<Move32> {
     let mut key_counts = HashMap::new();
     let mut pvline = Vec::with_capacity(8);
 
-    while let Some(entry) = tptable.get(board.position_key) {
-        if entry.m16.is_nomove() {
+    while let Some(m16) = tptable.get(board.position_key) {
+        if m16.is_nomove() {
             break;
         }
 
@@ -74,7 +74,7 @@ fn pv_line(tptable: &TranspositionTable, board: &mut Board) -> Vec<Move32> {
             break;
         }
 
-        let m32 = board.move_16_to_32(entry.m16);
+        let m32 = board.move_16_to_32(m16);
         board.make_move(m32);
         pvline.push(m32);
     }
@@ -119,7 +119,7 @@ fn should_search_stop(params: &SearchParams, stats: &SearchStats) -> bool {
         return true;
     };
 
-    let max_depth = params.max_depth.unwrap_or(u32::MAX);
+    let max_depth = params.max_depth.unwrap_or(u8::MAX);
     if stats.depth > max_depth {
         return true;
     }
@@ -145,16 +145,7 @@ pub fn iterative_deepening<'a>(
             return None;
         };
 
-        let score = alpha_beta(
-            -i32::MAX,
-            i32::MAX,
-            stats.depth,
-            board,
-            &params,
-            &mut stats,
-            tables,
-            true,
-        );
+        let score = alpha_beta(-30_002, 30_002, stats.depth, board, &params, &mut stats, tables, true);
 
         if stats.stop {
             return None;
@@ -170,15 +161,15 @@ pub fn iterative_deepening<'a>(
 
 #[allow(clippy::too_many_arguments)] // TODO: reduce the number of arguments into an args struct or something
 pub fn alpha_beta(
-    mut alpha: i32,
-    beta: i32,
-    depth: u32,
+    mut alpha: i16,
+    beta: i16,
+    depth: u8,
     board: &mut Board,
     params: &SearchParams,
     stats: &mut SearchStats,
     tables: &mut SearchTables,
     allow_null_move: bool,
-) -> i32 {
+) -> i16 {
     if stats.stop {
         return 0;
     }
@@ -198,7 +189,7 @@ pub fn alpha_beta(
         return 0;
     }
 
-    let hashtable_probe = tables.transposition_table.probe(board, alpha, beta, depth as u8);
+    let hashtable_probe = tables.transposition_table.probe(board, alpha, beta, depth);
     let pv_move = match hashtable_probe {
         Probe::NoHit => None,
         Probe::PV(m32, _) => Some(m32),
@@ -254,15 +245,9 @@ pub fn alpha_beta(
                 tables.search_killers[board.ply][0] = m;
             }
 
-            let entry = Entry {
-                position_key: board.position_key,
-                score: alpha,
-                m16: m.m16,
-                depth: depth as u8,
-                kind: HEKind::Beta,
-            };
-
-            tables.transposition_table.store(entry);
+            tables
+                .transposition_table
+                .store(board.position_key, alpha, m.m16, depth, HEKind::Beta);
 
             return beta; // fail hard beta-cutoff
         }
@@ -274,7 +259,7 @@ pub fn alpha_beta(
 
             if !m.m16.is_capture() {
                 let piece = board.pieces[m.m16.start()].unwrap();
-                tables.search_history[piece][m.m16.end()] += depth;
+                tables.search_history[piece][m.m16.end()] += depth as u32;
             }
         }
     }
@@ -288,26 +273,20 @@ pub fn alpha_beta(
     }
 
     let hashentry_kind = if alpha_changed { HEKind::Exact } else { HEKind::Alpha };
-    let entry = Entry {
-        position_key: board.position_key,
-        score: alpha,
-        m16: best_move.m16,
-        depth: depth as u8,
-        kind: hashentry_kind,
-    };
-
-    tables.transposition_table.store(entry);
+    tables
+        .transposition_table
+        .store(board.position_key, alpha, best_move.m16, depth, hashentry_kind);
 
     alpha
 }
 
 pub fn quiescence(
-    mut alpha: i32,
-    beta: i32,
+    mut alpha: i16,
+    beta: i16,
     board: &mut Board,
     stats: &mut SearchStats,
     tables: &mut SearchTables,
-) -> i32 {
+) -> i16 {
     stats.nodes += 1;
 
     if board.is_repetition() || board.fifty_move >= 100 {
