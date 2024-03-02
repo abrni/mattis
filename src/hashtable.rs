@@ -28,10 +28,9 @@ struct Entry {
 struct Data {
     score: i16,
     m16: Move16,
-    depth: u8,
+    depth: u16,
     kind: HEKind,
     age: u8,
-    _padding: u8,
 }
 
 impl Entry {
@@ -93,7 +92,7 @@ impl TranspositionTable {
         (key >> self.shift) as usize
     }
 
-    pub fn store(&self, position_key: u64, score: i16, m: Move16, depth: u8, kind: HEKind) {
+    pub fn store(&self, position_key: u64, score: i16, m: Move16, depth: u16, kind: HEKind) {
         let index = self.index(position_key);
         debug_assert!(index < self.capacity);
 
@@ -101,24 +100,22 @@ impl TranspositionTable {
 
         // SAFETY: Our index is always in range.
         let table_entry = unsafe { self.data.get_unchecked(index) };
-        let maybe_data = table_entry.load(position_key);
-        let data = maybe_data.unwrap_or_default();
+        let entry_key = table_entry.key.load(Ordering::Relaxed);
+        let entry_data = table_entry.data.load(Ordering::Relaxed);
+        let entry_data: Data = unsafe { std::mem::transmute(entry_data) };
 
         // Check if it makes sense to store the move.
-        // An new entry is rejected if:
-        // - it overwrites an existing entry and
-        // - the new entry is not from a later age and
-        // - the new entry does not have a better (higher) depth
-        if maybe_data.is_some() && data.age >= self.current_age && data.depth >= depth {
+        // The old entry can be replaced if any of the following conditions is true:
+        // - the old entry has never been written to
+        // - TODO: the old entry is corrupted by a data race
+        // - the old entry is not from the current age
+        // - the old entry has a lower depth than we are trying to write
+        let replace = entry_key == 0 || entry_data.age < self.current_age || entry_data.depth <= depth;
+        // TODO: What happens if current_age rolls over?
+
+        if !replace {
             return;
         }
-
-        // TODO: Reenable statistics
-        // if table_entry.position_key == 0 {
-        //     self.filled += 1;
-        // } else {
-        //     self.overwrites += 1;
-        // }
 
         let new_data = Data {
             score,
@@ -126,7 +123,6 @@ impl TranspositionTable {
             depth,
             kind,
             age: self.current_age,
-            _padding: 0,
         };
 
         table_entry.store(position_key, new_data);
@@ -142,7 +138,7 @@ impl TranspositionTable {
         self.load(key).map(|data| data.m16)
     }
 
-    pub fn probe(&self, board: &Board, alpha: i16, beta: i16, depth: u8) -> Probe {
+    pub fn probe(&self, board: &Board, alpha: i16, beta: i16, depth: u16) -> Probe {
         let Some(data) = self.load(board.position_key) else { return Probe::NoHit };
 
         let m16 = data.m16;
@@ -230,7 +226,6 @@ mod test {
             depth: rand::random(),
             kind: HEKind::Alpha,
             age: rand::random(),
-            _padding: rand::random(),
         };
 
         let entry = Entry::default();
@@ -250,7 +245,6 @@ mod test {
             depth: rand::random(),
             kind: HEKind::Alpha,
             age: rand::random(),
-            _padding: rand::random(),
         };
 
         let entry = Entry::default();

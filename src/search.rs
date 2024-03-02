@@ -23,14 +23,14 @@ pub struct SearchTables {
 pub struct SearchParams {
     pub max_time: Option<Duration>,
     pub max_nodes: Option<u64>,
-    pub max_depth: Option<u8>,
+    pub max_depth: Option<u16>,
     pub stop: Arc<AtomicBool>, // TODO: Support for Mate Search
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SearchStats {
     pub start_time: Instant, // When we started the search
-    pub depth: u8,           // Search depth
+    pub depth: u16,          // Search depth
     pub score: i16,          // Score in centipawns
     pub nodes: u64,          // Total count of visited nodes
     pub leaves: u64,         // Total count of visited leaf nodes
@@ -119,7 +119,7 @@ fn should_search_stop(params: &SearchParams, stats: &SearchStats) -> bool {
         return true;
     };
 
-    let max_depth = params.max_depth.unwrap_or(u8::MAX);
+    let max_depth = params.max_depth.unwrap_or(u16::MAX);
     if stats.depth > max_depth {
         return true;
     }
@@ -163,7 +163,7 @@ pub fn iterative_deepening<'a>(
 pub fn alpha_beta(
     mut alpha: i16,
     beta: i16,
-    depth: u8,
+    mut depth: u16,
     board: &mut Board,
     params: &SearchParams,
     stats: &mut SearchStats,
@@ -189,6 +189,10 @@ pub fn alpha_beta(
         return 0;
     }
 
+    if board.in_check() {
+        depth += 1;
+    }
+
     let hashtable_probe = tables.transposition_table.probe(board, alpha, beta, depth);
     let pv_move = match hashtable_probe {
         Probe::NoHit => None,
@@ -205,7 +209,7 @@ pub fn alpha_beta(
             return 0;
         }
 
-        if score >= beta {
+        if score >= beta && score.abs() < 29_000 {
             return beta;
         }
     }
@@ -215,6 +219,7 @@ pub fn alpha_beta(
     moves.sort_unstable_by_key(|m| -score_move(*m, pv_move, tables, board));
 
     let mut best_move = Move32::default();
+    let mut best_score = -30_000;
     let mut legal_moves = 0;
     let mut alpha_changed = false;
 
@@ -226,7 +231,7 @@ pub fn alpha_beta(
         }
 
         legal_moves += 1;
-        let score = -alpha_beta(-beta, -alpha, depth - 1, board, params, stats, tables, allow_null_move);
+        let score = -alpha_beta(-beta, -alpha, depth - 1, board, params, stats, tables, true);
         board.take_move();
 
         if stats.stop {
@@ -247,7 +252,7 @@ pub fn alpha_beta(
 
             tables
                 .transposition_table
-                .store(board.position_key, alpha, m.m16, depth, HEKind::Beta);
+                .store(board.position_key, beta, m.m16, depth, HEKind::Beta);
 
             return beta; // fail hard beta-cutoff
         }
@@ -255,27 +260,32 @@ pub fn alpha_beta(
         if score > alpha {
             alpha = score;
             alpha_changed = true;
-            best_move = m;
 
             if !m.m16.is_capture() {
                 let piece = board.pieces[m.m16.start()].unwrap();
                 tables.search_history[piece][m.m16.end()] += depth as u32;
             }
         }
+
+        if score > best_score {
+            best_move = m;
+            best_score = score;
+        }
     }
 
     if legal_moves == 0 {
         if board.in_check() {
-            return -30_000;
+            return -30_000 + board.ply as i16;
         } else {
             return 0;
         }
     }
 
     let hashentry_kind = if alpha_changed { HEKind::Exact } else { HEKind::Alpha };
+    let score = if alpha_changed { best_score } else { alpha };
     tables
         .transposition_table
-        .store(board.position_key, alpha, best_move.m16, depth, hashentry_kind);
+        .store(board.position_key, score, best_move.m16, depth, hashentry_kind);
 
     alpha
 }

@@ -91,6 +91,11 @@ fn search_thread(rx: Receiver<ThreadCommand>, _tx: Sender<ThreadAnswer>, search_
 
 fn run_go(board: &mut Board, go: uci::Go, search_tables: &mut SearchTables, stop: Arc<AtomicBool>) {
     search_tables.transposition_table.next_age();
+    search_tables.search_history = [[0; 64]; 12];
+    search_tables
+        .search_killers
+        .iter_mut()
+        .for_each(|k| *k = Default::default());
 
     let (time, inc) = match board.color {
         Color::White => (go.wtime, go.winc),
@@ -110,7 +115,7 @@ fn run_go(board: &mut Board, go: uci::Go, search_tables: &mut SearchTables, stop
     let params = SearchParams {
         max_time,
         max_nodes: go.nodes.map(|n| n as u64),
-        max_depth: go.depth.map(|d| d as u8), // TODO: guard against too high numbers
+        max_depth: go.depth.map(|d| d as u16), // TODO: guard against too high numbers
         stop,
     };
 
