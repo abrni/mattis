@@ -154,6 +154,10 @@ pub fn alpha_beta(
         return quiescence(alpha, beta, board, stats, tptable);
     }
 
+    if board.is_repetition() || board.fifty_move >= 100 {
+        return 0;
+    }
+
     let mut moves = Vec::with_capacity(32); // TODO: reuse a preallocated vec
     board.generate_all_moves(&mut moves);
     moves.sort_by_key(|m| -score_move(*m, tptable, board));
