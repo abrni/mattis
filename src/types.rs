@@ -628,6 +628,66 @@ impl Square64 {
     }
 }
 
+impl Add<usize> for Square64 {
+    type Output = Square64;
+
+    fn add(self, rhs: usize) -> Self::Output {
+        let this: usize = self.into();
+        Self::from_primitive(this + rhs)
+    }
+}
+
+impl AddAssign<usize> for Square64 {
+    fn add_assign(&mut self, rhs: usize) {
+        *self = *self + rhs;
+    }
+}
+
+impl Sub<usize> for Square64 {
+    type Output = Square64;
+
+    fn sub(self, rhs: usize) -> Self::Output {
+        let this: usize = self.into();
+        Self::from_primitive(this - rhs)
+    }
+}
+
+impl SubAssign<usize> for Square64 {
+    fn sub_assign(&mut self, rhs: usize) {
+        *self = *self - rhs;
+    }
+}
+
+impl Add<isize> for Square64 {
+    type Output = Square64;
+
+    fn add(self, rhs: isize) -> Self::Output {
+        let this: usize = self.into();
+        Self::from_primitive((this as isize + rhs) as usize)
+    }
+}
+
+impl AddAssign<isize> for Square64 {
+    fn add_assign(&mut self, rhs: isize) {
+        *self = *self + rhs;
+    }
+}
+
+impl Sub<isize> for Square64 {
+    type Output = Square64;
+
+    fn sub(self, rhs: isize) -> Self::Output {
+        let this: usize = self.into();
+        Self::from_primitive((this as isize - rhs) as usize)
+    }
+}
+
+impl SubAssign<isize> for Square64 {
+    fn sub_assign(&mut self, rhs: isize) {
+        *self = *self - rhs;
+    }
+}
+
 impl TryFrom<Square120> for Square64 {
     type Error = ();
 
