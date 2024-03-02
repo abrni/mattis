@@ -316,6 +316,12 @@ impl Board {
         fen
     }
 
+    pub fn in_check(&self) -> bool {
+        let my_king_square = self.king_square[self.color];
+        let op_color = self.color.flipped();
+        self.is_square_attacked(my_king_square, op_color)
+    }
+
     pub fn is_square_attacked(&self, square: Square64, color: Color) -> bool {
         if square == Square64::Invalid {
             return false;
