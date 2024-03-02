@@ -119,7 +119,7 @@ impl Move16 {
     }
 
     pub fn promoted_piece(self, color: Color) -> Option<Piece> {
-        match (self.0 & 0xF000, color) {
+        match (self.0 & 0xB000, color) {
             (0x8000, Color::White) => Some(Piece::WhiteKnight),
             (0x9000, Color::White) => Some(Piece::WhiteBishop),
             (0xA000, Color::White) => Some(Piece::WhiteRook),
@@ -135,6 +135,7 @@ impl Move16 {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Move16Builder(u16);
 
 impl Move16Builder {
@@ -214,7 +215,7 @@ impl Move16Builder {
             _ => 0,
         };
 
-        self.0 |= dbg!(0x8000 | sp);
+        self.0 |= 0x8000 | sp;
 
         self
     }
