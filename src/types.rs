@@ -104,7 +104,7 @@ pub enum CastlePerm {
 pub struct CastlePerms(u8);
 
 impl CastlePerms {
-    pub const None: Self = Self(0);
+    pub const NONE: Self = Self(0);
     pub const ALL: Self = Self(0x0F);
 
     pub fn set(&mut self, perm: CastlePerm) {
