@@ -12,19 +12,15 @@ use crate::{
 use super::Board;
 
 impl Board {
-    pub fn generate_all_moves(&self) -> Vec<Move32> {
-        let mut list = Vec::with_capacity(32);
-
-        self.generate_pawn_pushes(&mut list);
-        self.generate_pawn_attacks(&mut list);
-        self.generate_en_passant(&mut list);
-        self.generate_knight_moves(&mut list);
-        self.generate_king_moves(&mut list);
-        self.generate_rook_queen_moves(&mut list);
-        self.generate_bishop_queen_moves(&mut list);
-        self.generate_castling_moves(&mut list);
-
-        list
+    pub fn generate_all_moves(&self, list: &mut Vec<Move32>) {
+        self.generate_pawn_pushes(list);
+        self.generate_pawn_attacks(list);
+        self.generate_en_passant(list);
+        self.generate_knight_moves(list);
+        self.generate_king_moves(list);
+        self.generate_rook_queen_moves(list);
+        self.generate_bishop_queen_moves(list);
+        self.generate_castling_moves(list);
     }
 
     fn generate_pawn_pushes(&self, list: &mut Vec<Move32>) {

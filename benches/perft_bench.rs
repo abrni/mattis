@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use mattis::board::Board;
+use mattis::{board::Board, moves::Move32};
 
 const MAX_LEAVES: u32 = 999_999;
 
@@ -20,12 +20,13 @@ fn perf_bench(c: &mut Criterion) {
             }
 
             let id = BenchmarkId::from_parameter(format!("{fen}: {depth}"));
+            let mut lists = vec![Vec::with_capacity(32); 8];
 
             group.bench_with_input(id, &(fen, depth), |b, (fen, depth)| {
                 let mut board = Board::from_fen(fen).unwrap();
 
                 b.iter(|| {
-                    let actual_leaves = perft(&mut board, *depth);
+                    let actual_leaves = perft(&mut board, *depth, lists.as_mut_slice());
                     assert_eq!(expected_leaves, actual_leaves);
                 });
             });
@@ -35,7 +36,7 @@ fn perf_bench(c: &mut Criterion) {
     group.finish();
 }
 
-fn perft(board: &mut Board, depth: usize) -> u32 {
+fn perft(board: &mut Board, depth: usize, lists: &mut [Vec<Move32>]) -> u32 {
     #[cfg(debug_assertions)]
     board.check_board_integrity();
 
@@ -44,14 +45,16 @@ fn perft(board: &mut Board, depth: usize) -> u32 {
     }
 
     let mut leaves = 0;
-    let moves = board.generate_all_moves();
+    let (first, rest) = lists.split_first_mut().unwrap();
+    first.clear();
+    board.generate_all_moves(first);
 
-    for m in moves {
-        if !board.make_move(m) {
+    for m in first {
+        if !board.make_move(*m) {
             continue;
         }
 
-        leaves += perft(board, depth - 1);
+        leaves += perft(board, depth - 1, rest);
         board.take_move();
     }
 
