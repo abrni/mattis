@@ -1,5 +1,4 @@
 use crate::{
-    bitboard::BitBoard,
     board::{
         movegen::{magic_bishop_moves, magic_rook_moves},
         Board,

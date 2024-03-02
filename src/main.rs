@@ -1,10 +1,21 @@
-use mattis::board::Board;
+use std::io::{BufRead, BufReader};
+
+use mattis::{board::Board, uci::GuiMessage};
+
+const FEN_STARTPOS: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 fn main() {
-    let board =
-        Board::from_fen("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2").unwrap();
+    let mut board = Board::from_fen(FEN_STARTPOS).unwrap();
+    let mut stdin = BufReader::new(std::io::stdin());
+    let mut input = String::new();
 
-    println!("{board}");
-    println!();
-    println!("{board:#}");
+    loop {
+        input.clear();
+        stdin
+            .read_line(&mut input)
+            .expect("Could not read input line");
+
+        let message = GuiMessage::parse(&input).expect("Received unknown command");
+        dbg!(message);
+    }
 }
