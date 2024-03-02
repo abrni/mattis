@@ -7,8 +7,8 @@ use mattis::{
     board::Board,
     eval::evaluation,
     moves::Move32,
-    search::{iterative_deepening, SearchParams},
-    tptable::TpTable,
+    search::{iterative_deepening, SearchParams, SearchTables},
+    tptable::TranspositionTable,
     types::Color,
     uci::{self, EngineMessage, GuiMessage, Id},
 };
@@ -18,7 +18,12 @@ const FEN_STARTPOS: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -
 fn main() {
     let mut board = Board::from_fen(FEN_STARTPOS).unwrap();
     let mut stdin = BufReader::new(std::io::stdin());
-    let mut tptable = TpTable::new();
+    let mut search_tables = SearchTables {
+        transposition_table: TranspositionTable::new(),
+        search_killers: vec![[Move32::default(); 2]; 1024],
+        search_history: [[0; 64]; 12],
+    };
+
     let mut input = String::new();
 
     loop {
@@ -37,13 +42,13 @@ fn main() {
                 setup_position(&mut board, pos, &moves);
                 dbg!(evaluation(&board));
             }
-            GuiMessage::Go(go) => run_go(&mut board, go, &mut tptable),
+            GuiMessage::Go(go) => run_go(&mut board, go, &mut search_tables),
             _ => println!("This uci command is currently not supported."),
         }
     }
 }
 
-fn run_go(board: &mut Board, go: uci::Go, tptable: &mut TpTable) {
+fn run_go(board: &mut Board, go: uci::Go, search_tables: &mut SearchTables) {
     let (time, inc) = match board.color {
         Color::White => (go.wtime, go.winc),
         Color::Black => (go.btime, go.binc),
@@ -65,7 +70,7 @@ fn run_go(board: &mut Board, go: uci::Go, tptable: &mut TpTable) {
     };
 
     let mut bestmove = Move32::default();
-    for stats in iterative_deepening(board, params, tptable) {
+    for stats in iterative_deepening(board, params, search_tables) {
         let info = EngineMessage::Info(uci::Info {
             depth: Some(stats.depth),
             nodes: Some(stats.nodes as u32),
@@ -75,6 +80,7 @@ fn run_go(board: &mut Board, go: uci::Go, tptable: &mut TpTable) {
         });
 
         println!("{info}");
+        println!("Ordering: {:.2}", stats.fhf as f64 / stats.fh as f64);
         bestmove = stats.bestmove;
     }
 

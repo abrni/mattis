@@ -2,25 +2,25 @@ use crate::moves::Move16;
 
 #[repr(packed)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TpEntry {
+struct Transposition {
     m: Move16,
     key: [u8; 5],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TpTable {
-    vec: Vec<TpEntry>,
+pub struct TranspositionTable {
+    vec: Vec<Transposition>,
     collisions: usize,
     filled: usize,
 }
 
-impl TpTable {
+impl TranspositionTable {
     pub fn new() -> Self {
         let size_b = 112 << 20; // size in bytes
-        let len = size_b / std::mem::size_of::<TpEntry>();
+        let len = size_b / std::mem::size_of::<Transposition>();
 
         let vec = vec![
-            TpEntry {
+            Transposition {
                 m: Move16::build().finish(),
                 key: [0; 5],
             };
@@ -85,7 +85,7 @@ impl TpTable {
     }
 }
 
-impl Default for TpTable {
+impl Default for TranspositionTable {
     fn default() -> Self {
         Self::new()
     }
