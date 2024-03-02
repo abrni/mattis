@@ -233,6 +233,86 @@ lazy_static::lazy_static! {
             .union(RANK_BITBOARDS[Rank::R8])
     };
 
+    pub static ref WHITE_PAWN_PASSED_MASKS: [BitBoard; 64] =  {
+        let mut bitboards = [BitBoard::EMPTY; 64];
+
+        for (i, board) in bitboards.iter_mut().enumerate() {
+            let square = Square64::from_primitive(i);
+            let (file, rank) = (square.file().unwrap(), square.rank().unwrap());
+
+            for r in rank.iter_up().skip(1) {
+                let sq = Square64::from_file_rank(file, r);
+                board.set(sq);
+            }
+
+            if let Some(file) = file.up() {
+                for r in rank.iter_up().skip(1) {
+                    let sq = Square64::from_file_rank(file, r);
+                    board.set(sq);
+                }
+            }
+
+            if let Some(file) = file.down() {
+                for r in rank.iter_up().skip(1) {
+                    let sq = Square64::from_file_rank(file, r);
+                    board.set(sq);
+                }
+            }
+        }
+
+        bitboards
+    };
+
+    pub static ref BLACK_PAWN_PASSED_MASKS: [BitBoard; 64] = {
+        let mut bitboards = [BitBoard::EMPTY; 64];
+
+        for (i, board) in bitboards.iter_mut().enumerate() {
+            let square = Square64::from_primitive(i);
+            let (file, rank) = (square.file().unwrap(), square.rank().unwrap());
+
+            for r in rank.iter_down().skip(1) {
+                let sq = Square64::from_file_rank(file, r);
+                board.set(sq);
+            }
+
+            if let Some(file) = file.up() {
+                for r in rank.iter_down().skip(1) {
+                    let sq = Square64::from_file_rank(file, r);
+                    board.set(sq);
+                }
+            }
+
+            if let Some(file) = file.down() {
+                for r in rank.iter_down().skip(1) {
+                    let sq = Square64::from_file_rank(file, r);
+                    board.set(sq);
+                }
+            }
+        }
+
+        bitboards
+    };
+
+
+    pub static ref ISOLATED_PAWN_MASKS: [BitBoard; 64] = {
+        let mut bitboards = [BitBoard::EMPTY; 64];
+
+        for (i, board) in bitboards.iter_mut().enumerate() {
+            let square = Square64::from_primitive(i);
+            let file = square.file().unwrap();
+
+            if let Some(f) = file.up() {
+                *board = board.union(FILE_BITBOARDS[f]);
+            }
+
+            if let Some(f) = file.down() {
+                *board = board.union(FILE_BITBOARDS[f]);
+            }
+        }
+
+        bitboards
+    };
+
     pub static ref KNIGHT_MOVE_PATTERNS: [BitBoard; 64] = {
         let mut boards = [BitBoard::EMPTY; 64];
 

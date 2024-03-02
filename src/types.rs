@@ -123,7 +123,7 @@ impl Piece {
         Self::BlackKing,
     ];
 
-    pub fn pawn(color: Color) -> Self {
+    pub const fn pawn(color: Color) -> Self {
         match color {
             Color::White => Self::WhitePawn,
             Color::Black => Self::BlackPawn,
@@ -131,7 +131,7 @@ impl Piece {
         }
     }
 
-    pub fn knight(color: Color) -> Self {
+    pub const fn knight(color: Color) -> Self {
         match color {
             Color::White => Self::WhiteKnight,
             Color::Black => Self::BlackKnight,
@@ -139,7 +139,7 @@ impl Piece {
         }
     }
 
-    pub fn bishop(color: Color) -> Self {
+    pub const fn bishop(color: Color) -> Self {
         match color {
             Color::White => Self::WhiteBishop,
             Color::Black => Self::BlackBishop,
@@ -147,7 +147,7 @@ impl Piece {
         }
     }
 
-    pub fn rook(color: Color) -> Self {
+    pub const fn rook(color: Color) -> Self {
         match color {
             Color::White => Self::WhiteRook,
             Color::Black => Self::BlackRook,
@@ -155,7 +155,7 @@ impl Piece {
         }
     }
 
-    pub fn queen(color: Color) -> Self {
+    pub const fn queen(color: Color) -> Self {
         match color {
             Color::White => Self::WhiteQueen,
             Color::Black => Self::BlackQueen,
@@ -163,7 +163,7 @@ impl Piece {
         }
     }
 
-    pub fn king(color: Color) -> Self {
+    pub const fn king(color: Color) -> Self {
         match color {
             Color::White => Self::WhiteKing,
             Color::Black => Self::BlackKing,
@@ -171,7 +171,7 @@ impl Piece {
         }
     }
 
-    pub fn from_char(c: char) -> Option<Self> {
+    pub const fn from_char(c: char) -> Option<Self> {
         match c {
             'P' => Some(Self::WhitePawn),
             'N' => Some(Self::WhiteKnight),
@@ -189,7 +189,7 @@ impl Piece {
         }
     }
 
-    pub fn to_char(self) -> char {
+    pub const fn to_char(self) -> char {
         match self {
             Self::WhitePawn => 'P',
             Self::WhiteKnight => 'N',
@@ -206,25 +206,25 @@ impl Piece {
         }
     }
 
-    pub fn is_big(self) -> bool {
+    pub const fn is_big(self) -> bool {
         !matches!(self, Self::BlackPawn | Self::WhitePawn)
     }
 
-    pub fn is_major(self) -> bool {
+    pub const fn is_major(self) -> bool {
         matches!(
             self,
             Self::WhiteRook | Self::WhiteQueen | Self::WhiteKing | Self::BlackRook | Self::BlackQueen | Self::BlackKing
         )
     }
 
-    pub fn is_minor(self) -> bool {
+    pub const fn is_minor(self) -> bool {
         matches!(
             self,
             Self::WhiteBishop | Self::WhiteKnight | Self::BlackBishop | Self::BlackKnight
         )
     }
 
-    pub fn value(self) -> i32 {
+    pub const fn value(self) -> i32 {
         match self {
             Self::WhitePawn | Self::BlackPawn => 100,
             Self::WhiteKnight | Self::WhiteBishop | Self::BlackKnight | Self::BlackBishop => 325,
@@ -234,7 +234,7 @@ impl Piece {
         }
     }
 
-    pub fn color(self) -> Color {
+    pub const fn color(self) -> Color {
         match self {
             Self::WhitePawn
             | Self::WhiteKnight
@@ -350,6 +350,24 @@ impl File {
         let f: u8 = self.into();
         Self::try_from_primitive(f.checked_sub(1)?).ok()
     }
+
+    pub fn iter_up(self) -> impl Iterator<Item = Self> {
+        let mut file = Some(self);
+        std::iter::from_fn(move || {
+            let old_file = file;
+            file = file.and_then(File::up);
+            old_file
+        })
+    }
+
+    pub fn iter_down(self) -> impl Iterator<Item = Self> {
+        let mut file = Some(self);
+        std::iter::from_fn(move || {
+            let old_file = file;
+            file = file.and_then(File::down);
+            old_file
+        })
+    }
 }
 
 impl_array_indexing!(File, u8, 8);
@@ -407,6 +425,37 @@ impl Rank {
     pub fn down(self) -> Option<Self> {
         let r: u8 = self.into();
         Self::try_from_primitive(r.checked_sub(1)?).ok()
+    }
+
+    pub fn iter_up(self) -> impl Iterator<Item = Self> {
+        let mut rank = Some(self);
+        std::iter::from_fn(move || {
+            let old_rank = rank;
+            rank = rank.and_then(Rank::up);
+            old_rank
+        })
+    }
+
+    pub fn iter_down(self) -> impl Iterator<Item = Self> {
+        let mut rank = Some(self);
+        std::iter::from_fn(move || {
+            let old_rank = rank;
+            rank = rank.and_then(Rank::down);
+            old_rank
+        })
+    }
+
+    pub fn mirrored(self) -> Self {
+        match self {
+            Rank::R1 => Rank::R8,
+            Rank::R2 => Rank::R7,
+            Rank::R3 => Rank::R6,
+            Rank::R4 => Rank::R5,
+            Rank::R5 => Rank::R4,
+            Rank::R6 => Rank::R3,
+            Rank::R7 => Rank::R2,
+            Rank::R8 => Rank::R1,
+        }
     }
 }
 

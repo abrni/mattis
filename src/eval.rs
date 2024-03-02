@@ -1,10 +1,14 @@
 use crate::{
-    board::{
-        movegen::{magic_bishop_moves, magic_rook_moves},
-        Board,
-    },
+    bitboard::{BLACK_PAWN_PASSED_MASKS, ISOLATED_PAWN_MASKS, WHITE_PAWN_PASSED_MASKS},
+    board::Board,
     types::{Color, Piece, Square64},
 };
+
+// First and last entry should never be used, because pawns cant be on the first or last rank
+const PASSED_PAWN_BONUS: [i32; 8] = [0, 5, 10, 20, 35, 60, 100, 0];
+
+const ISOLATED_PAWN_PENALTY: i32 = -10;
+const ROOK_ON_OPEN_FILE_BONUS: i32 = 5;
 
 pub fn evaluation(board: &Board) -> i32 {
     if is_draw_by_material(board) {
@@ -13,7 +17,13 @@ pub fn evaluation(board: &Board) -> i32 {
 
     let my_color = board.color;
     let op_color = board.color.flipped();
+
+    // STEP 1: Just use the material value for both sides
     let mut eval = board.material[my_color] - board.material[op_color];
+
+    // STEP 2: Use piece-square tables for each and add the results to the eval
+    // - the current color uses the just the plain tables, the other sides uses them mirrored
+    // - the king uses a different table in the endgame
 
     let (my_fn, op_fn): (PieceSquareFn, PieceSquareFn) = match my_color {
         Color::White => (piece_square, piece_square_mirrored),
@@ -21,19 +31,57 @@ pub fn evaluation(board: &Board) -> i32 {
         _ => unreachable!(),
     };
 
+    // TODO: interpolate between midgame and endgame?
+    let king_square_table = if is_endgame(board) {
+        &KING_ENDGAME_SQUARE_TABLE
+    } else {
+        &KING_SQUARE_TABLE
+    };
+
     eval += my_fn(Piece::pawn(my_color), board, &PAWN_SQUARE_TABLE);
     eval += my_fn(Piece::knight(my_color), board, &KNIGHT_SQUARE_TABLE);
     eval += my_fn(Piece::bishop(my_color), board, &BISHOP_SQUARE_TABLE);
     eval += my_fn(Piece::rook(my_color), board, &ROOK_SQUARE_TABLE);
     eval += my_fn(Piece::queen(my_color), board, &QUEEN_SQUARE_TABLE);
-    eval += my_fn(Piece::king(my_color), board, &KING_SQUARE_TABLE);
+    eval += my_fn(Piece::king(my_color), board, king_square_table);
 
     eval -= op_fn(Piece::pawn(op_color), board, &PAWN_SQUARE_TABLE);
     eval -= op_fn(Piece::knight(op_color), board, &KNIGHT_SQUARE_TABLE);
     eval -= op_fn(Piece::bishop(op_color), board, &BISHOP_SQUARE_TABLE);
     eval -= op_fn(Piece::rook(op_color), board, &ROOK_SQUARE_TABLE);
     eval -= op_fn(Piece::queen(op_color), board, &QUEEN_SQUARE_TABLE);
-    eval -= op_fn(Piece::king(op_color), board, &KING_SQUARE_TABLE);
+    eval -= op_fn(Piece::king(op_color), board, king_square_table);
+
+    // STEP 3: Apply penalties for isolated pawns & passed pawns
+
+    let (my_passed_masks, op_passed_masks) = match my_color {
+        Color::White => (&*WHITE_PAWN_PASSED_MASKS, &*BLACK_PAWN_PASSED_MASKS),
+        Color::Black => (&*BLACK_PAWN_PASSED_MASKS, &*WHITE_PAWN_PASSED_MASKS),
+        Color::Both => unreachable!(),
+    };
+
+    let bb_my_pawns = board.bitboards[Piece::pawn(my_color)];
+    let bb_op_pawns = board.bitboards[Piece::pawn(op_color)];
+
+    for square in bb_my_pawns.iter_bit_indices() {
+        if ISOLATED_PAWN_MASKS[square].intersection(bb_my_pawns).is_empty() {
+            eval += ISOLATED_PAWN_PENALTY;
+        }
+
+        if my_passed_masks[square].intersection(bb_op_pawns).is_empty() {
+            eval += PASSED_PAWN_BONUS[square.rank().unwrap()];
+        }
+    }
+
+    for square in bb_op_pawns.iter_bit_indices() {
+        if ISOLATED_PAWN_MASKS[square].intersection(bb_op_pawns).is_empty() {
+            eval -= ISOLATED_PAWN_PENALTY;
+        }
+
+        if op_passed_masks[square].intersection(bb_my_pawns).is_empty() {
+            eval -= PASSED_PAWN_BONUS[square.rank().unwrap().mirrored()];
+        }
+    }
 
     eval
 }
@@ -54,16 +102,13 @@ fn piece_square_mirrored(piece: Piece, board: &Board, table: &[i32; 64]) -> i32 
         .sum()
 }
 
-fn rook_queen_mobility(square: Square64, color: Color, board: &Board) -> i32 {
-    magic_rook_moves(square, board.bb_all_pieces[Color::Both])
-        .without(board.bb_all_pieces[color])
-        .bit_count() as i32
-}
+fn is_endgame(board: &Board) -> bool {
+    const MATERIAL_THRESHOLD: i32 = Piece::WhiteRook.value()
+        + 2 * Piece::WhiteKnight.value()
+        + 2 * Piece::WhitePawn.value()
+        + Piece::WhiteKing.value();
 
-fn bishop_queen_mobility(square: Square64, color: Color, board: &Board) -> i32 {
-    magic_bishop_moves(square, board.bb_all_pieces[Color::Both])
-        .without(board.bb_all_pieces[color])
-        .bit_count() as i32
+    board.material[Color::White] < MATERIAL_THRESHOLD && board.material[Color::Black] < MATERIAL_THRESHOLD
 }
 
 fn is_draw_by_material(board: &Board) -> bool {
