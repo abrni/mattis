@@ -6,7 +6,7 @@ use crate::{
         RANK_BITBOARDS,
     },
     moves::{Move16, Move16Builder, Move32},
-    types::{Color, File, Piece, Rank, Square120, Square64},
+    types::{CastlePerm, Color, File, Piece, Rank, Square120, Square64},
 };
 
 use super::Board;
@@ -22,6 +22,7 @@ impl Board {
         self.generate_king_moves(&mut list);
         self.generate_rook_queen_moves(&mut list);
         self.generate_bishop_queen_moves(&mut list);
+        self.generate_castling_moves(&mut list);
 
         list
     }
@@ -323,6 +324,78 @@ impl Board {
                     capture,
                 ));
             }
+        }
+    }
+
+    fn generate_castling_moves(&self, list: &mut Vec<Move32>) {
+        if self.color == Color::White
+            && self.castle_perms.get(CastlePerm::WhiteKingside)
+            && self.pieces[Square120::F1].is_none()
+            && self.pieces[Square120::G1].is_none()
+            && !self.is_square_attacked(Square120::E1, Color::Black)
+            && !self.is_square_attacked(Square120::F1, Color::Black)
+        {
+            list.push(Move32::new(
+                Move16::build()
+                    .start(Square64::E1)
+                    .end(Square64::G1)
+                    .castle(true)
+                    .finish(),
+                None,
+            ));
+        }
+
+        if self.color == Color::White
+            && self.castle_perms.get(CastlePerm::WhiteQueenside)
+            && self.pieces[Square120::D1].is_none()
+            && self.pieces[Square120::C1].is_none()
+            && self.pieces[Square120::B1].is_none()
+            && !self.is_square_attacked(Square120::E1, Color::Black)
+            && !self.is_square_attacked(Square120::D1, Color::Black)
+        {
+            list.push(Move32::new(
+                Move16::build()
+                    .start(Square64::E1)
+                    .end(Square64::C1)
+                    .castle(false)
+                    .finish(),
+                None,
+            ));
+        }
+
+        if self.color == Color::Black
+            && self.castle_perms.get(CastlePerm::BlackKingside)
+            && self.pieces[Square120::F8].is_none()
+            && self.pieces[Square120::G8].is_none()
+            && !self.is_square_attacked(Square120::E8, Color::White)
+            && !self.is_square_attacked(Square120::F8, Color::White)
+        {
+            list.push(Move32::new(
+                Move16::build()
+                    .start(Square64::E8)
+                    .end(Square64::G8)
+                    .castle(true)
+                    .finish(),
+                None,
+            ));
+        }
+
+        if self.color == Color::Black
+            && self.castle_perms.get(CastlePerm::BlackQueenside)
+            && self.pieces[Square120::D8].is_none()
+            && self.pieces[Square120::C8].is_none()
+            && self.pieces[Square120::B8].is_none()
+            && !self.is_square_attacked(Square120::E8, Color::White)
+            && !self.is_square_attacked(Square120::D8, Color::White)
+        {
+            list.push(Move32::new(
+                Move16::build()
+                    .start(Square64::E8)
+                    .end(Square64::C8)
+                    .castle(false)
+                    .finish(),
+                None,
+            ));
         }
     }
 }
