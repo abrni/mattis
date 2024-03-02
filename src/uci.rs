@@ -81,70 +81,74 @@ impl GuiMessage {
 
                 Ok(Self::Position { pos, moves })
             }
-            "go" => {
-                let mut go = Go::default();
-
-                while let Some(p) = parts.next() {
-                    match p {
-                        "ponder" => go.ponder = true,
-                        "infinite" => go.infinite = true,
-                        "wtime" => {
-                            let t = parts.next().ok_or(())?;
-                            let t = t.parse().map_err(|_| ())?;
-                            go.wtime = Some(t);
-                        }
-                        "btime" => {
-                            let t = parts.next().ok_or(())?;
-                            let t = t.parse().map_err(|_| ())?;
-                            go.btime = Some(t);
-                        }
-                        "winc" => {
-                            let t = parts.next().ok_or(())?;
-                            let t = t.parse().map_err(|_| ())?;
-                            go.winc = Some(t);
-                        }
-                        "binc" => {
-                            let t = parts.next().ok_or(())?;
-                            let t = t.parse().map_err(|_| ())?;
-                            go.binc = Some(t);
-                        }
-                        "movestogo" => {
-                            let t = parts.next().ok_or(())?;
-                            let t = t.parse().map_err(|_| ())?;
-                            go.movestogo = Some(t);
-                        }
-                        "depth" => {
-                            let t = parts.next().ok_or(())?;
-                            let t = t.parse().map_err(|_| ())?;
-                            go.depth = Some(t);
-                        }
-                        "nodes" => {
-                            let t = parts.next().ok_or(())?;
-                            let t = t.parse().map_err(|_| ())?;
-                            go.nodes = Some(t);
-                        }
-                        "mate" => {
-                            let t = parts.next().ok_or(())?;
-                            let t = t.parse().map_err(|_| ())?;
-                            go.mate = Some(t);
-                        }
-                        "movetime" => {
-                            let t = parts.next().ok_or(())?;
-                            let t = t.parse().map_err(|_| ())?;
-                            go.movetime = Some(t);
-                        }
-                        "searchmoves" => todo!(),
-                        _ => return Err(()),
-                    }
-                }
-
-                Ok(Self::Go(go))
-            }
+            "go" => Ok(Self::Go(Go::parse(&mut parts)?)),
             "stop" => Ok(GuiMessage::Stop),
             "ponderhit" => Ok(GuiMessage::Ponderhit),
             "quit" => Ok(GuiMessage::Quit),
             _ => Err(()),
         }
+    }
+}
+
+impl Go {
+    pub fn parse<'a>(parts: &mut impl Iterator<Item = &'a str>) -> Result<Self, ()> {
+        let mut go = Go::default();
+
+        while let Some(p) = parts.next() {
+            match p {
+                "ponder" => go.ponder = true,
+                "infinite" => go.infinite = true,
+                "wtime" => {
+                    let t = parts.next().ok_or(())?;
+                    let t = t.parse().map_err(|_| ())?;
+                    go.wtime = Some(t);
+                }
+                "btime" => {
+                    let t = parts.next().ok_or(())?;
+                    let t = t.parse().map_err(|_| ())?;
+                    go.btime = Some(t);
+                }
+                "winc" => {
+                    let t = parts.next().ok_or(())?;
+                    let t = t.parse().map_err(|_| ())?;
+                    go.winc = Some(t);
+                }
+                "binc" => {
+                    let t = parts.next().ok_or(())?;
+                    let t = t.parse().map_err(|_| ())?;
+                    go.binc = Some(t);
+                }
+                "movestogo" => {
+                    let t = parts.next().ok_or(())?;
+                    let t = t.parse().map_err(|_| ())?;
+                    go.movestogo = Some(t);
+                }
+                "depth" => {
+                    let t = parts.next().ok_or(())?;
+                    let t = t.parse().map_err(|_| ())?;
+                    go.depth = Some(t);
+                }
+                "nodes" => {
+                    let t = parts.next().ok_or(())?;
+                    let t = t.parse().map_err(|_| ())?;
+                    go.nodes = Some(t);
+                }
+                "mate" => {
+                    let t = parts.next().ok_or(())?;
+                    let t = t.parse().map_err(|_| ())?;
+                    go.mate = Some(t);
+                }
+                "movetime" => {
+                    let t = parts.next().ok_or(())?;
+                    let t = t.parse().map_err(|_| ())?;
+                    go.movetime = Some(t);
+                }
+                "searchmoves" => todo!(),
+                _ => return Err(()),
+            }
+        }
+
+        Ok(go)
     }
 }
 
