@@ -6,7 +6,7 @@ use crate::{
         RANK_BITBOARDS,
     },
     moves::{Move16, Move16Builder, Move32},
-    types::{CastlePerm, Color, File, Piece, Rank, Square120, Square64},
+    types::{CastlePerm, Color, File, Piece, Rank, Square64},
 };
 
 use super::Board;
@@ -110,7 +110,7 @@ impl Board {
 
         for end in targets_east.iter_bit_indices() {
             let m16 = Move16::build().start(end - 9usize).end(end).capture();
-            let capture = self.pieces[Square120::try_from(end).unwrap()];
+            let capture = self.pieces[end];
 
             if end.rank().unwrap() == Rank::R8 {
                 insert_promotions(list, m16, Color::White, capture);
@@ -125,7 +125,7 @@ impl Board {
 
         for end in targets_west.iter_bit_indices() {
             let m16 = Move16::build().start(end - 7usize).end(end).capture();
-            let capture = self.pieces[Square120::try_from(end).unwrap()];
+            let capture = self.pieces[end];
 
             if end.rank().unwrap() == Rank::R8 {
                 insert_promotions(list, m16, Color::White, capture);
@@ -142,7 +142,7 @@ impl Board {
 
         for end in targets_east.iter_bit_indices() {
             let m16 = Move16::build().start(end + 7usize).end(end).capture();
-            let capture = self.pieces[Square120::try_from(end).unwrap()];
+            let capture = self.pieces[end];
 
             if end.rank().unwrap() == Rank::R1 {
                 insert_promotions(list, m16, Color::Black, capture);
@@ -157,7 +157,7 @@ impl Board {
 
         for end in targets_west.iter_bit_indices() {
             let m16 = Move16::build().start(end + 9usize).end(end).capture();
-            let capture = self.pieces[Square120::try_from(end).unwrap()];
+            let capture = self.pieces[end];
 
             if end.rank().unwrap() == Rank::R1 {
                 insert_promotions(list, m16, Color::Black, capture);
@@ -176,13 +176,7 @@ impl Board {
             return;
         }
 
-        let candidates = match self.color {
-            Color::White => [en_pas_sq - 9usize, en_pas_sq - 11usize],
-            Color::Black => [en_pas_sq + 9usize, en_pas_sq + 11usize],
-            _ => unreachable!(),
-        };
-
-        let moving_piece = match self.color {
+        let attacker = match self.color {
             Color::White => Piece::WhitePawn,
             Color::Black => Piece::BlackPawn,
             _ => unreachable!(),
@@ -194,17 +188,42 @@ impl Board {
             _ => unreachable!(),
         };
 
-        for candidate in candidates {
-            if self.pieces[candidate] != Some(moving_piece) {
-                continue;
-            }
+        let mut bb_en_pas = BitBoard::EMPTY;
+        bb_en_pas.set(en_pas_sq);
 
-            let candidate = Square64::try_from(candidate).unwrap();
-            let en_pas_sq = Square64::try_from(en_pas_sq).unwrap();
+        let mut attacker_east = match self.color {
+            Color::White => bb_en_pas.shifted_southeast(),
+            Color::Black => bb_en_pas.shifted_northeast(),
+            _ => unreachable!(),
+        };
 
+        let mut attacker_west = match self.color {
+            Color::White => bb_en_pas.shifted_southwest(),
+            Color::Black => bb_en_pas.shifted_northwest(),
+            _ => unreachable!(),
+        };
+
+        if !attacker_west
+            .intersection(self.bitboards[attacker])
+            .is_empty()
+        {
             list.push(Move32::new(
                 Move16::build()
-                    .start(candidate)
+                    .start(attacker_west.pop())
+                    .end(en_pas_sq)
+                    .en_passant()
+                    .finish(),
+                Some(captured_piece),
+            ))
+        }
+
+        if !attacker_east
+            .intersection(self.bitboards[attacker])
+            .is_empty()
+        {
+            list.push(Move32::new(
+                Move16::build()
+                    .start(attacker_east.pop())
                     .end(en_pas_sq)
                     .en_passant()
                     .finish(),
@@ -224,7 +243,7 @@ impl Board {
             let targets = KNIGHT_MOVE_PATTERNS[start].without(self.bb_all_pieces[self.color]);
 
             for end in targets.iter_bit_indices() {
-                let capture = self.pieces[Square120::try_from(end).unwrap()];
+                let capture = self.pieces[end];
 
                 let m = Move16::build().start(start).end(end);
                 let m = if capture.is_some() { m.capture() } else { m };
@@ -235,16 +254,13 @@ impl Board {
     }
 
     fn generate_king_moves(&self, list: &mut Vec<Move32>) {
-        let start120 = self.king_square[self.color];
-        let Ok(start64) = Square64::try_from(start120) else {
-            return;
-        };
-        let targets = KING_MOVE_PATTERNS[start64].without(self.bb_all_pieces[self.color]);
+        let start = self.king_square[self.color];
+        let targets = KING_MOVE_PATTERNS[start].without(self.bb_all_pieces[self.color]);
 
         for end in targets.iter_bit_indices() {
-            let capture = self.pieces[Square120::try_from(end).unwrap()];
+            let capture = self.pieces[end];
 
-            let m = Move16::build().start(start64).end(end);
+            let m = Move16::build().start(start).end(end);
             let m = if capture.is_some() { m.capture() } else { m };
 
             list.push(Move32::new(m.finish(), capture));
@@ -280,7 +296,7 @@ impl Board {
             }
 
             for end in captures.iter_bit_indices() {
-                let capture = self.pieces[Square120::try_from(end).unwrap()];
+                let capture = self.pieces[end];
                 list.push(Move32::new(
                     Move16::build().start(start).end(end).capture().finish(),
                     capture,
@@ -318,7 +334,7 @@ impl Board {
             }
 
             for end in captures.iter_bit_indices() {
-                let capture = self.pieces[Square120::try_from(end).unwrap()];
+                let capture = self.pieces[end];
                 list.push(Move32::new(
                     Move16::build().start(start).end(end).capture().finish(),
                     capture,
@@ -330,10 +346,10 @@ impl Board {
     fn generate_castling_moves(&self, list: &mut Vec<Move32>) {
         if self.color == Color::White
             && self.castle_perms.get(CastlePerm::WhiteKingside)
-            && self.pieces[Square120::F1].is_none()
-            && self.pieces[Square120::G1].is_none()
-            && !self.is_square_attacked(Square120::E1, Color::Black)
-            && !self.is_square_attacked(Square120::F1, Color::Black)
+            && self.pieces[Square64::F1].is_none()
+            && self.pieces[Square64::G1].is_none()
+            && !self.is_square_attacked(Square64::E1, Color::Black)
+            && !self.is_square_attacked(Square64::F1, Color::Black)
         {
             list.push(Move32::new(
                 Move16::build()
@@ -347,11 +363,11 @@ impl Board {
 
         if self.color == Color::White
             && self.castle_perms.get(CastlePerm::WhiteQueenside)
-            && self.pieces[Square120::D1].is_none()
-            && self.pieces[Square120::C1].is_none()
-            && self.pieces[Square120::B1].is_none()
-            && !self.is_square_attacked(Square120::E1, Color::Black)
-            && !self.is_square_attacked(Square120::D1, Color::Black)
+            && self.pieces[Square64::D1].is_none()
+            && self.pieces[Square64::C1].is_none()
+            && self.pieces[Square64::B1].is_none()
+            && !self.is_square_attacked(Square64::E1, Color::Black)
+            && !self.is_square_attacked(Square64::D1, Color::Black)
         {
             list.push(Move32::new(
                 Move16::build()
@@ -365,10 +381,10 @@ impl Board {
 
         if self.color == Color::Black
             && self.castle_perms.get(CastlePerm::BlackKingside)
-            && self.pieces[Square120::F8].is_none()
-            && self.pieces[Square120::G8].is_none()
-            && !self.is_square_attacked(Square120::E8, Color::White)
-            && !self.is_square_attacked(Square120::F8, Color::White)
+            && self.pieces[Square64::F8].is_none()
+            && self.pieces[Square64::G8].is_none()
+            && !self.is_square_attacked(Square64::E8, Color::White)
+            && !self.is_square_attacked(Square64::F8, Color::White)
         {
             list.push(Move32::new(
                 Move16::build()
@@ -382,11 +398,11 @@ impl Board {
 
         if self.color == Color::Black
             && self.castle_perms.get(CastlePerm::BlackQueenside)
-            && self.pieces[Square120::D8].is_none()
-            && self.pieces[Square120::C8].is_none()
-            && self.pieces[Square120::B8].is_none()
-            && !self.is_square_attacked(Square120::E8, Color::White)
-            && !self.is_square_attacked(Square120::D8, Color::White)
+            && self.pieces[Square64::D8].is_none()
+            && self.pieces[Square64::C8].is_none()
+            && self.pieces[Square64::B8].is_none()
+            && !self.is_square_attacked(Square64::E8, Color::White)
+            && !self.is_square_attacked(Square64::D8, Color::White)
         {
             list.push(Move32::new(
                 Move16::build()
@@ -437,7 +453,6 @@ pub const BISHOP_MAGIC_BIT_COUNT: [u32; 64] = [
 ];
 
 lazy_static::lazy_static! {
-
     pub static ref ROOK_MAGIC_MASKS: [BitBoard; 64] = {
         let mut boards = [BitBoard::EMPTY; 64];
 
@@ -603,7 +618,7 @@ fn blocker_permutation(mut i: usize, mut mask: BitBoard) -> BitBoard {
 
     while i != 0 {
         if (i & 1) != 0 {
-            let idx = Square64::try_from(mask.to_u64().trailing_zeros() as usize).unwrap();
+            let idx = Square64::from_primitive(mask.to_u64().trailing_zeros() as usize);
             blockers.set(idx);
         }
 

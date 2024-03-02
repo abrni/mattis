@@ -8,7 +8,7 @@ use crate::{
         ROOK_ATTACK_TABLE, ROOK_MAGICS, ROOK_MAGIC_BIT_COUNT, ROOK_MAGIC_MASKS,
     },
     moves::Move32,
-    types::{CastlePerm, CastlePerms, Color, File, Piece, Rank, Square120, Square64},
+    types::{CastlePerm, CastlePerms, Color, File, Piece, Rank, Square64},
 };
 use lazy_static::lazy_static;
 use num_enum::{FromPrimitive, TryFromPrimitive};
@@ -19,9 +19,9 @@ use thiserror::Error;
 lazy_static! {
     pub static ref KEY_RNG: Mutex<StdRng> = Mutex::new(StdRng::seed_from_u64(0)); // always produce the same keys
 
-    pub static ref PIECE_KEYS: [[u64; 12]; 120] = {
+    pub static ref PIECE_KEYS: [[u64; 12]; 64] = {
         let mut rng = KEY_RNG.lock().unwrap();
-        let mut keys = [[0; 12]; 120];
+        let mut keys = [[0; 12]; 64];
         keys.iter_mut().for_each(|l| *l = rng.gen());
         keys
     };
@@ -32,9 +32,9 @@ lazy_static! {
         keys[CastlePerms::NONE.as_u8() as usize] = 0;
         keys
     };
-    pub static ref EN_PASSANT_KEYS: [u64; 120] = {
+    pub static ref EN_PASSANT_KEYS: [u64; 64] = {
         let mut rng = KEY_RNG.lock().unwrap();
-        let mut keys = [0; 120];
+        let mut keys = [0; 64];
         keys.iter_mut().for_each(|k| *k = rng.gen());
         keys
     };
@@ -67,26 +67,26 @@ pub enum FenError {
 pub struct HistoryEntry {
     pub move32: Move32,
     pub fifty_move: usize,
-    pub en_passant: Option<Square120>,
+    pub en_passant: Option<Square64>,
     pub castle_perms: CastlePerms,
     pub position_key: u64,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Board {
-    pub pieces: [Option<Piece>; 120], // the main representation of pieces on the board
-    pub color: Color,                 // the current active color
-    pub en_passant: Option<Square120>, // the current en passant square, if there is one
-    pub castle_perms: CastlePerms,    // the current castle permitions
+    pub pieces: [Option<Piece>; 64], // the main representation of pieces on the board
+    pub color: Color,                // the current active color
+    pub en_passant: Option<Square64>, // the current en passant square, if there is one
+    pub castle_perms: CastlePerms,   // the current castle permitions
 
     pub fifty_move: usize, // the amount of *halfmoves* (triggers the rule at 100) since a fifty-move-rule reset
     pub ply: usize,        // the number of halfmoves since the start of the game (currently unused)
     pub position_key: u64, // the current zobrist position key
 
-    pub king_square: [Square120; 2], // the position of the white and black kings
-    pub bitboards: [BitBoard; 12],   // bitboards for each piece type
+    pub king_square: [Square64; 2], // the position of the white and black kings
+    pub bitboards: [BitBoard; 12],  // bitboards for each piece type
     pub bb_all_pieces: [BitBoard; 3], // bitboards of all pieces per color
-    pub count_pieces: [usize; 12], // counts the number of pieces on the board fore each piece type
+    pub count_pieces: [usize; 12],  // counts the number of pieces on the board fore each piece type
     pub count_big_pieces: [usize; 2], // counts the number of big pieces for both sides (everything exept pawns)
     pub count_major_pieces: [usize; 2], // counts the number of major pieces for both sides (rooks, queens, king)
     pub count_minor_pieces: [usize; 2], // counts the number of minor pieces for both sides (bishops, knights)
@@ -98,8 +98,8 @@ pub struct Board {
 impl Board {
     pub fn new() -> Self {
         Self {
-            pieces: [None; 120],
-            king_square: [Square120::Invalid; 2],
+            pieces: [None; 64],
+            king_square: [Square64::Invalid; 2],
             color: Color::Both,
             en_passant: None,
             fifty_move: 0,
@@ -120,7 +120,7 @@ impl Board {
     pub fn generate_position_key(&self) -> u64 {
         let mut key: u64 = 0;
 
-        for sq in 0..120 {
+        for sq in 0..64 {
             let piece = self.pieces[sq];
 
             if let Some(piece) = piece {
@@ -165,7 +165,7 @@ impl Board {
                     let file = File::try_from_primitive(file_num as u8)
                         .map_err(|_| FenError::WrongFileCount)?;
                     let rank = Rank::try_from_primitive((7 - rank_num) as u8).unwrap();
-                    let square = Square120::from_file_rank(file, rank);
+                    let square = Square64::from_file_rank(file, rank);
                     board.pieces[square] = Some(piece);
                     file_num += 1;
                 }
@@ -204,7 +204,7 @@ impl Board {
 
             let rank = Rank::from_char(parts[3].chars().nth(1).unwrap())
                 .ok_or(FenError::InvalidEnPassantSquare)?;
-            let square = Square120::from_file_rank(file, rank);
+            let square = Square64::from_file_rank(file, rank);
             board.en_passant = Some(square);
         }
 
@@ -225,21 +225,20 @@ impl Board {
         self.count_minor_pieces = [0; 2];
         self.material = [0; 2];
 
-        for i in 0..120 {
-            let square = Square120::from_primitive(i);
+        for i in 0..64 {
+            let square = Square64::from_primitive(i);
             let piece = self.pieces[square];
 
-            if square == Square120::Invalid || piece.is_none() {
+            if piece.is_none() {
                 continue;
             }
 
             let piece = piece.unwrap(); // safe, because we test if it is none before
-            let sq64 = Square64::try_from(square).unwrap(); // safe, because we test if the quare is invalid before
             let color = piece.color();
 
-            self.bitboards[piece].set(sq64);
-            self.bb_all_pieces[color].set(sq64);
-            self.bb_all_pieces[Color::Both].set(sq64);
+            self.bitboards[piece].set(square);
+            self.bb_all_pieces[color].set(square);
+            self.bb_all_pieces[Color::Both].set(square);
             self.count_pieces[piece] += 1;
             self.count_big_pieces[color] += piece.is_big() as usize;
             self.count_major_pieces[color] += piece.is_major() as usize;
@@ -261,7 +260,7 @@ impl Board {
 
             for file in 0..8 {
                 let file = File::try_from_primitive(file).unwrap();
-                let sq = Square120::from_file_rank(file, rank);
+                let sq = Square64::from_file_rank(file, rank);
 
                 if let Some(piece) = self.pieces[sq] {
                     if empty > 0 {
@@ -320,27 +319,39 @@ impl Board {
         fen
     }
 
-    pub fn is_square_attacked(&self, square: Square120, color: Color) -> bool {
-        if square == Square120::Invalid {
+    pub fn is_square_attacked(&self, square: Square64, color: Color) -> bool {
+        if square == Square64::Invalid {
             return false;
         }
 
-        let sq64 = Square64::try_from(square).unwrap();
-
         // attacked by white pawns?
-        if color == Color::White
-            && (self.pieces[square - 11usize] == Some(Piece::WhitePawn)
-                || self.pieces[square - 9usize] == Some(Piece::WhitePawn))
-        {
-            return true;
+        if color == Color::White {
+            let east = self.bitboards[Piece::WhitePawn]
+                .shifted_northeast()
+                .get(square);
+
+            let west = self.bitboards[Piece::WhitePawn]
+                .shifted_northwest()
+                .get(square);
+
+            if west || east {
+                return true;
+            }
         }
 
         // attacked by black pawns?
-        if color == Color::Black
-            && (self.pieces[square + 11usize] == Some(Piece::BlackPawn)
-                || self.pieces[square + 9usize] == Some(Piece::BlackPawn))
-        {
-            return true;
+        if color == Color::Black {
+            let east = self.bitboards[Piece::BlackPawn]
+                .shifted_southeast()
+                .get(square);
+
+            let west = self.bitboards[Piece::BlackPawn]
+                .shifted_southwest()
+                .get(square);
+
+            if west || east {
+                return true;
+            }
         }
 
         // attacked by a king?
@@ -350,7 +361,7 @@ impl Board {
             Color::Both => unreachable!(),
         };
 
-        if !KNIGHT_MOVE_PATTERNS[sq64]
+        if !KNIGHT_MOVE_PATTERNS[square]
             .intersection(self.bitboards[knight_piece])
             .is_empty()
         {
@@ -358,10 +369,10 @@ impl Board {
         }
 
         // attacked by a rook or queen?
-        let blockers = self.bb_all_pieces[Color::Both].intersection(ROOK_MAGIC_MASKS[sq64]);
-        let key = blockers.to_u64().wrapping_mul(ROOK_MAGICS[sq64]);
-        let key = key >> (64 - ROOK_MAGIC_BIT_COUNT[sq64]);
-        let attack_pattern = ROOK_ATTACK_TABLE[sq64][key as usize];
+        let blockers = self.bb_all_pieces[Color::Both].intersection(ROOK_MAGIC_MASKS[square]);
+        let key = blockers.to_u64().wrapping_mul(ROOK_MAGICS[square]);
+        let key = key >> (64 - ROOK_MAGIC_BIT_COUNT[square]);
+        let attack_pattern = ROOK_ATTACK_TABLE[square][key as usize];
         let captures = attack_pattern.intersection(self.bb_all_pieces[color]);
 
         let (queen_piece, rook_piece) = match color {
@@ -376,10 +387,10 @@ impl Board {
         }
 
         // attacked by a bishop or queen?
-        let blockers = self.bb_all_pieces[Color::Both].intersection(BISHOP_MAGIC_MASKS[sq64]);
-        let key = blockers.to_u64().wrapping_mul(BISHOP_MAGICS[sq64]);
-        let key = key >> (64 - BISHOP_MAGIC_BIT_COUNT[sq64]);
-        let attack_pattern = BISHOP_ATTACK_TABLE[sq64][key as usize];
+        let blockers = self.bb_all_pieces[Color::Both].intersection(BISHOP_MAGIC_MASKS[square]);
+        let key = blockers.to_u64().wrapping_mul(BISHOP_MAGICS[square]);
+        let key = key >> (64 - BISHOP_MAGIC_BIT_COUNT[square]);
+        let attack_pattern = BISHOP_ATTACK_TABLE[square][key as usize];
         let captures = attack_pattern.intersection(self.bb_all_pieces[color]);
 
         let (queen_piece, bishop_piece) = match color {
@@ -400,7 +411,7 @@ impl Board {
             Color::Both => unreachable!(),
         };
 
-        if !KING_MOVE_PATTERNS[sq64]
+        if !KING_MOVE_PATTERNS[square]
             .intersection(self.bitboards[king_piece])
             .is_empty()
         {
@@ -419,22 +430,16 @@ impl Board {
         let mut check_count_minor_pieces = [0; 2];
         let mut check_material = [0; 2];
 
-        for i in 0..120 {
-            let square = Square120::from_primitive(i);
+        for i in 0..64 {
+            let square = Square64::from_primitive(i);
             let piece = self.pieces[square];
-
-            if square == Square120::Invalid {
-                assert!(piece.is_none());
-                continue;
-            }
 
             if let Some(piece) = piece {
                 let color = piece.color();
-                let sq64 = Square64::try_from(square).unwrap();
 
-                check_bitboards[piece].set(sq64);
-                check_bb_all_pieces[color].set(sq64);
-                check_bb_all_pieces[Color::Both].set(sq64);
+                check_bitboards[piece].set(square);
+                check_bb_all_pieces[color].set(square);
+                check_bb_all_pieces[Color::Both].set(square);
                 check_count_pieces[piece] += 1;
                 check_count_big_pieces[color] += piece.is_big() as usize;
                 check_count_major_pieces[color] += piece.is_major() as usize;
@@ -492,7 +497,7 @@ impl Display for Board {
             for file in 0..8 {
                 let rank = Rank::try_from_primitive(rank).unwrap();
                 let file = File::try_from_primitive(file).unwrap();
-                let sq = Square120::from_file_rank(file, rank);
+                let sq = Square64::from_file_rank(file, rank);
                 let piece = self.pieces[sq];
 
                 if let Some(piece) = piece {

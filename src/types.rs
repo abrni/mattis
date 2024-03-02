@@ -593,7 +593,7 @@ impl Display for Square120 {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, FromPrimitive, IntoPrimitive)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, IntoPrimitive)]
 #[repr(usize)]
 #[rustfmt::skip]
 pub enum Square64 {
@@ -610,6 +610,18 @@ pub enum Square64 {
 }
 
 impl_array_indexing!(Square64, usize, 64);
+
+impl FromPrimitive for Square64 {
+    type Primitive = usize;
+
+    fn from_primitive(number: Self::Primitive) -> Self {
+        if number <= Self::Invalid as usize {
+            unsafe { std::mem::transmute(number) }
+        } else {
+            Self::Invalid
+        }
+    }
+}
 
 impl<T> Index<Square64> for Vec<T> {
     type Output = T;
@@ -632,7 +644,7 @@ impl Square64 {
         let file: u8 = file.into();
         let rank: u8 = rank.into();
         let square = file + rank * 8;
-        Square64::from(square as usize)
+        Square64::from_primitive(square as usize)
     }
 
     pub fn file(self) -> Option<File> {
