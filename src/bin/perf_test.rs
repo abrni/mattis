@@ -11,13 +11,15 @@ struct Statistics {
 }
 
 fn main() {
-    const MAX_LEAVES: u32 = 10_000_000;
+    const MAX_LEAVES: u32 = 9_999_999;
     let testsuite = fs::read_to_string("perftsuite.epd").unwrap();
+    let print_width = (1 + MAX_LEAVES.ilog10()) as usize;
 
     for line in testsuite.lines() {
         let mut parts = line.split(';');
         let fen = parts.next().unwrap();
         let mut board = Board::from_fen(fen).unwrap();
+        println!("{fen}:");
 
         for (depth, p) in parts.enumerate() {
             let depth = depth + 1;
@@ -29,7 +31,7 @@ fn main() {
 
             let mut stats = Statistics::default();
 
-            print!("Depth {depth}: expect {expected_leaves} leaves");
+            print!("    Depth {depth}: expect {expected_leaves:>print_width$} leaves");
             std::io::stdout().flush().unwrap();
 
             let mut lists = vec![Vec::with_capacity(32); 8];
@@ -38,7 +40,7 @@ fn main() {
             let success = expected_leaves == actual_leaves;
 
             let symbol = if success { '✓' } else { '✗' };
-            println!(", got {actual_leaves} --> {symbol}");
+            println!(", got {actual_leaves:>print_width$} -> {symbol}");
 
             if !success {
                 eprintln!("Test failed!");
