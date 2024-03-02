@@ -153,10 +153,7 @@ pub enum EngineMessage {
     Id(Id),
     Uciok,
     Readyok,
-    Bestmove {
-        move_: String,
-        ponder: Option<String>,
-    },
+    Bestmove { move_: String, ponder: Option<String> },
     // TODO: Copyprotection
     // TODO: Registration
     Info(Info),
@@ -205,32 +202,9 @@ impl Display for EngineMessage {
             },
             EngineMessage::Uciok => write!(f, "uciok"),
             EngineMessage::Readyok => write!(f, "readyok"),
-            #[rustfmt::skip]
-            EngineMessage::Info(info) =>
-            {
-                write!(f, "info")?;
-                if let Some(depth)          = info.depth           { write!(f, " depth {depth}")?;                   }
-                if let Some(seldepth)       = info.seldepth        { write!(f, " seldepth {seldepth}")?;             }
-                if let Some(time)           = info.time            { write!(f, " time {time}")?;                     }
-                if let Some(nodes)          = info.nodes           { write!(f, " nodes {nodes}")?;                   }
-                if let Some(score)          = &info.score          { write!(f, " score {score}")?;                   }
-                if let Some(currmove)       = &info.currmove       { write!(f, " currmove {currmove}")?;             }
-                if let Some(currmovenumber) = &info.currmovenumber { write!(f, " currmovenumber {currmovenumber}")?; }
-                if let Some(hashfull)       = info.hashfull        { write!(f, " hashfull {hashfull}")?;             }
-                if let Some(nps)            = info.nps             { write!(f, " nps {nps}")?;                       }
-                if let Some(tbhits)         = info.tbhits          { write!(f, " tbhits {tbhits}")?;                 }
-                if let Some(cpuload)        = info.cpuload         { write!(f, " cpuload {cpuload}")?;               }
-                
-                if !info.pv.is_empty() {
-                    write!(f, " pv")?;
-                    for m in &info.pv {
-                        write!(f, " {m}")?;
-                    }
-                }
-                
-                if let Some(string)         = &info.string         { write!(f, " string {string}")?;                 }
-                
-                Ok(())
+
+            EngineMessage::Info(info) => {
+                write!(f, "{info}")
             }
             EngineMessage::Bestmove { move_, ponder } => {
                 write!(f, "bestmove {move_}")?;
@@ -250,5 +224,41 @@ impl Display for Score {
             Self::Cp(cp) => write!(f, "cp {cp}"),
             Self::Mate(mate) => write!(f, "mate {mate}"),
         }
+    }
+}
+
+impl Display for Info {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn write_field<T: Display>(f: &mut std::fmt::Formatter<'_>, name: &str, value: Option<T>) -> std::fmt::Result {
+            if let Some(v) = value {
+                write!(f, " {name} {v}")?;
+            }
+            Ok(())
+        }
+
+        write!(f, "info")?;
+        write_field(f, "depth", self.depth)?;
+        write_field(f, "seldepth", self.seldepth)?;
+        write_field(f, "time", self.time)?;
+        write_field(f, "nodes", self.nodes)?;
+        write_field(f, "score", self.score.as_ref())?;
+        write_field(f, "currmove", self.currmove.as_ref())?;
+        write_field(f, "currmovenumber", self.currmovenumber.as_ref())?;
+        write_field(f, "hashfull", self.hashfull)?;
+        write_field(f, "nps", self.nps)?;
+        write_field(f, "tbhits", self.tbhits)?;
+        write_field(f, "cpuload", self.cpuload)?;
+
+        if !self.pv.is_empty() {
+            write!(f, " pv")?;
+
+            for m in &self.pv {
+                write!(f, " {m}")?;
+            }
+        }
+
+        write_field(f, "string", self.string.as_ref())?;
+
+        Ok(())
     }
 }
