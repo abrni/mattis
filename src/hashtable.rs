@@ -2,6 +2,7 @@ use crate::{
     board::Board,
     moves::{Move16, Move32},
 };
+use std::sync::atomic::{AtomicU64, Ordering};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum HEKind {
@@ -17,10 +18,14 @@ pub enum Probe {
     CutOff(Move32, i16), // We have a successful hit, that was exact or causes a branch cutoff
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-#[repr(packed)]
+#[derive(Debug, Default)]
 struct Entry {
-    position_key: u64,
+    key: AtomicU64,
+    data: AtomicU64,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct Data {
     score: i16,
     m16: Move16,
     depth: u8,
@@ -29,14 +34,32 @@ struct Entry {
     _padding: u8,
 }
 
+impl Entry {
+    fn store(&self, key: u64, data: Data) {
+        let data: u64 = unsafe { std::mem::transmute(data) };
+        let key = data ^ key;
+
+        self.key.store(key, Ordering::Relaxed);
+        self.data.store(data, Ordering::Relaxed);
+    }
+
+    fn load(&self, key: u64) -> Option<Data> {
+        let encoded_key = self.key.load(Ordering::Relaxed);
+        let data = self.data.load(Ordering::Relaxed);
+
+        if encoded_key ^ data == key {
+            let data: Data = unsafe { std::mem::transmute(data) };
+            Some(data)
+        } else {
+            None
+        }
+    }
+}
+
 pub struct TranspositionTable {
     data: Box<[Entry]>,
     capacity: usize,
     shift: u32,
-    filled: usize,
-    overwrites: usize,
-    probe_hits: usize,
-    probe_successes: usize,
     current_age: u8,
 }
 
@@ -54,7 +77,7 @@ impl TranspositionTable {
 
         let mut data = Vec::new();
         data.reserve_exact(capacity);
-        data.resize(capacity, Default::default());
+        data.resize_with(capacity, Default::default);
 
         let data = data.into_boxed_slice();
 
@@ -62,10 +85,6 @@ impl TranspositionTable {
             data,
             capacity,
             shift,
-            filled: 0,
-            overwrites: 0,
-            probe_hits: 0,
-            probe_successes: 0,
             current_age: 0,
         }
     }
@@ -74,86 +93,74 @@ impl TranspositionTable {
         (key >> self.shift) as usize
     }
 
-    pub fn store(&mut self, position_key: u64, score: i16, m: Move16, depth: u8, kind: HEKind) {
+    pub fn store(&self, position_key: u64, score: i16, m: Move16, depth: u8, kind: HEKind) {
         let index = self.index(position_key);
         debug_assert!(index < self.capacity);
 
         // TODO: check if mate??? siehe VICE
 
         // SAFETY: Our index is always in range.
-        let table_entry = unsafe { self.data.get_unchecked_mut(index) };
+        let table_entry = unsafe { self.data.get_unchecked(index) };
+        let maybe_data = table_entry.load(position_key);
+        let data = maybe_data.unwrap_or_default();
 
         // Check if it makes sense to store the move.
         // An new entry is rejected if:
         // - it overwrites an existing entry and
         // - the new entry is not from a later age and
         // - the new entry does not have a better (higher) depth
-        if table_entry.position_key != 0 && table_entry.age >= self.current_age && table_entry.depth >= depth {
+        if maybe_data.is_some() && data.age >= self.current_age && data.depth >= depth {
             return;
         }
 
-        if table_entry.position_key == 0 {
-            self.filled += 1;
-        } else {
-            self.overwrites += 1;
-        }
+        // TODO: Reenable statistics
+        // if table_entry.position_key == 0 {
+        //     self.filled += 1;
+        // } else {
+        //     self.overwrites += 1;
+        // }
 
-        table_entry.position_key = position_key;
-        table_entry.score = score;
-        table_entry.m16 = m;
-        table_entry.depth = depth;
-        table_entry.kind = kind;
+        let new_data = Data {
+            score,
+            m16: m,
+            depth,
+            kind,
+            age: self.current_age,
+            _padding: 0,
+        };
+
+        table_entry.store(position_key, new_data);
     }
 
-    fn get_entry(&self, key: u64) -> Option<Entry> {
+    fn load(&self, key: u64) -> Option<Data> {
         let index = self.index(key);
-
-        // SAFETY: Our index is always in range.
-        let entry = unsafe { *self.data.get_unchecked(index) };
-
-        if entry.position_key == key {
-            Some(entry)
-        } else {
-            None
-        }
+        let entry = unsafe { self.data.get_unchecked(index) };
+        entry.load(key)
     }
 
     pub fn get(&self, key: u64) -> Option<Move16> {
-        let entry = self.get_entry(key)?;
-        Some(entry.m16)
+        self.load(key).map(|data| data.m16)
     }
 
-    pub fn probe(&mut self, board: &Board, alpha: i16, beta: i16, depth: u8) -> Probe {
-        let Some(entry) = self.get_entry(board.position_key) else { return Probe::NoHit };
+    pub fn probe(&self, board: &Board, alpha: i16, beta: i16, depth: u8) -> Probe {
+        let Some(data) = self.load(board.position_key) else { return Probe::NoHit };
 
-        let m16 = entry.m16;
+        let m16 = data.m16;
         let m32 = board.move_16_to_32(m16);
-        let score = entry.score;
+        let score = data.score;
 
-        if entry.depth < depth {
+        if data.depth < depth {
             return Probe::PV(m32, score);
         }
 
-        debug_assert!(entry.depth >= 1);
-        self.probe_hits += 1;
+        debug_assert!(data.depth >= 1);
 
-        // TODO: ADJUST SCORE if it indicates a mate
-        // if score > ISMATE {score -= board.ply as i32;  }
-        // else if score < -ISMATE {score += board.ply as i32; }
-        // debug_assert!(score >= -INFINITE && score <= INFINITE);
-
-        let probe_res = match entry.kind {
+        match data.kind {
             HEKind::Alpha if score <= alpha => Probe::CutOff(m32, alpha),
             HEKind::Beta if score >= beta => Probe::CutOff(m32, beta),
             HEKind::Exact => Probe::CutOff(m32, score),
             _ => Probe::PV(m32, score),
-        };
-
-        if matches!(probe_res, Probe::CutOff(..)) {
-            self.probe_successes += 1;
         }
-
-        probe_res
     }
 
     pub fn next_age(&mut self) {
@@ -163,12 +170,18 @@ impl TranspositionTable {
 
 #[cfg(test)]
 mod test {
-    use crate::hashtable::{Entry, TranspositionTable};
+    use super::HEKind;
+    use crate::{
+        hashtable::{Data, Entry, TranspositionTable},
+        moves::Move16,
+    };
 
     #[test]
     fn size_of_entry() {
         let entry = Entry::default();
+        let data = Data::default();
 
+        assert_eq!(std::mem::size_of_val(&data), 8);
         assert_eq!(std::mem::size_of_val(&entry), 16);
         // assert_eq!(std::mem::align_of_val(&entry), 8);
     }
@@ -194,7 +207,7 @@ mod test {
     #[test]
     fn store_any_key() {
         for size_mb in [2, 4, 8, 16, 32] {
-            let mut table = TranspositionTable::new(size_mb);
+            let table = TranspositionTable::new(size_mb);
 
             for _ in 0..table.capacity {
                 table.store(
@@ -205,11 +218,43 @@ mod test {
                     Default::default(),
                 );
             }
-
-            println!(
-                "table of size {size_mb}MB: {} capacity, {} entries, {} overwrites",
-                table.capacity, table.filled, table.overwrites
-            );
         }
+    }
+
+    #[test]
+    fn encode_decode_entry() {
+        let key: u64 = rand::random();
+        let data = Data {
+            score: rand::random(),
+            m16: Move16::default(),
+            depth: rand::random(),
+            kind: HEKind::Alpha,
+            age: rand::random(),
+            _padding: rand::random(),
+        };
+
+        let entry = Entry::default();
+        entry.store(key, data);
+        let Some(loaded_data) = entry.load(key) else { panic!("Could not load data.") };
+        assert_eq!(data, loaded_data);
+    }
+
+    #[test]
+    fn decode_entry_with_different_key() {
+        let key1: u64 = rand::random();
+        let key2: u64 = rand::random();
+
+        let data = Data {
+            score: rand::random(),
+            m16: Move16::default(),
+            depth: rand::random(),
+            kind: HEKind::Alpha,
+            age: rand::random(),
+            _padding: rand::random(),
+        };
+
+        let entry = Entry::default();
+        entry.store(key1, data);
+        assert_eq!(entry.load(key2), None);
     }
 }
