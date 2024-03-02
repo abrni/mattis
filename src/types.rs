@@ -24,6 +24,51 @@ macro_rules! impl_array_indexing {
     };
 }
 
+macro_rules! impl_iterators {
+    ($type:ty, $itertype:ident, $repr:ty) => {
+        pub struct $itertype {
+            range: std::ops::RangeInclusive<u8>,
+        }
+
+        impl Iterator for $itertype {
+            type Item = $type;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                self.range
+                    .next()
+                    .map(|v| unsafe { <$type>::unchecked_transmute_from(v) })
+            }
+
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                self.range.size_hint()
+            }
+        }
+
+        impl DoubleEndedIterator for $itertype {
+            fn next_back(&mut self) -> Option<Self::Item> {
+                self.range
+                    .next_back()
+                    .map(|v| unsafe { <$type>::unchecked_transmute_from(v) })
+            }
+        }
+
+        impl ExactSizeIterator for $itertype {}
+
+        impl $type {
+            pub fn range_inclusive(a: Self, b: Self) -> $itertype {
+                let a: u8 = a.into();
+                let b: u8 = b.into();
+
+                $itertype { range: a..=b }
+            }
+
+            pub fn iter_all() -> $itertype {
+                Self::range_inclusive(Self::MIN, Self::MAX)
+            }
+        }
+    };
+}
+
 #[derive(
     Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive,
 )]
@@ -44,6 +89,9 @@ pub enum Piece {
 }
 
 impl Piece {
+    const MIN: Self = Self::WhitePawn;
+    const MAX: Self = Self::BlackKing;
+
     pub const ALL: [Self; 12] = [
         Self::WhitePawn,
         Self::WhiteKnight,
@@ -165,6 +213,7 @@ impl Piece {
 }
 
 impl_array_indexing!(Piece, u8, 12);
+impl_iterators!(Piece, PieceIter, u8);
 
 #[derive(
     Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive,
@@ -177,6 +226,9 @@ pub enum Color {
 }
 
 impl Color {
+    const MIN: Self = Self::White;
+    const MAX: Self = Self::Both;
+
     pub fn from_char(c: char) -> Option<Self> {
         match c {
             'w' => Some(Self::White),
@@ -196,9 +248,19 @@ impl Color {
 
 impl_array_indexing!(Color, u8, 2);
 impl_array_indexing!(Color, u8, 3);
+impl_iterators!(Color, ColorIter, u8);
 
 #[derive(
-    Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Clone,
+    Copy,
+    TryFromPrimitive,
+    IntoPrimitive,
+    UnsafeFromPrimitive,
 )]
 #[repr(u8)]
 pub enum File {
@@ -213,6 +275,9 @@ pub enum File {
 }
 
 impl File {
+    const MIN: Self = Self::A;
+    const MAX: Self = Self::H;
+
     pub fn from_char(c: char) -> Option<Self> {
         match c {
             'a' => Some(Self::A),
@@ -239,12 +304,32 @@ impl File {
             Self::H => 'h',
         }
     }
+
+    pub fn up(self) -> Option<Self> {
+        let f: u8 = self.into();
+        Self::try_from_primitive(f + 1).ok()
+    }
+
+    pub fn down(self) -> Option<Self> {
+        let f: u8 = self.into();
+        Self::try_from_primitive(f.checked_sub(1)?).ok()
+    }
 }
 
 impl_array_indexing!(File, u8, 8);
+impl_iterators!(File, FileIter, u8);
 
 #[derive(
-    Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Clone,
+    Copy,
+    TryFromPrimitive,
+    IntoPrimitive,
+    UnsafeFromPrimitive,
 )]
 #[repr(u8)]
 pub enum Rank {
@@ -259,6 +344,9 @@ pub enum Rank {
 }
 
 impl Rank {
+    const MIN: Self = Self::R1;
+    const MAX: Self = Self::R8;
+
     pub fn from_char(c: char) -> Option<Self> {
         match c {
             '1' => Some(Self::R1),
@@ -285,9 +373,20 @@ impl Rank {
             Self::R8 => '8',
         }
     }
+
+    pub fn up(self) -> Option<Self> {
+        let r: u8 = self.into();
+        Self::try_from_primitive(r + 1).ok()
+    }
+
+    pub fn down(self) -> Option<Self> {
+        let r: u8 = self.into();
+        Self::try_from_primitive(r.checked_sub(1)?).ok()
+    }
 }
 
 impl_array_indexing!(Rank, u8, 8);
+impl_iterators!(Rank, RankIter, u8);
 
 #[derive(
     Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive,
@@ -591,7 +690,7 @@ mod tests {
     }
 
     #[test]
-    fn convert_invalid() {
+    fn convert_invalid_squares() {
         let sq64 = Square64::Invalid;
         assert_eq!(Err(()), Square120::try_from(sq64));
 
