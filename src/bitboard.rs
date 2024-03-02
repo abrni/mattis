@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use crate::types::{File, Rank, Square64};
+use crate::types::{File, Rank, Square120, Square64};
 use num_enum::{FromPrimitive, UnsafeFromPrimitive};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
@@ -233,6 +233,29 @@ lazy_static::lazy_static! {
             .union(FILE_BITBOARDS[File::H])
             .union(RANK_BITBOARDS[Rank::R1])
             .union(RANK_BITBOARDS[Rank::R8])
+    };
+
+    pub static ref KNIGHT_MOVE_PATTERNS: [BitBoard; 64] = {
+        let mut boards = [BitBoard::EMPTY; 64];
+
+        for (i, m) in boards.iter_mut().enumerate() {
+            let mut result = BitBoard::EMPTY;
+            let sq64 = Square64::from_primitive(i);
+            let sq120 = Square120::try_from(sq64).unwrap();
+
+            const DIRS: [isize; 8] = [-21, -19, -12, -8, 8, 12, 19, 21];
+            for dir in DIRS {
+                let target120 = sq120 + dir;
+
+                if let Ok(target64) = Square64::try_from(target120) {
+                    result.set(target64);
+                }
+            }
+
+            *m = result;
+        }
+
+        boards
     };
 
     pub static ref ROOK_MOVE_PATTERNS: [BitBoard; 64] = {
