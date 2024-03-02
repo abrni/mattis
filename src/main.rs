@@ -136,4 +136,7 @@ fn setup_position(board: &mut Board, pos: uci::Position, moves: &[String]) {
 
         panic!("Invalid move");
     }
+
+    board.ply = 0;
+    board.history.clear();
 }
