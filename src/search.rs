@@ -161,17 +161,27 @@ pub fn quiescence(
 ) -> i32 {
     stats.nodes += 1;
     let standing_pat = evaluation(board);
+    let in_check = board.in_check();
 
-    if standing_pat >= beta {
-        return beta;
-    } else if alpha < standing_pat {
-        alpha = standing_pat;
+    if !in_check {
+        if standing_pat >= beta {
+            return beta;
+        } else if alpha < standing_pat {
+            alpha = standing_pat;
+        }
     }
 
     let mut moves = Vec::with_capacity(32); // TODO: reuse a preallocated vec
-    board.generate_capture_moves(&mut moves);
+
+    if in_check {
+        board.generate_all_moves(&mut moves);
+    } else {
+        board.generate_capture_moves(&mut moves);
+    }
+
     moves.sort_by_key(|m| -score_move(*m, tptable, board));
 
+    let mut legal_moves = 0;
     for m in moves.into_iter() {
         let is_valid_move = board.make_move(m);
 
@@ -179,6 +189,7 @@ pub fn quiescence(
             continue;
         }
 
+        legal_moves += 1;
         let score = -quiescence(-beta, -alpha, board, stats, tptable);
         board.take_move();
 
@@ -189,6 +200,10 @@ pub fn quiescence(
         if score > alpha {
             alpha = score;
         }
+    }
+
+    if legal_moves == 0 && in_check {
+        return -30_000;
     }
 
     alpha
