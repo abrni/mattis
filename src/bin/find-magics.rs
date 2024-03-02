@@ -2,9 +2,7 @@ use std::{io::Write, ops::BitAnd};
 
 use mattis::{
     bitboard::BitBoard,
-    board::movegen::{
-        BISHOP_MAGIC_BIT_COUNT, BISHOP_MAGIC_MASKS, ROOK_MAGIC_BIT_COUNT, ROOK_MAGIC_MASKS,
-    },
+    board::movegen::{BISHOP_MAGIC_BIT_COUNT, BISHOP_MAGIC_MASKS, ROOK_MAGIC_BIT_COUNT, ROOK_MAGIC_MASKS},
     types::Square64,
 };
 use num_enum::FromPrimitive;

@@ -116,15 +116,7 @@ pub fn iterative_deepening<'a>(
             return None;
         };
 
-        let score = alpha_beta(
-            -i32::MAX,
-            i32::MAX,
-            stats.depth,
-            board,
-            &params,
-            &mut stats,
-            tptable,
-        );
+        let score = alpha_beta(-i32::MAX, i32::MAX, stats.depth, board, &params, &mut stats, tptable);
 
         if stats.stop {
             return None;
@@ -211,13 +203,7 @@ pub fn alpha_beta(
     alpha
 }
 
-pub fn quiescence(
-    mut alpha: i32,
-    beta: i32,
-    board: &mut Board,
-    stats: &mut SearchStats,
-    tptable: &mut TpTable,
-) -> i32 {
+pub fn quiescence(mut alpha: i32, beta: i32, board: &mut Board, stats: &mut SearchStats, tptable: &mut TpTable) -> i32 {
     stats.nodes += 1;
     let standing_pat = evaluation(board);
     let in_check = board.in_check();

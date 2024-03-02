@@ -23,9 +23,7 @@ fn main() {
 
     loop {
         input.clear();
-        stdin
-            .read_line(&mut input)
-            .expect("Could not read input line");
+        stdin.read_line(&mut input).expect("Could not read input line");
 
         let Ok(message) = GuiMessage::parse(&input) else {
             println!("Received unknown command");

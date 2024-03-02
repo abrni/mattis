@@ -53,9 +53,8 @@ impl Board {
 
         // update castling permitions and update hash accordingly
         self.position_key ^= CASTLE_KEYS[self.castle_perms.as_u8() as usize];
-        self.castle_perms = CastlePerms::from_u8(
-            self.castle_perms.as_u8() & CASTLE_PERM_MODIFIERS[from] & CASTLE_PERM_MODIFIERS[to],
-        );
+        let castle_perms = self.castle_perms.as_u8() & CASTLE_PERM_MODIFIERS[from] & CASTLE_PERM_MODIFIERS[to];
+        self.castle_perms = CastlePerms::from_u8(castle_perms);
         self.position_key ^= CASTLE_KEYS[self.castle_perms.as_u8() as usize];
 
         // update fifty move counter and ply

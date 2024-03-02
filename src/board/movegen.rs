@@ -1,10 +1,7 @@
 use num_enum::FromPrimitive;
 
 use crate::{
-    bitboard::{
-        BitBoard, BISHOP_MOVE_PATTERNS, BORDER, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS,
-        RANK_BITBOARDS,
-    },
+    bitboard::{BitBoard, BISHOP_MOVE_PATTERNS, BORDER, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS, RANK_BITBOARDS},
     moves::{Move16, Move16Builder, Move32},
     types::{CastlePerm, Color, File, Piece, Rank, Square64},
 };
@@ -213,10 +210,7 @@ impl Board {
             _ => unreachable!(),
         };
 
-        if !attacker_west
-            .intersection(self.bitboards[attacker])
-            .is_empty()
-        {
+        if !attacker_west.intersection(self.bitboards[attacker]).is_empty() {
             list.push(Move32::new(
                 Move16::build()
                     .start(attacker_west.pop())
@@ -227,10 +221,7 @@ impl Board {
             ))
         }
 
-        if !attacker_east
-            .intersection(self.bitboards[attacker])
-            .is_empty()
-        {
+        if !attacker_east.intersection(self.bitboards[attacker]).is_empty() {
             list.push(Move32::new(
                 Move16::build()
                     .start(attacker_east.pop())
@@ -287,12 +278,8 @@ impl Board {
     fn generate_rook_queen_moves(&self, list: &mut Vec<Move32>, captures_only: bool) {
         let rooks_and_queens = match self.color {
             Color::Both => return,
-            Color::White => {
-                self.bitboards[Piece::WhiteRook].union(self.bitboards[Piece::WhiteQueen])
-            }
-            Color::Black => {
-                self.bitboards[Piece::BlackRook].union(self.bitboards[Piece::BlackQueen])
-            }
+            Color::White => self.bitboards[Piece::WhiteRook].union(self.bitboards[Piece::WhiteQueen]),
+            Color::Black => self.bitboards[Piece::BlackRook].union(self.bitboards[Piece::BlackQueen]),
         };
 
         let blockers = self.bb_all_pieces[Color::Both];
@@ -315,10 +302,7 @@ impl Board {
             }
 
             for end in quiet_moves.iter_bit_indices() {
-                list.push(Move32::new(
-                    Move16::build().start(start).end(end).finish(),
-                    None,
-                ));
+                list.push(Move32::new(Move16::build().start(start).end(end).finish(), None));
             }
         }
     }
@@ -326,12 +310,8 @@ impl Board {
     fn generate_bishop_queen_moves(&self, list: &mut Vec<Move32>, captures_only: bool) {
         let bishops_and_qeens = match self.color {
             Color::Both => return,
-            Color::White => {
-                self.bitboards[Piece::WhiteBishop].union(self.bitboards[Piece::WhiteQueen])
-            }
-            Color::Black => {
-                self.bitboards[Piece::BlackBishop].union(self.bitboards[Piece::BlackQueen])
-            }
+            Color::White => self.bitboards[Piece::WhiteBishop].union(self.bitboards[Piece::WhiteQueen]),
+            Color::Black => self.bitboards[Piece::BlackBishop].union(self.bitboards[Piece::BlackQueen]),
         };
 
         let blockers = self.bb_all_pieces[Color::Both];
@@ -354,10 +334,7 @@ impl Board {
             }
 
             for end in quiet_moves.iter_bit_indices() {
-                list.push(Move32::new(
-                    Move16::build().start(start).end(end).finish(),
-                    None,
-                ));
+                list.push(Move32::new(Move16::build().start(start).end(end).finish(), None));
             }
         }
     }
@@ -455,11 +432,9 @@ pub fn magic_rook_moves(square: Square64, blockers: BitBoard) -> BitBoard {
     ROOK_ATTACK_TABLE[square][key as usize]
 }
 
-pub const BISHOP_MAGICS: [u64; 64] =
-    unsafe { std::mem::transmute(*include_bytes!("../../bishop_magics")) };
+pub const BISHOP_MAGICS: [u64; 64] = unsafe { std::mem::transmute(*include_bytes!("../../bishop_magics")) };
 
-pub const ROOK_MAGICS: [u64; 64] =
-    unsafe { std::mem::transmute(*include_bytes!("../../rook_magics")) };
+pub const ROOK_MAGICS: [u64; 64] = unsafe { std::mem::transmute(*include_bytes!("../../rook_magics")) };
 
 #[rustfmt::skip]
 pub const ROOK_MAGIC_BIT_COUNT: [u32; 64] = [
@@ -662,12 +637,7 @@ fn blocker_permutation(mut i: usize, mut mask: BitBoard) -> BitBoard {
     blockers
 }
 
-fn insert_promotions(
-    list: &mut Vec<Move32>,
-    builder: Move16Builder,
-    color: Color,
-    capture: Option<Piece>,
-) {
+fn insert_promotions(list: &mut Vec<Move32>, builder: Move16Builder, color: Color, capture: Option<Piece>) {
     let pieces = if color == Color::White {
         [
             Piece::WhiteKnight,

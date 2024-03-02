@@ -69,9 +69,7 @@ macro_rules! impl_iterators {
     };
 }
 
-#[derive(
-    Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive,
-)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive)]
 #[repr(u8)]
 pub enum Piece {
     WhitePawn,
@@ -215,12 +213,7 @@ impl Piece {
     pub fn is_major(self) -> bool {
         matches!(
             self,
-            Self::WhiteRook
-                | Self::WhiteQueen
-                | Self::WhiteKing
-                | Self::BlackRook
-                | Self::BlackQueen
-                | Self::BlackKing
+            Self::WhiteRook | Self::WhiteQueen | Self::WhiteKing | Self::BlackRook | Self::BlackQueen | Self::BlackKing
         )
     }
 
@@ -263,9 +256,7 @@ impl Piece {
 impl_array_indexing!(Piece, u8, 12);
 impl_iterators!(Piece, PieceIter, u8);
 
-#[derive(
-    Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive,
-)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive)]
 #[repr(u8)]
 pub enum Color {
     White,
@@ -306,18 +297,7 @@ impl_array_indexing!(Color, u8, 2);
 impl_array_indexing!(Color, u8, 3);
 impl_iterators!(Color, ColorIter, u8);
 
-#[derive(
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Clone,
-    Copy,
-    TryFromPrimitive,
-    IntoPrimitive,
-    UnsafeFromPrimitive,
-)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive)]
 #[repr(u8)]
 pub enum File {
     A,
@@ -375,18 +355,7 @@ impl File {
 impl_array_indexing!(File, u8, 8);
 impl_iterators!(File, FileIter, u8);
 
-#[derive(
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Clone,
-    Copy,
-    TryFromPrimitive,
-    IntoPrimitive,
-    UnsafeFromPrimitive,
-)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive)]
 #[repr(u8)]
 pub enum Rank {
     R1,
@@ -444,9 +413,7 @@ impl Rank {
 impl_array_indexing!(Rank, u8, 8);
 impl_iterators!(Rank, RankIter, u8);
 
-#[derive(
-    Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive,
-)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive)]
 #[repr(u8)]
 pub enum CastlePerm {
     WhiteKingside = 1,
@@ -619,10 +586,7 @@ impl TryFrom<Square64> for Square120 {
     type Error = ();
 
     fn try_from(value: Square64) -> Result<Self, Self::Error> {
-        Ok(Self::from_file_rank(
-            value.file().ok_or(())?,
-            value.rank().ok_or(())?,
-        ))
+        Ok(Self::from_file_rank(value.file().ok_or(())?, value.rank().ok_or(())?))
     }
 }
 
@@ -780,10 +744,7 @@ impl TryFrom<Square120> for Square64 {
     type Error = ();
 
     fn try_from(value: Square120) -> Result<Self, Self::Error> {
-        Ok(Self::from_file_rank(
-            value.file().ok_or(())?,
-            value.rank().ok_or(())?,
-        ))
+        Ok(Self::from_file_rank(value.file().ok_or(())?, value.rank().ok_or(())?))
     }
 }
 

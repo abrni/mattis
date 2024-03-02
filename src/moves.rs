@@ -289,11 +289,7 @@ mod tests {
     fn m32_capture() {
         for piece in Piece::ALL {
             let m = Move32::new(
-                Move16::build()
-                    .start(Square64::A1)
-                    .end(Square64::A2)
-                    .capture()
-                    .finish(),
+                Move16::build().start(Square64::A1).end(Square64::A2).capture().finish(),
                 Some(piece),
             );
 
@@ -354,11 +350,7 @@ mod tests {
 
     #[test]
     fn m16_capture() {
-        let m = Move16::build()
-            .start(Square64::A1)
-            .end(Square64::A2)
-            .capture()
-            .finish();
+        let m = Move16::build().start(Square64::A1).end(Square64::A2).capture().finish();
 
         assert_eq!(m.start(), Square64::A1);
         assert_eq!(m.end(), Square64::A2);

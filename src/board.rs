@@ -48,9 +48,7 @@ pub enum FenError {
     #[error("fen string does not contain exactly 8 files per rank")]
     WrongFileCount,
 
-    #[error(
-        "fen string does not specify a correct active color (use 'w' for white, 'b' for black)"
-    )]
+    #[error("fen string does not specify a correct active color (use 'w' for white, 'b' for black)")]
     InvalidColor,
 
     #[error("fen string does not contain valid castle permitions (use '-' for none)")]
@@ -71,20 +69,20 @@ pub struct HistoryEntry {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Board {
-    pub pieces: [Option<Piece>; 64], // the main representation of pieces on the board
-    pub color: Color,                // the current active color
+    pub pieces: [Option<Piece>; 64],  // the main representation of pieces on the board
+    pub color: Color,                 // the current active color
     pub en_passant: Option<Square64>, // the current en passant square, if there is one
-    pub castle_perms: CastlePerms,   // the current castle permitions
+    pub castle_perms: CastlePerms,    // the current castle permitions
 
     pub fifty_move: usize, // the amount of *halfmoves* (triggers the rule at 100) since a fifty-move-rule reset
     pub ply: usize,        // the number of halfmoves since the start of the game (currently unused)
     pub position_key: u64, // the current zobrist position key
 
-    pub king_square: [Square64; 2], // the position of the white and black kings
-    pub bitboards: [BitBoard; 12],  // bitboards for each piece type
-    pub bb_all_pieces: [BitBoard; 3], // bitboards of all pieces per color
-    pub count_pieces: [usize; 12],  // counts the number of pieces on the board fore each piece type
-    pub count_big_pieces: [usize; 2], // counts the number of big pieces for both sides (everything exept pawns)
+    pub king_square: [Square64; 2],     // the position of the white and black kings
+    pub bitboards: [BitBoard; 12],      // bitboards for each piece type
+    pub bb_all_pieces: [BitBoard; 3],   // bitboards of all pieces per color
+    pub count_pieces: [usize; 12],      // counts the number of pieces on the board fore each piece type
+    pub count_big_pieces: [usize; 2],   // counts the number of big pieces for both sides (everything exept pawns)
     pub count_major_pieces: [usize; 2], // counts the number of major pieces for both sides (rooks, queens, king)
     pub count_minor_pieces: [usize; 2], // counts the number of minor pieces for both sides (bishops, knights)
     pub material: [i32; 2],             // the material in centipawns for both sides
@@ -159,8 +157,7 @@ impl Board {
                 if let Some(d) = c.to_digit(10) {
                     file_num += d;
                 } else if let Some(piece) = Piece::from_char(c) {
-                    let file = File::try_from_primitive(file_num as u8)
-                        .map_err(|_| FenError::WrongFileCount)?;
+                    let file = File::try_from_primitive(file_num as u8).map_err(|_| FenError::WrongFileCount)?;
                     let rank = Rank::try_from_primitive((7 - rank_num) as u8).unwrap();
                     let square = Square64::from_file_rank(file, rank);
                     board.pieces[square] = Some(piece);
@@ -196,11 +193,8 @@ impl Board {
         }
 
         if parts[3] != "-" {
-            let file = File::from_char(parts[3].chars().next().unwrap())
-                .ok_or(FenError::InvalidEnPassantSquare)?;
-
-            let rank = Rank::from_char(parts[3].chars().nth(1).unwrap())
-                .ok_or(FenError::InvalidEnPassantSquare)?;
+            let file = File::from_char(parts[3].chars().next().unwrap()).ok_or(FenError::InvalidEnPassantSquare)?;
+            let rank = Rank::from_char(parts[3].chars().nth(1).unwrap()).ok_or(FenError::InvalidEnPassantSquare)?;
             let square = Square64::from_file_rank(file, rank);
             board.en_passant = Some(square);
         }
@@ -329,13 +323,8 @@ impl Board {
 
         // attacked by white pawns?
         if color == Color::White {
-            let east = self.bitboards[Piece::WhitePawn]
-                .shifted_northeast()
-                .get(square);
-
-            let west = self.bitboards[Piece::WhitePawn]
-                .shifted_northwest()
-                .get(square);
+            let east = self.bitboards[Piece::WhitePawn].shifted_northeast().get(square);
+            let west = self.bitboards[Piece::WhitePawn].shifted_northwest().get(square);
 
             if west || east {
                 return true;
@@ -344,13 +333,8 @@ impl Board {
 
         // attacked by black pawns?
         if color == Color::Black {
-            let east = self.bitboards[Piece::BlackPawn]
-                .shifted_southeast()
-                .get(square);
-
-            let west = self.bitboards[Piece::BlackPawn]
-                .shifted_southwest()
-                .get(square);
+            let east = self.bitboards[Piece::BlackPawn].shifted_southeast().get(square);
+            let west = self.bitboards[Piece::BlackPawn].shifted_southwest().get(square);
 
             if west || east {
                 return true;
@@ -462,15 +446,8 @@ impl Board {
             );
         }
 
-        assert_eq!(
-            self.pieces[self.king_square[Color::White]].unwrap(),
-            Piece::WhiteKing
-        );
-
-        assert_eq!(
-            self.pieces[self.king_square[Color::Black]].unwrap(),
-            Piece::BlackKing
-        );
+        assert_eq!(self.pieces[self.king_square[Color::White]].unwrap(), Piece::WhiteKing);
+        assert_eq!(self.pieces[self.king_square[Color::Black]].unwrap(), Piece::BlackKing);
     }
 
     pub fn move_16_to_32(&self, m16: Move16) -> Move32 {
@@ -480,10 +457,7 @@ impl Board {
 
         if m16.is_en_passant() {
             let dir = if self.color == Color::White { -8 } else { 8 };
-            Move32::new(
-                m16,
-                self.pieces[(m16.end() as usize).wrapping_add_signed(dir)],
-            )
+            Move32::new(m16, self.pieces[(m16.end() as usize).wrapping_add_signed(dir)])
         } else {
             Move32::new(m16, self.pieces[m16.end()])
         }
