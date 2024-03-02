@@ -17,23 +17,23 @@ use std::{fmt::Display, sync::Mutex};
 use thiserror::Error;
 
 lazy_static! {
-    pub static ref KEY_RNG: Mutex<StdRng> = Mutex::new(StdRng::seed_from_u64(0)); // always produce the same keys
+    static ref __KEY_RNG: Mutex<StdRng> = Mutex::new(StdRng::seed_from_u64(0)); // always produce the same keys
 
     pub static ref PIECE_KEYS: [[u64; 12]; 64] = {
-        let mut rng = KEY_RNG.lock().unwrap();
+        let mut rng = __KEY_RNG.lock().unwrap();
         let mut keys = [[0; 12]; 64];
         keys.iter_mut().for_each(|l| *l = rng.gen());
         keys
     };
-    pub static ref COLOR_KEY: u64 = KEY_RNG.lock().unwrap().gen();
+    pub static ref COLOR_KEY: u64 = __KEY_RNG.lock().unwrap().gen();
     pub static ref CASTLE_KEYS: [u64; 16] = {
-        let mut keys: [u64; 16]  = KEY_RNG.lock().unwrap().gen();
+        let mut keys: [u64; 16]  = __KEY_RNG.lock().unwrap().gen();
         // an unitialized board should always have position key 0
         keys[CastlePerms::NONE.as_u8() as usize] = 0;
         keys
     };
     pub static ref EN_PASSANT_KEYS: [u64; 64] = {
-        let mut rng = KEY_RNG.lock().unwrap();
+        let mut rng = __KEY_RNG.lock().unwrap();
         let mut keys = [0; 64];
         keys.iter_mut().for_each(|k| *k = rng.gen());
         keys
@@ -373,7 +373,6 @@ impl Board {
         let key = blockers.to_u64().wrapping_mul(ROOK_MAGICS[square]);
         let key = key >> (64 - ROOK_MAGIC_BIT_COUNT[square]);
         let attack_pattern = ROOK_ATTACK_TABLE[square][key as usize];
-        let captures = attack_pattern.intersection(self.bb_all_pieces[color]);
 
         let (queen_piece, rook_piece) = match color {
             Color::Black => (Piece::BlackQueen, Piece::BlackRook),
@@ -382,7 +381,7 @@ impl Board {
         };
 
         let rooks_and_queens = self.bitboards[queen_piece].union(self.bitboards[rook_piece]);
-        if !captures.intersection(rooks_and_queens).is_empty() {
+        if !attack_pattern.intersection(rooks_and_queens).is_empty() {
             return true;
         }
 
@@ -391,7 +390,6 @@ impl Board {
         let key = blockers.to_u64().wrapping_mul(BISHOP_MAGICS[square]);
         let key = key >> (64 - BISHOP_MAGIC_BIT_COUNT[square]);
         let attack_pattern = BISHOP_ATTACK_TABLE[square][key as usize];
-        let captures = attack_pattern.intersection(self.bb_all_pieces[color]);
 
         let (queen_piece, bishop_piece) = match color {
             Color::Black => (Piece::BlackQueen, Piece::BlackBishop),
@@ -400,7 +398,7 @@ impl Board {
         };
 
         let bishops_and_queens = self.bitboards[queen_piece].union(self.bitboards[bishop_piece]);
-        if !captures.intersection(bishops_and_queens).is_empty() {
+        if !attack_pattern.intersection(bishops_and_queens).is_empty() {
             return true;
         }
 
