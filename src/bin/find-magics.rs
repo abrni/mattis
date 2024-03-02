@@ -1,4 +1,4 @@
-use std::ops::{BitAnd, Mul};
+use std::{io::Write, ops::BitAnd};
 
 use mattis::{
     bitboard::{BitBoard, BISHOP_MAGIC_MASKS, ROOK_MAGIC_MASKS},
@@ -8,15 +8,31 @@ use num_enum::FromPrimitive;
 use rand::{thread_rng, Rng};
 
 fn main() {
+    let mut rook_file = std::fs::File::create("./rook_magics").unwrap();
     for square in 0..64 {
         let square = Square64::from_primitive(square);
-        let rmagic = find_magic(square, ROOK_BITS[square as usize], false);
+
+        let rmagic = loop {
+            if let Some(m) = find_magic(square, ROOK_BITS[square as usize], false) {
+                break m;
+            };
+        };
+
+        rook_file.write_all(&rmagic.to_ne_bytes()).unwrap();
         println!("{rmagic:0x?}");
     }
 
+    let mut bishop_file = std::fs::File::create("./bishop_magics").unwrap();
     for square in 0..64 {
         let square = Square64::from_primitive(square);
-        let bmagic = find_magic(square, BISHOP_BITS[square as usize], true);
+
+        let bmagic = loop {
+            if let Some(m) = find_magic(square, BISHOP_BITS[square as usize], true) {
+                break m;
+            };
+        };
+
+        bishop_file.write_all(&bmagic.to_ne_bytes()).unwrap();
         println!("{bmagic:0x?}");
     }
 }
@@ -71,7 +87,7 @@ fn find_magic(square: Square64, m: u32, is_bishop: bool) -> Option<u64> {
 
         if mask
             .to_u64()
-            .mul(magic)
+            .wrapping_mul(magic)
             .bitand(0xFF00000000000000)
             .count_ones()
             < 6
@@ -131,7 +147,7 @@ fn ratt(square: Square64, block: BitBoard) -> BitBoard {
         }
     }
 
-    for r in (0..=rank - 1).rev() {
+    for r in (0..=rank.saturating_sub(1)).rev() {
         result |= 1 << (file + r * 8);
         if (block & (1 << (file + r * 8))) > 0 {
             break;
@@ -145,7 +161,7 @@ fn ratt(square: Square64, block: BitBoard) -> BitBoard {
         }
     }
 
-    for f in (0..=file - 1).rev() {
+    for f in (0..=file.saturating_sub(1)).rev() {
         result |= 1 << (f + rank * 8);
         if (block & (1 << (f + rank * 8))) > 0 {
             break;
@@ -168,21 +184,24 @@ fn batt(square: Square64, block: BitBoard) -> BitBoard {
         }
     }
 
-    for (r, f) in (rank + 1..=7).zip((0..=file - 1).rev()) {
+    for (r, f) in (rank + 1..=7).zip((0..=file.saturating_sub(1)).rev()) {
         result |= 1 << (f + r * 8);
         if (block & (1 << (f + r * 8))) > 0 {
             break;
         }
     }
 
-    for (r, f) in (0..=rank - 1).rev().zip(file + 1..=7) {
+    for (r, f) in (0..=rank.saturating_sub(1)).rev().zip(file + 1..=7) {
         result |= 1 << (f + r * 8);
         if (block & (1 << (f + r * 8))) > 0 {
             break;
         }
     }
 
-    for (r, f) in (0..=rank - 1).rev().zip((0..=file - 1).rev()) {
+    for (r, f) in (0..=rank.saturating_sub(1))
+        .rev()
+        .zip((0..=file.saturating_sub(1)).rev())
+    {
         result |= 1 << (f + r * 8);
         if (block & (1 << (f + r * 8))) > 0 {
             break;
@@ -201,5 +220,5 @@ fn transform(b: BitBoard, magic: u64, bits: u32) -> u32 {
     // Faster methods?
     // ((b as i32) * (magic as i32) ^ ((b >> 32) as i32) * ((magic >> 32) as i32)) as u32 >> (32 - bits)
 
-    ((b.to_u64() * magic) >> (64 - bits)) as u32
+    ((b.to_u64().wrapping_mul(magic)) >> (64 - bits)) as u32
 }
