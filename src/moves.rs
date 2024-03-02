@@ -8,7 +8,7 @@ use std::fmt::{Debug, Display};
 /// 0000 0000 0000 XXXX 0000 0000 0000 0000  -  Captured Piece
 /// XXXX XXXX XXXX 0000 0000 0000 0000 0000  -  *Unused*
 /// ```
-#[derive(PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(PartialEq, Eq, Clone, Copy, Hash, Default)]
 pub struct Move32 {
     v: u16,
     pub m16: Move16,
@@ -228,6 +228,12 @@ impl Move16Builder {
         debug_assert!(m.is_nomove() || m.start() != m.end()); // start and end should be different, unless it is a No-Move
 
         m
+    }
+}
+
+impl Default for Move16 {
+    fn default() -> Self {
+        Self::build().finish()
     }
 }
 
