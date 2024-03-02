@@ -13,7 +13,7 @@ use super::Board;
 
 impl Board {
     pub fn generate_all_moves(&self) -> Vec<Move32> {
-        let mut list = vec![];
+        let mut list = Vec::with_capacity(32);
 
         self.generate_pawn_pushes(&mut list);
         self.generate_pawn_attacks(&mut list);
@@ -172,7 +172,9 @@ impl Board {
     }
 
     fn generate_en_passant(&self, list: &mut Vec<Move32>) {
-        let Some(en_pas_sq) = self.en_passant else { return };
+        let Some(en_pas_sq) = self.en_passant else {
+            return;
+        };
 
         if self.color == Color::Both {
             return;
@@ -238,7 +240,9 @@ impl Board {
 
     fn generate_king_moves(&self, list: &mut Vec<Move32>) {
         let start120 = self.king_square[self.color];
-        let Ok(start64) = Square64::try_from(start120) else { return };
+        let Ok(start64) = Square64::try_from(start120) else {
+            return;
+        };
         let targets = KING_MOVE_PATTERNS[start64].without(self.bb_all_pieces[self.color]);
 
         for end in targets.iter_bit_indices() {
