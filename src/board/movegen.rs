@@ -491,7 +491,7 @@ lazy_static::lazy_static! {
         masks
     };
 
-    static ref ROOK_ATTACK_TABLE: Vec<Vec<BitBoard>> = {
+   pub  static ref ROOK_ATTACK_TABLE: Vec<Vec<BitBoard>> = {
         let mut table = vec![vec![]; 64];
 
         for square_num in 0..64 {
@@ -543,7 +543,7 @@ lazy_static::lazy_static! {
     };
 
 
-    static ref BISHOP_ATTACK_TABLE: Vec<Vec<BitBoard>> = {
+    pub static ref BISHOP_ATTACK_TABLE: Vec<Vec<BitBoard>> = {
         let mut table = vec![vec![]; 64];
 
         for square_num in 0..64 {

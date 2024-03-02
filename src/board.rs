@@ -2,7 +2,11 @@ pub mod makemove;
 pub mod movegen;
 
 use crate::{
-    bitboard::BitBoard,
+    bitboard::{BitBoard, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS},
+    board::movegen::{
+        BISHOP_ATTACK_TABLE, BISHOP_MAGICS, BISHOP_MAGIC_BIT_COUNT, BISHOP_MAGIC_MASKS,
+        ROOK_ATTACK_TABLE, ROOK_MAGICS, ROOK_MAGIC_BIT_COUNT, ROOK_MAGIC_MASKS,
+    },
     moves::Move32,
     types::{CastlePerm, CastlePerms, Color, File, Piece, Rank, Square120, Square64},
 };
@@ -321,6 +325,8 @@ impl Board {
             return false;
         }
 
+        let sq64 = Square64::try_from(square).unwrap();
+
         // attacked by white pawns?
         if color == Color::White
             && (self.pieces[square - 11usize] == Some(Piece::WhitePawn)
@@ -337,76 +343,68 @@ impl Board {
             return true;
         }
 
-        // attacked by a knight?
-        const KNIGHT_DIRS: [isize; 8] = [-8, -19, -21, -12, 8, 19, 21, 12];
-        for dir in KNIGHT_DIRS {
-            let piece = self.pieces[square + dir];
-            if (piece == Some(Piece::WhiteKnight) && color == Color::White)
-                || (piece == Some(Piece::BlackKnight) && color == Color::Black)
-            {
-                return true;
-            }
+        // attacked by a king?
+        let knight_piece = match color {
+            Color::Black => Piece::BlackKnight,
+            Color::White => Piece::WhiteKnight,
+            Color::Both => unreachable!(),
+        };
+
+        if !KNIGHT_MOVE_PATTERNS[sq64]
+            .intersection(self.bitboards[knight_piece])
+            .is_empty()
+        {
+            return true;
         }
 
         // attacked by a rook or queen?
-        const ROOK_DIRS: [isize; 4] = [-1, -10, 1, 10];
-        for dir in ROOK_DIRS {
-            let mut temp_square = square + dir;
+        let blockers = self.bb_all_pieces[Color::Both].intersection(ROOK_MAGIC_MASKS[sq64]);
+        let key = blockers.to_u64().wrapping_mul(ROOK_MAGICS[sq64]);
+        let key = key >> (64 - ROOK_MAGIC_BIT_COUNT[sq64]);
+        let attack_pattern = ROOK_ATTACK_TABLE[sq64][key as usize];
+        let captures = attack_pattern.intersection(self.bb_all_pieces[color]);
 
-            while temp_square != Square120::Invalid {
-                let piece = self.pieces[temp_square];
+        let (queen_piece, rook_piece) = match color {
+            Color::Black => (Piece::BlackQueen, Piece::BlackRook),
+            Color::White => (Piece::WhiteQueen, Piece::WhiteRook),
+            Color::Both => unreachable!(),
+        };
 
-                if piece.is_none() {
-                    temp_square += dir;
-                    continue;
-                }
-
-                if (matches!(piece, Some(Piece::WhiteRook | Piece::WhiteQueen))
-                    && color == Color::White)
-                    || (matches!(piece, Some(Piece::BlackRook | Piece::BlackQueen))
-                        && color == Color::Black)
-                {
-                    return true;
-                }
-
-                break;
-            }
+        let rooks_and_queens = self.bitboards[queen_piece].union(self.bitboards[rook_piece]);
+        if !captures.intersection(rooks_and_queens).is_empty() {
+            return true;
         }
 
         // attacked by a bishop or queen?
-        const BISHOP_DIRS: [isize; 4] = [-9, -11, 9, 11];
-        for dir in BISHOP_DIRS {
-            let mut temp_square = square + dir;
+        let blockers = self.bb_all_pieces[Color::Both].intersection(BISHOP_MAGIC_MASKS[sq64]);
+        let key = blockers.to_u64().wrapping_mul(BISHOP_MAGICS[sq64]);
+        let key = key >> (64 - BISHOP_MAGIC_BIT_COUNT[sq64]);
+        let attack_pattern = BISHOP_ATTACK_TABLE[sq64][key as usize];
+        let captures = attack_pattern.intersection(self.bb_all_pieces[color]);
 
-            while temp_square != Square120::Invalid {
-                let piece = self.pieces[temp_square];
+        let (queen_piece, bishop_piece) = match color {
+            Color::Black => (Piece::BlackQueen, Piece::BlackBishop),
+            Color::White => (Piece::WhiteQueen, Piece::WhiteBishop),
+            Color::Both => unreachable!(),
+        };
 
-                if piece.is_none() {
-                    temp_square += dir;
-                    continue;
-                }
-
-                if (matches!(piece, Some(Piece::WhiteBishop | Piece::WhiteQueen))
-                    && color == Color::White)
-                    || (matches!(piece, Some(Piece::BlackBishop | Piece::BlackQueen))
-                        && color == Color::Black)
-                {
-                    return true;
-                }
-
-                break;
-            }
+        let bishops_and_queens = self.bitboards[queen_piece].union(self.bitboards[bishop_piece]);
+        if !captures.intersection(bishops_and_queens).is_empty() {
+            return true;
         }
 
         // attacked by a king?
-        const KING_DIRS: [isize; 8] = [-1, -10, 1, 10, -9, -11, 11, 9];
-        for dir in KING_DIRS {
-            let piece = self.pieces[square + dir];
-            if (piece == Some(Piece::WhiteKing) && color == Color::White)
-                || (piece == Some(Piece::BlackKing) && color == Color::Black)
-            {
-                return true;
-            }
+        let king_piece = match color {
+            Color::Black => Piece::BlackKing,
+            Color::White => Piece::WhiteKing,
+            Color::Both => unreachable!(),
+        };
+
+        if !KING_MOVE_PATTERNS[sq64]
+            .intersection(self.bitboards[king_piece])
+            .is_empty()
+        {
+            return true;
         }
 
         false
