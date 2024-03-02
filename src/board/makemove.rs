@@ -113,7 +113,83 @@ impl Board {
     }
 
     pub fn take_move(&mut self) {
-        todo!()
+        #[cfg(debug_assertions)]
+        self.check_board_integrity();
+
+        self.ply -= 1;
+        let his = self.history.pop().unwrap();
+        let m = his.move32;
+
+        let from64 = m.m16.start();
+        let to64 = m.m16.end();
+        let from120 = Square120::try_from(from64).unwrap();
+        let to120 = Square120::try_from(to64).unwrap();
+
+        // Hash out current en passant square, if there is one
+        if let Some(sq) = self.en_passant {
+            self.position_key ^= EN_PASSANT_KEYS[sq];
+        }
+
+        self.fifty_move = his.fifty_move;
+
+        // Reset castle permitions
+        self.position_key ^= CASTLE_KEYS[self.castle_perms.as_u8() as usize];
+        self.castle_perms = his.castle_perms;
+        self.position_key ^= CASTLE_KEYS[self.castle_perms.as_u8() as usize];
+
+        // Reset en passant square from history entry and update the hash
+        self.en_passant = his.en_passant;
+        if let Some(sq) = self.en_passant {
+            self.position_key ^= EN_PASSANT_KEYS[sq];
+        }
+
+        self.color = self.color.flipped();
+        self.position_key ^= *COLOR_KEY;
+
+        if his.move32.m16.is_en_passant() {
+            let (dir, enemy_pawn): (isize, _) = if self.color == Color::White {
+                (-10, Piece::BlackPawn)
+            } else {
+                (10, Piece::WhitePawn)
+            };
+
+            let enemy_pawn_square = to120 + dir;
+            self.add_piece(enemy_pawn_square, enemy_pawn) // add the captured pawn back in
+        } else if his.move32.m16.is_queenside_castle() {
+            self.move_piece(from120 - 1usize, from120 - 4usize); // move the rook back
+        } else if his.move32.m16.is_kingside_castle() {
+            self.move_piece(from120 + 1usize, from120 + 3usize); // move the rook back
+        }
+
+        // move the piece back
+        self.move_piece(to120, from120);
+
+        // reset the king square, if the move was a king move
+        if let Some(Piece::WhiteKing | Piece::BlackKing) = self.pieces[from120] {
+            self.king_square[self.color] = from120;
+        }
+
+        // add the captured piece back in, if there is one
+        if let Some(captured_piece) = m.captured() {
+            self.add_piece(to120, captured_piece);
+        }
+
+        if m.m16.is_promotion() {
+            let pawn = if self.color == Color::White {
+                Piece::WhitePawn
+            } else {
+                Piece::BlackPawn
+            };
+
+            self.clear_piece(from120);
+            self.add_piece(from120, pawn);
+        }
+
+        #[cfg(debug_assertions)]
+        {
+            self.check_board_integrity();
+            assert_eq!(self.position_key, his.position_key);
+        }
     }
 
     fn clear_piece(&mut self, sq120: Square120) {
