@@ -185,6 +185,58 @@ impl Board {
         }
     }
 
+    pub fn make_null_move(&mut self) {
+        #[cfg(debug_assertions)]
+        self.check_board_integrity();
+        debug_assert!(!self.in_check());
+
+        self.ply += 1;
+        self.history.push(HistoryEntry {
+            move32: Move32::default(),
+            fifty_move: self.fifty_move,
+            en_passant: self.en_passant,
+            castle_perms: self.castle_perms,
+            position_key: self.position_key,
+        });
+
+        self.color = self.color.flipped();
+        self.position_key ^= *COLOR_KEY;
+
+        // remove the en passant square and hash it out if necessary
+        if let Some(sq) = self.en_passant.take() {
+            self.position_key ^= EN_PASSANT_KEYS[sq];
+        }
+
+        #[cfg(debug_assertions)]
+        self.check_board_integrity();
+    }
+
+    pub fn take_null_move(&mut self) {
+        #[cfg(debug_assertions)]
+        self.check_board_integrity();
+
+        self.ply -= 1;
+
+        if let Some(sq) = self.en_passant {
+            self.position_key ^= EN_PASSANT_KEYS[sq];
+        }
+
+        let his = self.history.pop().unwrap();
+        self.castle_perms = his.castle_perms;
+        self.fifty_move = his.fifty_move;
+        self.en_passant = his.en_passant;
+
+        if let Some(sq) = self.en_passant {
+            self.position_key ^= EN_PASSANT_KEYS[sq];
+        }
+
+        self.color = self.color.flipped();
+        self.position_key ^= *COLOR_KEY;
+
+        #[cfg(debug_assertions)]
+        self.check_board_integrity();
+    }
+
     fn clear_piece(&mut self, square: Square64) {
         debug_assert_ne!(square, Square64::Invalid);
         let piece = self.pieces[square].take().unwrap();
