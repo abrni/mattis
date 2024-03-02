@@ -76,6 +76,10 @@ impl BitBoard {
         }
     }
 
+    pub fn silent_pop(&mut self) {
+        self.0 &= self.0 - 1;
+    }
+
     /// Clears the least significant 1-bit and returns its index
     #[rustfmt::skip]
     pub fn pop(&mut self) -> Square64 {
@@ -181,6 +185,30 @@ pub const BISHOP_MAGICS: [u64; 64] =
 
 pub const ROOK_MAGICS: [u64; 64] =
     unsafe { std::mem::transmute(*include_bytes!("../rook_magics")) };
+
+#[rustfmt::skip]
+pub const ROOK_MAGIC_BIT_COUNT: [u32; 64] = [
+    12, 11, 11, 11, 11, 11, 11, 12,
+    11, 10, 10, 10, 10, 10, 10, 11,
+    11, 10, 10, 10, 10, 10, 10, 11,
+    11, 10, 10, 10, 10, 10, 10, 11,
+    11, 10, 10, 10, 10, 10, 10, 11,
+    11, 10, 10, 10, 10, 10, 10, 11,
+    11, 10, 10, 10, 10, 10, 10, 11,
+    12, 11, 11, 11, 11, 11, 11, 12,
+];
+
+#[rustfmt::skip]
+pub const BISHOP_MAGIC_BIT_COUNT: [u32; 64] = [
+    6, 5, 5, 5, 5, 5, 5, 6,
+    5, 5, 5, 5, 5, 5, 5, 5,
+    5, 5, 7, 7, 7, 7, 5, 5,
+    5, 5, 7, 9, 9, 7, 5, 5,
+    5, 5, 7, 9, 9, 7, 5, 5,
+    5, 5, 7, 7, 7, 7, 5, 5,
+    5, 5, 5, 5, 5, 5, 5, 5,
+    6, 5, 5, 5, 5, 5, 5, 6,
+];
 
 lazy_static::lazy_static! {
     pub static ref FILE_BITBOARDS: [BitBoard; 8] = {

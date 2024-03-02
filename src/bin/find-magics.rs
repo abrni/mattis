@@ -1,7 +1,10 @@
 use std::{io::Write, ops::BitAnd};
 
 use mattis::{
-    bitboard::{BitBoard, BISHOP_MAGIC_MASKS, ROOK_MAGIC_MASKS},
+    bitboard::{
+        BitBoard, BISHOP_MAGIC_BIT_COUNT, BISHOP_MAGIC_MASKS, ROOK_MAGIC_BIT_COUNT,
+        ROOK_MAGIC_MASKS,
+    },
     types::Square64,
 };
 use num_enum::FromPrimitive;
@@ -13,7 +16,7 @@ fn main() {
         let square = Square64::from_primitive(square);
 
         let rmagic = loop {
-            if let Some(m) = find_magic(square, ROOK_BITS[square as usize], false) {
+            if let Some(m) = find_magic(square, ROOK_MAGIC_BIT_COUNT[square as usize], false) {
                 break m;
             };
         };
@@ -27,7 +30,7 @@ fn main() {
         let square = Square64::from_primitive(square);
 
         let bmagic = loop {
-            if let Some(m) = find_magic(square, BISHOP_BITS[square as usize], true) {
+            if let Some(m) = find_magic(square, BISHOP_MAGIC_BIT_COUNT[square as usize], true) {
                 break m;
             };
         };
@@ -36,30 +39,6 @@ fn main() {
         println!("{bmagic:0x?}");
     }
 }
-
-#[rustfmt::skip]
-const ROOK_BITS: [u32; 64] = [
-    12, 11, 11, 11, 11, 11, 11, 12,
-    11, 10, 10, 10, 10, 10, 10, 11,
-    11, 10, 10, 10, 10, 10, 10, 11,
-    11, 10, 10, 10, 10, 10, 10, 11,
-    11, 10, 10, 10, 10, 10, 10, 11,
-    11, 10, 10, 10, 10, 10, 10, 11,
-    11, 10, 10, 10, 10, 10, 10, 11,
-    12, 11, 11, 11, 11, 11, 11, 12,
-];
-
-#[rustfmt::skip]
-const BISHOP_BITS: [u32; 64] = [
-    6, 5, 5, 5, 5, 5, 5, 6,
-    5, 5, 5, 5, 5, 5, 5, 5,
-    5, 5, 7, 7, 7, 7, 5, 5,
-    5, 5, 7, 9, 9, 7, 5, 5,
-    5, 5, 7, 9, 9, 7, 5, 5,
-    5, 5, 7, 7, 7, 7, 5, 5,
-    5, 5, 5, 5, 5, 5, 5, 5,
-    6, 5, 5, 5, 5, 5, 5, 6,
-];
 
 fn find_magic(square: Square64, m: u32, is_bishop: bool) -> Option<u64> {
     let mut b = [BitBoard::EMPTY; 4096];

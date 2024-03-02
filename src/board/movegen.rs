@@ -1,7 +1,12 @@
+use num_enum::FromPrimitive;
+
 use crate::{
-    bitboard::{KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS, RANK_BITBOARDS},
+    bitboard::{
+        BitBoard, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS, RANK_BITBOARDS, ROOK_MAGICS,
+        ROOK_MAGIC_BIT_COUNT, ROOK_MAGIC_MASKS,
+    },
     moves::{Move16, Move16Builder, Move32},
-    types::{Color, Piece, Rank, Square120, Square64},
+    types::{Color, File, Piece, Rank, Square120, Square64},
 };
 
 use super::Board;
@@ -15,6 +20,7 @@ impl Board {
         self.generate_en_passant(&mut list);
         self.generate_knight_moves(&mut list);
         self.generate_king_moves(&mut list);
+        self.generate_rook_queen_moves(&mut list);
 
         list
     }
@@ -242,6 +248,107 @@ impl Board {
             list.push(Move32::new(m.finish(), capture));
         }
     }
+
+    fn generate_rook_queen_moves(&self, list: &mut Vec<Move32>) {
+        let rooks_and_queens = match self.color {
+            Color::Both => return,
+            Color::White => {
+                self.bitboards[Piece::WhiteRook].union(self.bitboards[Piece::WhiteQueen])
+            }
+            Color::Black => {
+                self.bitboards[Piece::BlackRook].union(self.bitboards[Piece::WhiteQueen])
+            }
+        };
+
+        let blockers = self.bb_all_pieces[Color::Both];
+
+        for start in rooks_and_queens.iter_bit_indices() {
+            let blockers = blockers.intersection(ROOK_MAGIC_MASKS[start]);
+            let key = blockers.to_u64().wrapping_mul(ROOK_MAGICS[start]);
+            let key = key >> (64 - ROOK_MAGIC_BIT_COUNT[start]);
+            let attack_pattern = ROOK_ATTACK_TABLE[start][key as usize];
+            let quiet_moves = attack_pattern.without(self.bb_all_pieces[Color::Both]);
+            let captures = attack_pattern.intersection(self.bb_all_pieces[self.color.flipped()]);
+
+            for end in quiet_moves.iter_bit_indices() {
+                list.push(Move32::new(
+                    Move16::build().start(start).end(end).finish(),
+                    None,
+                ));
+            }
+
+            for end in captures.iter_bit_indices() {
+                let capture = self.pieces[Square120::try_from(end).unwrap()];
+                list.push(Move32::new(
+                    Move16::build().start(start).end(end).capture().finish(),
+                    capture,
+                ));
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+// ATTACK TABLES -------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------------------
+
+lazy_static::lazy_static! {
+    static ref ROOK_ATTACK_TABLE: Vec<Vec<BitBoard>> = {
+        let mut table = vec![vec![]; 64];
+
+        for square_num in 0..64 {
+            let square = Square64::from_primitive(square_num);
+            let mask = ROOK_MAGIC_MASKS[square_num];
+            let permutations = 1 << mask.bit_count();
+            let file = square.file().unwrap();
+            let rank = square.rank().unwrap();
+            table[square].resize(1 << ROOK_MAGIC_BIT_COUNT[square] as usize, BitBoard::EMPTY);
+
+            for i in 0..permutations {
+                let blockers = blocker_permutation(i, mask);
+                let mut attack = BitBoard::EMPTY;
+
+                if let Some(r) = rank.up() {
+                    for r in Rank::range_inclusive(r, Rank::R8) {
+                        attack.set(Square64::from_file_rank(file, r));
+                        if blockers.get(Square64::from_file_rank(file, r)) { break; }
+                    }
+                }
+
+                if let Some(r) = rank.down() {
+                    for r in Rank::range_inclusive(Rank::R1, r).rev() {
+                        attack.set(Square64::from_file_rank(file, r));
+                        if blockers.get(Square64::from_file_rank(file, r)) { break; }
+                    }
+                }
+
+                if let Some(f) = file.up() {
+                    for f in File::range_inclusive(f, File::H) {
+                        attack.set(Square64::from_file_rank(f, rank));
+                        if blockers.get(Square64::from_file_rank(f, rank)) { break; }
+                    }
+                }
+
+                if let Some(f) = file.down() {
+                    for f in File::range_inclusive(File::A, f).rev() {
+                        attack.set(Square64::from_file_rank(f, rank));
+                        if blockers.get(Square64::from_file_rank(f, rank)) { break; }
+                    }
+                }
+
+                let key = blockers.to_u64().wrapping_mul(ROOK_MAGICS[square]) >> (64 - ROOK_MAGIC_BIT_COUNT[square]);
+                table[square][key as usize] = attack;
+            }
+        }
+
+        table
+    };
+
+    static ref BISHOP_ATTACK_TABLE: [[BitBoard; 1 << 9]; 64] = {
+        todo!()
+    };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -249,6 +356,22 @@ impl Board {
 // UTILITY -------------------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
+
+fn blocker_permutation(mut i: usize, mut mask: BitBoard) -> BitBoard {
+    let mut blockers = BitBoard::EMPTY;
+
+    while i != 0 {
+        if (i & 1) != 0 {
+            let idx = Square64::try_from(mask.to_u64().trailing_zeros() as usize).unwrap();
+            blockers.set(idx);
+        }
+
+        i >>= 1;
+        mask.silent_pop();
+    }
+
+    blockers
+}
 
 fn insert_promotions(
     list: &mut Vec<Move32>,

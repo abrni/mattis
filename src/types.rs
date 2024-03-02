@@ -244,6 +244,14 @@ impl Color {
             Self::Both => '-',
         }
     }
+
+    pub fn flipped(self) -> Self {
+        match self {
+            Self::White => Self::Black,
+            Self::Black => Self::White,
+            Self::Both => Self::Both,
+        }
+    }
 }
 
 impl_array_indexing!(Color, u8, 2);
@@ -598,6 +606,22 @@ pub enum Square64 {
 }
 
 impl_array_indexing!(Square64, usize, 64);
+
+impl<T> Index<Square64> for Vec<T> {
+    type Output = T;
+
+    fn index(&self, index: Square64) -> &Self::Output {
+        let index: usize = index.into();
+        &self[index]
+    }
+}
+
+impl<T> IndexMut<Square64> for Vec<T> {
+    fn index_mut(&mut self, index: Square64) -> &mut Self::Output {
+        let index: usize = index.into();
+        &mut self[index]
+    }
+}
 
 impl Square64 {
     pub fn from_file_rank(file: File, rank: Rank) -> Self {
