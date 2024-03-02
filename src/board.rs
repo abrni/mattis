@@ -4,7 +4,7 @@ pub mod movegen;
 use self::movegen::{magic_bishop_moves, magic_rook_moves};
 use crate::{
     bitboard::{BitBoard, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS},
-    moves::Move32,
+    moves::{Move16, Move32},
     types::{CastlePerm, CastlePerms, Color, File, Piece, Rank, Square64},
 };
 use lazy_static::lazy_static;
@@ -466,6 +466,22 @@ impl Board {
             Piece::BlackKing
         );
     }
+
+    pub fn move_16_to_32(&self, m16: Move16) -> Move32 {
+        if !m16.is_capture() {
+            return Move32::new(m16, None);
+        }
+
+        if m16.is_en_passant() {
+            let dir = if self.color == Color::White { -8 } else { 8 };
+            Move32::new(
+                m16,
+                self.pieces[(m16.end() as usize).wrapping_add_signed(dir)],
+            )
+        } else {
+            Move32::new(m16, self.pieces[m16.end()])
+        }
+    }
 }
 
 impl Default for Board {
@@ -541,11 +557,33 @@ impl Display for Board {
 #[cfg(test)]
 mod tests {
     use super::Board;
+    use crate::{
+        moves::Move16,
+        types::{Piece, Square64},
+    };
 
     #[test]
     fn empty_board() {
         let board = Board::new();
         assert_eq!(board.generate_position_key(), 0);
         assert_eq!(board.position_key, 0);
+    }
+
+    #[test]
+    fn convert_en_passant_move() {
+        let fen = "rnbqkbnr/1ppppp1p/8/p4Pp1/8/8/PPPPP1PP/RNBQKBNR w KQkq g6 0 3";
+        let board = Board::from_fen(fen).unwrap();
+
+        let ep_move16 = Move16::build()
+            .start(Square64::F5)
+            .en_passant()
+            .end(Square64::G6)
+            .finish();
+
+        let ep_move32 = board.move_16_to_32(ep_move16);
+        let mut movelist = vec![];
+        board.generate_all_moves(&mut movelist);
+        assert!(movelist.contains(&ep_move32));
+        assert_eq!(ep_move32.captured(), Some(Piece::BlackPawn));
     }
 }
