@@ -205,7 +205,7 @@ pub fn alpha_beta(
         Probe::CutOff(_, score) => return score,
     };
 
-    if allow_null_move && !board.in_check() && board.ply != 0 && board.count_big_pieces[board.color] > 0 && depth >= 4 {
+    if allow_null_move && !board.in_check() && board.ply != 0 && board.count_big_pieces[board.color] > 1 && depth >= 4 {
         board.make_null_move();
         let score = -alpha_beta(-beta, -beta + 1, depth - 4, board, params, stats, tables, false);
         board.take_null_move();
