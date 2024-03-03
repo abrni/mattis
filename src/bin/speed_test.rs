@@ -1,5 +1,4 @@
 use std::{
-    os::windows::thread,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
