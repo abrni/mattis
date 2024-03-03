@@ -36,7 +36,7 @@ impl Board {
         match self.color {
             Color::White => self.generate_white_pawn_pushes(list),
             Color::Black => self.generate_black_pawn_pushes(list),
-            _ => (),
+            Color::Both => (),
         }
     }
 
@@ -108,7 +108,7 @@ impl Board {
         match self.color {
             Color::White => self.generate_white_pawn_attacks(list),
             Color::Black => self.generate_black_pawn_attacks(list),
-            _ => (),
+            Color::Both => (),
         }
     }
 
@@ -188,13 +188,13 @@ impl Board {
         let attacker = match self.color {
             Color::White => Piece::WhitePawn,
             Color::Black => Piece::BlackPawn,
-            _ => unreachable!(),
+            Color::Both => unreachable!(),
         };
 
         let captured_piece = match self.color {
             Color::White => Piece::BlackPawn,
             Color::Black => Piece::WhitePawn,
-            _ => unreachable!(),
+            Color::Both => unreachable!(),
         };
 
         let mut bb_en_pas = BitBoard::EMPTY;
@@ -203,13 +203,13 @@ impl Board {
         let mut attacker_east = match self.color {
             Color::White => bb_en_pas.shifted_southeast(),
             Color::Black => bb_en_pas.shifted_northeast(),
-            _ => unreachable!(),
+            Color::Both => unreachable!(),
         };
 
         let mut attacker_west = match self.color {
             Color::White => bb_en_pas.shifted_southwest(),
             Color::Black => bb_en_pas.shifted_northwest(),
-            _ => unreachable!(),
+            Color::Both => unreachable!(),
         };
 
         if !attacker_west.intersection(self.bitboards[attacker]).is_empty() {
@@ -220,7 +220,7 @@ impl Board {
                     .en_passant()
                     .finish(),
                 Some(captured_piece),
-            ))
+            ));
         }
 
         if !attacker_east.intersection(self.bitboards[attacker]).is_empty() {
@@ -231,7 +231,7 @@ impl Board {
                     .en_passant()
                     .finish(),
                 Some(captured_piece),
-            ))
+            ));
         }
     }
 
@@ -505,7 +505,7 @@ lazy_static::lazy_static! {
     pub static ref BISHOP_MAGIC_MASKS: [BitBoard; 64] = {
         let mut masks = *BISHOP_MOVE_PATTERNS;
 
-        for m in masks.iter_mut() {
+        for m in &mut masks {
             *m = m.without(*BORDER);
         }
 

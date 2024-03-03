@@ -256,7 +256,7 @@ pub fn alpha_beta(
             stats.fh += 1;
 
             if legal_moves == 1 {
-                stats.fhf += 1
+                stats.fhf += 1;
             };
 
             if !m.m16.is_capture() {
@@ -290,9 +290,9 @@ pub fn alpha_beta(
     if legal_moves == 0 {
         if board.in_check() {
             return -30_000 + board.ply as i16;
-        } else {
-            return 0;
         }
+
+        return 0;
     }
 
     let hashentry_kind = if alpha_changed { HEKind::Exact } else { HEKind::Alpha };

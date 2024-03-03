@@ -32,7 +32,7 @@ pub fn evaluation(board: &Board) -> i16 {
     let (my_fn, op_fn): (PieceSquareFn, PieceSquareFn) = match my_color {
         Color::White => (piece_square, piece_square_mirrored),
         Color::Black => (piece_square_mirrored, piece_square),
-        _ => unreachable!(),
+        Color::Both => unreachable!(),
     };
 
     // TODO: interpolate between midgame and endgame?

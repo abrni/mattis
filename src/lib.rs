@@ -1,3 +1,5 @@
+#![warn(clippy::return_self_not_must_use)]
+
 pub mod bitboard;
 pub mod board;
 pub mod eval;

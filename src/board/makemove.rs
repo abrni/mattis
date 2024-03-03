@@ -147,7 +147,7 @@ impl Board {
             };
 
             let enemy_pawn_square = to + dir;
-            self.add_piece(enemy_pawn_square, enemy_pawn) // add the captured pawn back in
+            self.add_piece(enemy_pawn_square, enemy_pawn); // add the captured pawn back in
         } else if his.move32.m16.is_queenside_castle() {
             self.move_piece(from - 1usize, from - 4usize); // move the rook back
         } else if his.move32.m16.is_kingside_castle() {

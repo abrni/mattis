@@ -139,6 +139,7 @@ impl Move16 {
 pub struct Move16Builder(u16);
 
 impl Move16Builder {
+    #[must_use]
     pub fn start(mut self, square: Square64) -> Self {
         let square: usize = square.into();
         self.0 &= !0x3f; // Clear the bits first
@@ -146,6 +147,7 @@ impl Move16Builder {
         self
     }
 
+    #[must_use]
     pub fn end(mut self, square: Square64) -> Self {
         let square: usize = square.into();
         self.0 &= !0xFC0; // Clear the bits first
@@ -153,6 +155,7 @@ impl Move16Builder {
         self
     }
 
+    #[must_use]
     pub fn double_pawn_push(mut self) -> Self {
         // Current flags must signal a quiet move
         debug_assert!(self.0 < 0x1000);
@@ -162,6 +165,7 @@ impl Move16Builder {
         self
     }
 
+    #[must_use]
     pub fn castle(mut self, kingside: bool) -> Self {
         // Current flags must signal a quiet move
         debug_assert!(self.0 < 0x1000);
@@ -175,6 +179,7 @@ impl Move16Builder {
         self
     }
 
+    #[must_use]
     pub fn capture(mut self) -> Self {
         // Current flags must signal a quiet move or a promotion
         debug_assert!(self.0 < 0x1000 || self.0 > 0x3FFF);
@@ -183,6 +188,7 @@ impl Move16Builder {
         self
     }
 
+    #[must_use]
     pub fn en_passant(mut self) -> Self {
         // Current flags must signal a quiet move or a non-promoting capture
         debug_assert!(self.0 & 0xF000 == 0 || self.0 & 0xF000 == 0x4000);
@@ -191,6 +197,7 @@ impl Move16Builder {
         self
     }
 
+    #[must_use]
     pub fn promote(mut self, piece: Piece) -> Self {
         // Current flags must signal a quiet move or a capture
         debug_assert!(self.0 < 0x1000 || self.0 > 0x3FFF);
@@ -212,7 +219,7 @@ impl Move16Builder {
             Piece::WhiteBishop | Piece::BlackBishop => 0x1000,
             Piece::WhiteRook | Piece::BlackRook => 0x2000,
             Piece::WhiteQueen | Piece::BlackQueen => 0x3000,
-            _ => 0,
+            _ => unreachable!(),
         };
 
         self.0 |= 0x8000 | sp;

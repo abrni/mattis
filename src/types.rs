@@ -282,6 +282,7 @@ impl Color {
         }
     }
 
+    #[must_use]
     pub fn flipped(self) -> Self {
         match self {
             Self::White => Self::Black,
@@ -443,6 +444,7 @@ impl Rank {
         })
     }
 
+    #[must_use]
     pub fn mirrored(self) -> Self {
         match self {
             Rank::R1 => Rank::R8,

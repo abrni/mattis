@@ -26,18 +26,22 @@ impl BitBoard {
         self.0 == u64::MAX
     }
 
+    #[must_use]
     pub const fn intersection(self, other: Self) -> Self {
         Self(self.0 & other.0)
     }
 
+    #[must_use]
     pub const fn union(self, other: Self) -> Self {
         Self(self.0 | other.0)
     }
 
+    #[must_use]
     pub const fn complement(self) -> Self {
         Self(!self.0)
     }
 
+    #[must_use]
     pub const fn without(self, other: Self) -> Self {
         Self(self.0 & !other.0)
     }
@@ -52,9 +56,9 @@ impl BitBoard {
 
     pub fn set_to(&mut self, idx: Square64, value: bool) {
         if value {
-            self.set(idx)
+            self.set(idx);
         } else {
-            self.clear(idx)
+            self.clear(idx);
         }
     }
 
@@ -83,10 +87,6 @@ impl BitBoard {
     /// Clears the least significant 1-bit and returns its index
     #[rustfmt::skip]
     pub fn pop(&mut self) -> Square64 {
-        if self.is_empty() {
-            return Square64::Invalid
-        }
-
         const POP_MAGIC_TABLE: [usize ; 64] = [
             63, 30,  3, 32, 25, 41, 22, 33,
             15, 50, 42, 13, 11, 53, 19, 34,
@@ -97,6 +97,10 @@ impl BitBoard {
              7, 39, 48, 24, 59, 14, 12, 55,
             38, 28, 58, 20, 37, 17, 36,  8,
         ];
+
+        if self.is_empty() {
+            return Square64::Invalid
+        }
 
         let b = self.0 ^ (self.0 - 1);
         let fold: u32 = ((b & u64::MAX) ^ (b >> 32)) as u32;
@@ -123,34 +127,42 @@ impl BitBoard {
         self.0.count_ones()
     }
 
+    #[must_use]
     pub fn shifted_north(self) -> Self {
         Self(self.0 << 8)
     }
 
+    #[must_use]
     pub fn shifted_south(self) -> Self {
         Self(self.0 >> 8)
     }
 
+    #[must_use]
     pub fn shifted_east(self) -> Self {
         Self((self.0 << 1) & NOT_FILE_BITBOARDS[File::A].to_u64())
     }
 
+    #[must_use]
     pub fn shifted_west(self) -> Self {
         Self((self.0 >> 1) & NOT_FILE_BITBOARDS[File::H].to_u64())
     }
 
+    #[must_use]
     pub fn shifted_northeast(self) -> Self {
         Self((self.0 << 9) & NOT_FILE_BITBOARDS[File::A].to_u64())
     }
 
+    #[must_use]
     pub fn shifted_southeast(self) -> Self {
         Self((self.0 >> 7) & NOT_FILE_BITBOARDS[File::A].to_u64())
     }
 
+    #[must_use]
     pub fn shifted_southwest(self) -> Self {
         Self((self.0 >> 9) & NOT_FILE_BITBOARDS[File::H].to_u64())
     }
 
+    #[must_use]
     pub fn shifted_northwest(self) -> Self {
         Self((self.0 << 7) & NOT_FILE_BITBOARDS[File::H].to_u64())
     }
@@ -196,7 +208,7 @@ lazy_static::lazy_static! {
     pub static ref NOT_FILE_BITBOARDS: [BitBoard; 8] = {
         let mut boards = *FILE_BITBOARDS;
 
-        for m in boards.iter_mut() {
+        for m in &mut boards {
             *m = m.complement();
         }
 
@@ -218,7 +230,7 @@ lazy_static::lazy_static! {
     pub static ref NOT_RANK_BITBOARDS: [BitBoard; 8] = {
         let mut boards = *RANK_BITBOARDS;
 
-        for m in boards.iter_mut() {
+        for m in &mut boards {
             *m = m.complement();
         }
 
@@ -314,6 +326,8 @@ lazy_static::lazy_static! {
     };
 
     pub static ref KNIGHT_MOVE_PATTERNS: [BitBoard; 64] = {
+        const DIRS: [isize; 8] = [-21, -19, -12, -8, 8, 12, 19, 21];
+
         let mut boards = [BitBoard::EMPTY; 64];
 
         for (i, m) in boards.iter_mut().enumerate() {
@@ -321,7 +335,6 @@ lazy_static::lazy_static! {
             let sq64 = Square64::from_primitive(i);
             let sq120 = Square120::try_from(sq64).unwrap();
 
-            const DIRS: [isize; 8] = [-21, -19, -12, -8, 8, 12, 19, 21];
             for dir in DIRS {
                 let target120 = sq120 + dir;
 
@@ -337,6 +350,8 @@ lazy_static::lazy_static! {
     };
 
     pub static ref KING_MOVE_PATTERNS: [BitBoard; 64] = {
+        const DIRS: [isize; 8] = [-11, -10, -9, -1, 1, 9, 10, 11];
+
         let mut boards = [BitBoard::EMPTY; 64];
 
         for (i, m) in boards.iter_mut().enumerate() {
@@ -344,7 +359,6 @@ lazy_static::lazy_static! {
             let sq64 = Square64::from_primitive(i);
             let sq120 = Square120::try_from(sq64).unwrap();
 
-            const DIRS: [isize; 8] = [-11, -10, -9, -1, 1, 9, 10, 11];
             for dir in DIRS {
                 let target120 = sq120 + dir;
 
@@ -529,6 +543,6 @@ mod tests {
             assert_eq!(iter.next(), Some(sq));
         }
 
-        assert_eq!(iter.next(), None)
+        assert_eq!(iter.next(), None);
     }
 }

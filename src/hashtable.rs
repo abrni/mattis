@@ -64,14 +64,12 @@ pub struct TranspositionTable {
 
 impl TranspositionTable {
     pub fn new(size_mb: usize) -> Self {
-        if size_mb == 0 {
-            panic!("Cannot create a zero sized hashtable")
-        }
+        assert!(size_mb != 0, "Cannot create a zero sized hashtable");
 
         let size_mb = size_mb.next_power_of_two();
-        let size_b = size_mb * 1024 * 1024;
+        let byte_size = size_mb * 1024 * 1024;
         let entry_size = std::mem::size_of::<Entry>();
-        let capacity = size_b / entry_size;
+        let capacity = byte_size / entry_size;
         let shift = 64 - capacity.trailing_zeros();
 
         let mut data = Vec::new();
@@ -203,7 +201,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic = "Don't create a zero sized HashTable"]
     fn try_create_zero_sized() {
         TranspositionTable::new(0);
     }
@@ -216,10 +214,10 @@ mod test {
             for _ in 0..table.capacity {
                 table.store(
                     rand::random(),
-                    Default::default(),
-                    Default::default(),
-                    Default::default(),
-                    Default::default(),
+                    i16::default(),
+                    Move16::default(),
+                    u16::default(),
+                    HEKind::default(),
                 );
             }
         }
