@@ -201,7 +201,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic = "Don't create a zero sized HashTable"]
+    #[should_panic = "Cannot create a zero sized hashtable"]
     fn try_create_zero_sized() {
         TranspositionTable::new(0);
     }
