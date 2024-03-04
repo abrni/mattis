@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use crate::types::{File, Rank, Square120, Square64};
+use crate::types::{File, Rank, Square64};
 use num_enum::{FromPrimitive, UnsafeFromPrimitive};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
@@ -85,8 +85,9 @@ impl BitBoard {
     }
 
     /// Clears the least significant 1-bit and returns its index
-    #[rustfmt::skip]
+
     pub fn pop(&mut self) -> Square64 {
+        #[rustfmt::skip]
         const POP_MAGIC_TABLE: [usize ; 64] = [
             63, 30,  3, 32, 25, 41, 22, 33,
             15, 50, 42, 13, 11, 53, 19, 34,
@@ -99,14 +100,14 @@ impl BitBoard {
         ];
 
         if self.is_empty() {
-            return Square64::Invalid
+            return Square64::Invalid;
         }
 
         let b = self.0 ^ (self.0 - 1);
         let fold: u32 = ((b & u64::MAX) ^ (b >> 32)) as u32;
         self.0 &= self.0 - 1;
 
-        let idx = POP_MAGIC_TABLE[(fold.wrapping_mul(0x783a9b23) >> 26)  as usize];
+        let idx = POP_MAGIC_TABLE[(fold.wrapping_mul(0x783a9b23) >> 26) as usize];
         Square64::from_primitive(idx)
     }
 
@@ -326,21 +327,32 @@ lazy_static::lazy_static! {
     };
 
     pub static ref KNIGHT_MOVE_PATTERNS: [BitBoard; 64] = {
-        const DIRS: [isize; 8] = [-21, -19, -12, -8, 8, 12, 19, 21];
+        const DIRS: [(isize, Rank, Rank, File, File); 8] = [
+            (  6, Rank::R1, Rank::R7, File::C, File::H),
+            ( 15, Rank::R1, Rank::R6, File::B, File::H),
+            ( 17, Rank::R1, Rank::R6, File::A, File::G),
+            ( 10, Rank::R1, Rank::R7, File::A, File::F),
+            ( -6, Rank::R2, Rank::R8, File::A, File::F),
+            (-15, Rank::R3, Rank::R8, File::A, File::G),
+            (-17, Rank::R3, Rank::R8, File::B, File::H),
+            (-10, Rank::R2, Rank::R8, File::C, File::H),
+        ];
 
         let mut boards = [BitBoard::EMPTY; 64];
 
         for (i, m) in boards.iter_mut().enumerate() {
             let mut result = BitBoard::EMPTY;
-            let sq64 = Square64::from_primitive(i);
-            let sq120 = Square120::try_from(sq64).unwrap();
+            let square = Square64::from_primitive(i);
+            let rank = square.rank().unwrap();
+            let file = square.file().unwrap();
 
-            for dir in DIRS {
-                let target120 = sq120 + dir;
-
-                if let Ok(target64) = Square64::try_from(target120) {
-                    result.set(target64);
+            for (dir, min_rank, max_rank, min_file, max_file) in DIRS {
+                if file < min_file || file > max_file || rank <  min_rank || rank > max_rank {
+                    continue;
                 }
+
+                let target = square + dir;
+                result.set(target);
             }
 
             *m = result;
@@ -350,21 +362,33 @@ lazy_static::lazy_static! {
     };
 
     pub static ref KING_MOVE_PATTERNS: [BitBoard; 64] = {
-        const DIRS: [isize; 8] = [-11, -10, -9, -1, 1, 9, 10, 11];
+        const DIRS: [(isize, Rank, Rank, File, File); 8] = [
+            ( 7, Rank::R1, Rank::R7, File::B, File::H),
+            ( 8, Rank::R1, Rank::R7, File::A, File::H),
+            ( 9, Rank::R1, Rank::R7, File::A, File::G),
+            ( 1, Rank::R1, Rank::R8, File::A, File::G),
+            (-7, Rank::R2, Rank::R8, File::A, File::G),
+            (-8, Rank::R2, Rank::R8, File::A, File::H),
+            (-9, Rank::R2, Rank::R8, File::B, File::H),
+            (-1, Rank::R1, Rank::R8, File::B, File::H)
+        ];
 
         let mut boards = [BitBoard::EMPTY; 64];
 
         for (i, m) in boards.iter_mut().enumerate() {
             let mut result = BitBoard::EMPTY;
-            let sq64 = Square64::from_primitive(i);
-            let sq120 = Square120::try_from(sq64).unwrap();
+            let square = Square64::from_primitive(i);
+            let rank = square.rank().unwrap();
+            let file = square.file().unwrap();
 
-            for dir in DIRS {
-                let target120 = sq120 + dir;
-
-                if let Ok(target64) = Square64::try_from(target120) {
-                    result.set(target64);
+            for (dir, min_rank, max_rank, min_file, max_file) in DIRS {
+                if file < min_file || file > max_file || rank <  min_rank || rank > max_rank {
+                    continue;
                 }
+
+                let target = square + dir;
+                result.set(target);
+
             }
 
             *m = result;
