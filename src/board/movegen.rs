@@ -3,7 +3,7 @@ use num_enum::FromPrimitive;
 use crate::{
     bitboard::{BitBoard, BISHOP_MOVE_PATTERNS, BORDER, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS, RANK_BITBOARDS},
     moves::{Move16, Move16Builder, Move32},
-    types::{CastlePerm, Color, File, Piece, Rank, Square64},
+    types::{CastlePerm, Color, File, Piece, PieceType, Rank, Square64},
 };
 
 use super::Board;
@@ -171,19 +171,10 @@ impl Board {
     }
 
     fn generate_en_passant(&self, list: &mut MoveList) {
-        let Some(en_pas_sq) = self.en_passant else {
-            return;
-        };
+        let Some(en_pas_sq) = self.en_passant else { return };
 
-        let attacker = match self.color {
-            Color::White => Piece::WhitePawn,
-            Color::Black => Piece::BlackPawn,
-        };
-
-        let captured_piece = match self.color {
-            Color::White => Piece::BlackPawn,
-            Color::Black => Piece::WhitePawn,
-        };
+        let attacker = Piece::new(PieceType::Pawn, self.color);
+        let captured_piece = Piece::new(PieceType::Pawn, self.color.flipped());
 
         let mut bb_en_pas = BitBoard::EMPTY;
         bb_en_pas.set(en_pas_sq);
@@ -263,15 +254,12 @@ impl Board {
     }
 
     fn generate_rook_queen_moves(&self, list: &mut MoveList, captures_only: bool) {
-        let rooks_and_queens = match self.color {
-            Color::White => self.bitboards[Piece::WhiteRook].union(self.bitboards[Piece::WhiteQueen]),
-            Color::Black => self.bitboards[Piece::BlackRook].union(self.bitboards[Piece::BlackQueen]),
-        };
-
-        let blockers = self.bb_all;
+        let rook_piece = Piece::new(PieceType::Rook, self.color);
+        let queen_piece = Piece::new(PieceType::Queen, self.color);
+        let rooks_and_queens = self.bitboards[rook_piece].union(self.bitboards[queen_piece]);
 
         for start in rooks_and_queens.iter_bit_indices() {
-            let attack_pattern = magic_rook_moves(start, blockers);
+            let attack_pattern = magic_rook_moves(start, self.bb_all);
             let quiet_moves = attack_pattern.without(self.bb_all);
             let captures = attack_pattern.intersection(self.bb_all_per_color[self.color.flipped()]);
 
@@ -294,15 +282,12 @@ impl Board {
     }
 
     fn generate_bishop_queen_moves(&self, list: &mut MoveList, captures_only: bool) {
-        let bishops_and_qeens = match self.color {
-            Color::White => self.bitboards[Piece::WhiteBishop].union(self.bitboards[Piece::WhiteQueen]),
-            Color::Black => self.bitboards[Piece::BlackBishop].union(self.bitboards[Piece::BlackQueen]),
-        };
+        let bishop_piece = Piece::new(PieceType::Bishop, self.color);
+        let queen_piece = Piece::new(PieceType::Queen, self.color);
+        let bishops_and_queens = self.bitboards[bishop_piece].union(self.bitboards[queen_piece]);
 
-        let blockers = self.bb_all;
-
-        for start in bishops_and_qeens.iter_bit_indices() {
-            let attack_pattern = magic_bishop_moves(start, blockers);
+        for start in bishops_and_queens.iter_bit_indices() {
+            let attack_pattern = magic_bishop_moves(start, self.bb_all);
             let quiet_moves = attack_pattern.without(self.bb_all);
             let captures = attack_pattern.intersection(self.bb_all_per_color[self.color.flipped()]);
 
