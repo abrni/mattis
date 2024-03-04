@@ -4,8 +4,8 @@ pub mod movegen;
 use self::movegen::{magic_bishop_moves, magic_rook_moves};
 use crate::{
     bitboard::{BitBoard, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS},
-    moves::{Move16, Move32},
-    types::{CastlePerm, CastlePerms, Color, File, Piece, Rank, Square64},
+    moves::Move16,
+    types::{CastlePerm, CastlePerms, Color, File, Piece, PieceType, Rank, Square64},
 };
 use lazy_static::lazy_static;
 use num_enum::{FromPrimitive, TryFromPrimitive};
@@ -60,7 +60,8 @@ pub enum FenError {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct HistoryEntry {
-    pub move32: Move32,
+    pub move16: Move16,
+    pub captured: Option<PieceType>,
     pub fifty_move: usize,
     pub en_passant: Option<Square64>,
     pub castle_perms: CastlePerms,
@@ -452,22 +453,6 @@ impl Board {
         assert_eq!(self.pieces[self.king_square[Color::Black]].unwrap(), Piece::BlackKing);
     }
 
-    pub fn move_16_to_32(&self, m16: Move16) -> Move32 {
-        if !m16.is_capture() {
-            return Move32::new(m16, None);
-        }
-
-        if m16.is_en_passant() {
-            let dir = if self.color == Color::White { -8 } else { 8 };
-            Move32::new(
-                m16,
-                self.pieces[(m16.end() as usize).wrapping_add_signed(dir)].map(Piece::piece_type),
-            )
-        } else {
-            Move32::new(m16, self.pieces[m16.end()].map(Piece::piece_type))
-        }
-    }
-
     pub fn is_repetition(&self) -> bool {
         // We do not need to check any position from before the fifty_move counter was last reset,
         // because after a pawn move or capture the previous positions can't repeat anymore.
@@ -552,11 +537,7 @@ impl Display for Board {
 #[cfg(test)]
 mod tests {
     use super::Board;
-    use crate::{
-        board::movegen::MoveList,
-        moves::Move16,
-        types::{PieceType, Square64},
-    };
+    use crate::{board::movegen::MoveList, moves::Move16, types::Square64};
 
     #[test]
     fn empty_board() {
@@ -577,10 +558,8 @@ mod tests {
             .end(Square64::G6)
             .finish();
 
-        let ep_move32 = board.move_16_to_32(ep_move16);
         let mut movelist = MoveList::new();
         board.generate_all_moves(&mut movelist);
-        assert!(movelist.contains(&ep_move32));
-        assert_eq!(ep_move32.captured, Some(PieceType::Pawn));
+        assert!(movelist.contains(&ep_move16));
     }
 }

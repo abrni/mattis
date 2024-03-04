@@ -1,8 +1,8 @@
 use super::Board;
 use crate::{
     board::{HistoryEntry, CASTLE_KEYS, COLOR_KEY, EN_PASSANT_KEYS, PIECE_KEYS},
-    moves::Move32,
-    types::{CastlePerms, Color, Piece, Square64},
+    moves::Move16,
+    types::{CastlePerms, Color, Piece, PieceType, Square64},
 };
 
 impl Board {
@@ -13,9 +13,9 @@ impl Board {
     /// so the board stays in its current state.
     ///
     /// Returns `true` if the move was successful and `false` otherwise.
-    pub fn make_move(&mut self, m: Move32) -> bool {
-        let from = m.m16.start();
-        let to = m.m16.end();
+    pub fn make_move(&mut self, m: Move16) -> bool {
+        let from = m.start();
+        let to = m.end();
         let color = self.color;
 
         #[cfg(debug_assertions)]
@@ -26,22 +26,29 @@ impl Board {
             assert!(self.pieces[from].is_some());
         }
 
+        let captured = if m.is_en_passant() {
+            Some(PieceType::Pawn)
+        } else {
+            self.pieces[to].map(Piece::piece_type)
+        };
+
         // store old board data in the history table
         self.history.push(HistoryEntry {
-            move32: m,
+            move16: m,
+            captured,
             fifty_move: self.fifty_move,
             en_passant: self.en_passant,
             castle_perms: self.castle_perms,
             position_key: self.position_key,
         });
 
-        if m.m16.is_en_passant() {
+        if m.is_en_passant() {
             let dir: isize = if color == Color::White { -8 } else { 8 };
             let enemy_pawn_square = to + dir;
             self.clear_piece(enemy_pawn_square); // remove the captured pawn
-        } else if m.m16.is_queenside_castle() {
+        } else if m.is_queenside_castle() {
             self.move_piece(from - 4usize, from - 1usize); // move the rook
-        } else if m.m16.is_kingside_castle() {
+        } else if m.is_kingside_castle() {
             self.move_piece(from + 3usize, from + 1usize); // move the rook
         }
 
@@ -61,7 +68,7 @@ impl Board {
         self.ply += 1;
 
         // remove any captured pieces and update fifty move counter accordingly
-        if m.m16.is_capture() && !m.m16.is_en_passant() {
+        if m.is_capture() && !m.is_en_passant() {
             self.clear_piece(to);
             self.fifty_move = 0;
         }
@@ -72,7 +79,7 @@ impl Board {
         }
 
         // set en passant square and update hash, if the move is a double pawn push
-        if m.m16.is_doube_pawn_push() {
+        if m.is_doube_pawn_push() {
             let dir: isize = if color == Color::White { 8 } else { -8 };
             self.en_passant = Some(from + dir);
             self.position_key ^= EN_PASSANT_KEYS[from + dir];
@@ -82,7 +89,7 @@ impl Board {
         self.move_piece(from, to);
 
         // if the move is a promotion, switch the piece
-        if let Some(promoted_piece) = m.m16.promoted_piece(color) {
+        if let Some(promoted_piece) = m.promoted_piece(color) {
             self.clear_piece(to);
             self.add_piece(to, promoted_piece);
         }
@@ -112,10 +119,10 @@ impl Board {
 
         self.ply -= 1;
         let his = self.history.pop().unwrap();
-        let m = his.move32;
+        let m = his.move16;
 
-        let from = m.m16.start();
-        let to = m.m16.end();
+        let from = m.start();
+        let to = m.end();
 
         // Hash out current en passant square, if there is one
         if let Some(sq) = self.en_passant {
@@ -138,18 +145,15 @@ impl Board {
         self.color = self.color.flipped();
         self.position_key ^= *COLOR_KEY;
 
-        if his.move32.m16.is_en_passant() {
-            let (dir, enemy_pawn): (isize, _) = if self.color == Color::White {
-                (-8, Piece::BlackPawn)
-            } else {
-                (8, Piece::WhitePawn)
-            };
+        if his.move16.is_en_passant() {
+            let enemy_pawn = Piece::new(PieceType::Pawn, self.color.flipped());
+            let dir: isize = if self.color == Color::White { -8 } else { 8 };
 
             let enemy_pawn_square = to + dir;
             self.add_piece(enemy_pawn_square, enemy_pawn); // add the captured pawn back in
-        } else if his.move32.m16.is_queenside_castle() {
+        } else if his.move16.is_queenside_castle() {
             self.move_piece(from - 1usize, from - 4usize); // move the rook back
-        } else if his.move32.m16.is_kingside_castle() {
+        } else if his.move16.is_kingside_castle() {
             self.move_piece(from + 1usize, from + 3usize); // move the rook back
         }
 
@@ -162,11 +166,11 @@ impl Board {
         }
 
         // add the captured piece back in, if there is one
-        if m.m16.is_capture() && !m.m16.is_en_passant() {
-            self.add_piece(to, Piece::new(m.captured.unwrap(), self.color.flipped()));
+        if m.is_capture() && !m.is_en_passant() {
+            self.add_piece(to, Piece::new(his.captured.unwrap(), self.color.flipped()));
         }
 
-        if m.m16.is_promotion() {
+        if m.is_promotion() {
             let pawn = if self.color == Color::White {
                 Piece::WhitePawn
             } else {
@@ -191,7 +195,8 @@ impl Board {
 
         self.ply += 1;
         self.history.push(HistoryEntry {
-            move32: Move32::default(),
+            move16: Move16::default(),
+            captured: None,
             fifty_move: self.fifty_move,
             en_passant: self.en_passant,
             castle_perms: self.castle_perms,

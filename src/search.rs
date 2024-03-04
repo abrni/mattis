@@ -2,8 +2,8 @@ use crate::{
     board::{movegen::MoveList, Board},
     eval::evaluation,
     hashtable::{HEKind, Probe, TranspositionTable},
-    moves::Move32,
-    types::PieceType,
+    moves::Move16,
+    types::{Piece, PieceType},
 };
 use std::{
     collections::HashMap,
@@ -16,7 +16,7 @@ use std::{
 
 pub struct SearchTables {
     pub transposition_table: Arc<TranspositionTable>,
-    pub search_killers: Vec<[Move32; 2]>,
+    pub search_killers: Vec<[Move16; 2]>,
     pub search_history: [[u32; 64]; 12],
 }
 
@@ -36,8 +36,8 @@ pub struct SearchStats {
     pub leaves: u64,         // Total count of visited leaf nodes
     pub fh: u64,             // Count of fail-highs (beta cut off)
     pub fhf: u64,            // Count of fail-highs at the first move
-    pub bestmove: Move32,    // The best move
-    pub pv: Vec<Move32>,     // Principle Variation Line
+    pub bestmove: Move16,    // The best move
+    pub pv: Vec<Move16>,     // Principle Variation Line
     pub stop: bool,          // Should the search stop ASAP
 }
 
@@ -51,14 +51,14 @@ impl Default for SearchStats {
             leaves: 0,
             fh: 0,
             fhf: 0,
-            bestmove: Move32::default(),
+            bestmove: Move16::default(),
             pv: vec![],
             stop: false,
         }
     }
 }
 
-fn pv_line(tptable: &TranspositionTable, board: &mut Board) -> Vec<Move32> {
+fn pv_line(tptable: &TranspositionTable, board: &mut Board) -> Vec<Move16> {
     let mut key_counts = HashMap::new();
     let mut pvline = Vec::with_capacity(8);
 
@@ -74,9 +74,8 @@ fn pv_line(tptable: &TranspositionTable, board: &mut Board) -> Vec<Move32> {
             break;
         }
 
-        let m32 = board.move_16_to_32(m16);
-        board.make_move(m32);
-        pvline.push(m32);
+        board.make_move(m16);
+        pvline.push(m16);
     }
 
     for _ in 0..pvline.len() {
@@ -88,10 +87,10 @@ fn pv_line(tptable: &TranspositionTable, board: &mut Board) -> Vec<Move32> {
 
 fn take_next_move(
     list: &mut MoveList,
-    pv_move: Option<Move32>,
+    pv_move: Option<Move16>,
     tables: &SearchTables,
     board: &Board,
-) -> Option<Move32> {
+) -> Option<Move16> {
     let (idx, _) = list
         .iter()
         .enumerate()
@@ -101,20 +100,26 @@ fn take_next_move(
     Some(m)
 }
 
-fn score_move(m: Move32, pv_move: Option<Move32>, tables: &SearchTables, board: &Board) -> i32 {
+fn score_move(m: Move16, pv_move: Option<Move16>, tables: &SearchTables, board: &Board) -> i32 {
+    let captured = if m.is_en_passant() {
+        Some(PieceType::Pawn)
+    } else {
+        board.pieces[m.end()].map(Piece::piece_type)
+    };
+
     if Some(m) == pv_move {
         2_000_000
-    } else if let Some(victim) = m.captured {
+    } else if let Some(victim) = captured {
         //SAFETY: A chess move always moves a piece
-        let attacker = unsafe { board.pieces[m.m16.start()].unwrap_unchecked().piece_type() };
+        let attacker = unsafe { board.pieces[m.start()].unwrap_unchecked().piece_type() };
         1_000_000 + mvv_lva(attacker, victim)
     } else if tables.search_killers[board.ply][0] == m {
         900_000
     } else if tables.search_killers[board.ply][1] == m {
         800_000
     } else {
-        let piece = board.pieces[m.m16.start()].unwrap();
-        tables.search_history[piece][m.m16.end()] as i32
+        let piece = board.pieces[m.start()].unwrap();
+        tables.search_history[piece][m.end()] as i32
     }
 }
 
@@ -251,7 +256,7 @@ pub fn alpha_beta(
     let mut moves = MoveList::default();
     board.generate_all_moves(&mut moves);
 
-    let mut best_move = Move32::default(); // Will contain the best move we found during the search.
+    let mut best_move = Move16::default(); // Will contain the best move we found during the search.
     let mut best_score = -30_000; // TODO: do we really need this?
     let mut legal_moves = 0; // Counts the number of legal moves. Not every generated move is necessarily legal.
     let mut alpha_changed = false; // signals if alpha has changed during the evaluation of each move
@@ -286,7 +291,7 @@ pub fn alpha_beta(
             // A quiet move, that caused a beta-cutoff is labeled a 'killer-move'.
             // If the same move is encountered at the same ply but in a different position, it will be
             // prefered by move ordering. We use two killer slots, to not forget good moves in some situations.
-            if !m.m16.is_capture() {
+            if !m.is_capture() {
                 tables.search_killers[board.ply][1] = tables.search_killers[board.ply][0];
                 tables.search_killers[board.ply][0] = m;
             }
@@ -294,7 +299,7 @@ pub fn alpha_beta(
             // Store the move in the hashtable and mark it as a beta-cutoff
             tables
                 .transposition_table
-                .store(board.position_key, beta, m.m16, depth, HEKind::Beta);
+                .store(board.position_key, beta, m, depth, HEKind::Beta);
 
             return beta; // fail hard beta-cutoff
         }
@@ -307,9 +312,9 @@ pub fn alpha_beta(
             // This helps move ordering by prefering moves that are similar to moves which caused alpha improvements before.
             // TODO: I am not sure, we are doing this right. I should test not using the history heuristic or using a
             // different added value.
-            if !m.m16.is_capture() {
-                let piece = board.pieces[m.m16.start()].unwrap();
-                tables.search_history[piece][m.m16.end()] += depth as u32; // TODO: is this better: += depth * depth or 2^depth?
+            if !m.is_capture() {
+                let piece = board.pieces[m.start()].unwrap();
+                tables.search_history[piece][m.end()] += depth as u32; // TODO: is this better: += depth * depth or 2^depth?
             }
         }
 
@@ -335,7 +340,7 @@ pub fn alpha_beta(
     let score = if alpha_changed { best_score } else { alpha }; // TODO: I think, weh should be able to always use alpha here?
     tables
         .transposition_table
-        .store(board.position_key, score, best_move.m16, depth, hashentry_kind);
+        .store(board.position_key, score, best_move, depth, hashentry_kind);
 
     alpha
 }

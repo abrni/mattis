@@ -1,39 +1,6 @@
-use crate::types::{Color, Piece, PieceType, Square64};
+use crate::types::{Color, Piece, Square64};
 use num_enum::FromPrimitive;
 use std::fmt::{Debug, Display};
-
-/// # Fields
-/// ```text
-/// 0000 0000 0000 0000 XXXX XXXX XXXX XXXX  -  Move16
-/// 0000 0000 0000 XXXX 0000 0000 0000 0000  -  Captured Piece
-/// XXXX XXXX XXXX 0000 0000 0000 0000 0000  -  *Unused*
-/// ```
-#[derive(PartialEq, Eq, Clone, Copy, Hash, Default)]
-pub struct Move32 {
-    pub m16: Move16,
-    pub captured: Option<PieceType>,
-}
-
-impl Move32 {
-    pub fn new(m16: Move16, captured: Option<PieceType>) -> Self {
-        Self { m16, captured }
-    }
-}
-
-impl Debug for Move32 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Move32")
-            .field("captured", &self.captured)
-            .field("m16", &self.m16)
-            .finish()
-    }
-}
-
-impl Display for Move32 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&self.m16, f)
-    }
-}
 
 /// # Fields
 /// ```text
@@ -262,33 +229,12 @@ impl Display for Move16 {
 #[cfg(test)]
 mod tests {
     use super::Move16;
-    use crate::{moves::Move32, types::*};
+    use crate::types::*;
     use num_enum::FromPrimitive;
 
     #[test]
     fn type_size() {
         assert_eq!(std::mem::size_of::<Move16>(), 2);
-        assert_eq!(std::mem::size_of::<Move32>(), 4);
-    }
-
-    #[test]
-    fn m32_quiet() {
-        let m = Move32::new(Move16::build().finish(), None);
-        assert_eq!(m.captured, None);
-        assert!(m.m16.is_nomove());
-    }
-
-    #[test]
-    fn m32_capture() {
-        for piece in Piece::ALL {
-            let m = Move32::new(
-                Move16::build().start(Square64::A1).end(Square64::A2).capture().finish(),
-                Some(piece.piece_type()),
-            );
-
-            assert_eq!(m.captured, Some(piece.piece_type()));
-            assert!(m.m16.is_capture());
-        }
     }
 
     #[test]

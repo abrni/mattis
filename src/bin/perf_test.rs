@@ -71,15 +71,15 @@ fn perft(board: &mut Board, depth: usize, stats: &mut Statistics, lists: &mut [M
         }
 
         if depth == 1 {
-            if m.m16.is_capture() {
+            if m.is_capture() {
                 stats.captures += 1;
             }
 
-            if m.m16.is_en_passant() {
+            if m.is_en_passant() {
                 stats.ep += 1;
             }
 
-            if m.m16.is_kingside_castle() || m.m16.is_queenside_castle() {
+            if m.is_kingside_castle() || m.is_queenside_castle() {
                 stats.castles += 1;
             }
 

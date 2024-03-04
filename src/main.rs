@@ -11,7 +11,7 @@ use bus::{Bus, BusReader};
 use mattis::{
     board::{movegen::MoveList, Board},
     hashtable::TranspositionTable,
-    moves::Move32,
+    moves::Move16,
     search::{iterative_deepening, SearchParams, SearchTables},
     types::Color,
     uci::{self, EngineMessage, GuiMessage, Id},
@@ -87,7 +87,7 @@ fn search_thread(
 
     let mut search_tables = SearchTables {
         transposition_table: ttable,
-        search_killers: vec![[Move32::default(); 2]; 1024],
+        search_killers: vec![[Move16::default(); 2]; 1024],
         search_history: [[0; 64]; 12],
     };
 
@@ -131,7 +131,7 @@ fn run_go(print_output: bool, board: &mut Board, go: uci::Go, search_tables: &mu
         stop,
     };
 
-    let mut bestmove = Move32::default();
+    let mut bestmove = Move16::default();
     for stats in iterative_deepening(board, params, search_tables) {
         bestmove = stats.bestmove;
         let info = EngineMessage::Info(uci::Info {
