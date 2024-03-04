@@ -23,7 +23,6 @@ impl Board {
             self.check_board_integrity();
             assert_ne!(from, Square64::Invalid);
             assert_ne!(to, Square64::Invalid);
-            assert_ne!(color, Color::Both);
             assert!(self.pieces[from].is_some());
         }
 
@@ -246,8 +245,8 @@ impl Board {
         self.material[color] -= piece.value();
         self.count_pieces[piece] -= 1;
         self.bitboards[piece].clear(square);
-        self.bb_all_pieces[color].clear(square);
-        self.bb_all_pieces[Color::Both].clear(square);
+        self.bb_all_per_color[color].clear(square);
+        self.bb_all.clear(square);
 
         if piece.is_major() {
             self.count_big_pieces[color] -= 1;
@@ -268,8 +267,8 @@ impl Board {
         self.material[color] += piece.value();
         self.count_pieces[piece] += 1;
         self.bitboards[piece].set(square);
-        self.bb_all_pieces[color].set(square);
-        self.bb_all_pieces[Color::Both].set(square);
+        self.bb_all_per_color[color].set(square);
+        self.bb_all.set(square);
 
         if piece.is_major() {
             self.count_big_pieces[color] += 1;
@@ -294,11 +293,11 @@ impl Board {
         self.bitboards[piece].clear(from);
         self.bitboards[piece].set(to);
 
-        self.bb_all_pieces[color].clear(from);
-        self.bb_all_pieces[Color::Both].clear(from);
+        self.bb_all_per_color[color].clear(from);
+        self.bb_all.clear(from);
 
-        self.bb_all_pieces[color].set(to);
-        self.bb_all_pieces[Color::Both].set(to);
+        self.bb_all_per_color[color].set(to);
+        self.bb_all.set(to);
     }
 }
 

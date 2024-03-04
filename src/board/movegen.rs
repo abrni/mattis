@@ -36,18 +36,15 @@ impl Board {
         match self.color {
             Color::White => self.generate_white_pawn_pushes(list),
             Color::Black => self.generate_black_pawn_pushes(list),
-            Color::Both => (),
         }
     }
 
     fn generate_white_pawn_pushes(&self, list: &mut MoveList) {
-        let target_squares_single = self.bitboards[Piece::WhitePawn]
-            .shifted_north()
-            .without(self.bb_all_pieces[Color::Both]);
+        let target_squares_single = self.bitboards[Piece::WhitePawn].shifted_north().without(self.bb_all);
 
         let target_squares_double = target_squares_single
             .shifted_north()
-            .without(self.bb_all_pieces[Color::Both])
+            .without(self.bb_all)
             .intersection(RANK_BITBOARDS[Rank::R4]);
 
         for end in target_squares_single.iter_bit_indices() {
@@ -73,13 +70,11 @@ impl Board {
     }
 
     fn generate_black_pawn_pushes(&self, list: &mut MoveList) {
-        let target_squares_single = self.bitboards[Piece::BlackPawn]
-            .shifted_south()
-            .without(self.bb_all_pieces[Color::Both]);
+        let target_squares_single = self.bitboards[Piece::BlackPawn].shifted_south().without(self.bb_all);
 
         let target_squares_double = target_squares_single
             .shifted_south()
-            .without(self.bb_all_pieces[Color::Both])
+            .without(self.bb_all)
             .intersection(RANK_BITBOARDS[Rank::R5]);
 
         for end in target_squares_single.iter_bit_indices() {
@@ -108,14 +103,13 @@ impl Board {
         match self.color {
             Color::White => self.generate_white_pawn_attacks(list),
             Color::Black => self.generate_black_pawn_attacks(list),
-            Color::Both => (),
         }
     }
 
     fn generate_white_pawn_attacks(&self, list: &mut MoveList) {
         let targets_east = self.bitboards[Piece::WhitePawn]
             .shifted_northeast()
-            .intersection(self.bb_all_pieces[Color::Black]);
+            .intersection(self.bb_all_per_color[Color::Black]);
 
         for end in targets_east.iter_bit_indices() {
             let m16 = Move16::build().start(end - 9usize).end(end).capture();
@@ -130,7 +124,7 @@ impl Board {
 
         let targets_west = self.bitboards[Piece::WhitePawn]
             .shifted_northwest()
-            .intersection(self.bb_all_pieces[Color::Black]);
+            .intersection(self.bb_all_per_color[Color::Black]);
 
         for end in targets_west.iter_bit_indices() {
             let m16 = Move16::build().start(end - 7usize).end(end).capture();
@@ -147,7 +141,7 @@ impl Board {
     fn generate_black_pawn_attacks(&self, list: &mut MoveList) {
         let targets_east = self.bitboards[Piece::BlackPawn]
             .shifted_southeast()
-            .intersection(self.bb_all_pieces[Color::White]);
+            .intersection(self.bb_all_per_color[Color::White]);
 
         for end in targets_east.iter_bit_indices() {
             let m16 = Move16::build().start(end + 7usize).end(end).capture();
@@ -162,7 +156,7 @@ impl Board {
 
         let targets_west = self.bitboards[Piece::BlackPawn]
             .shifted_southwest()
-            .intersection(self.bb_all_pieces[Color::White]);
+            .intersection(self.bb_all_per_color[Color::White]);
 
         for end in targets_west.iter_bit_indices() {
             let m16 = Move16::build().start(end + 9usize).end(end).capture();
@@ -181,20 +175,14 @@ impl Board {
             return;
         };
 
-        if self.color == Color::Both {
-            return;
-        }
-
         let attacker = match self.color {
             Color::White => Piece::WhitePawn,
             Color::Black => Piece::BlackPawn,
-            Color::Both => unreachable!(),
         };
 
         let captured_piece = match self.color {
             Color::White => Piece::BlackPawn,
             Color::Black => Piece::WhitePawn,
-            Color::Both => unreachable!(),
         };
 
         let mut bb_en_pas = BitBoard::EMPTY;
@@ -203,13 +191,11 @@ impl Board {
         let mut attacker_east = match self.color {
             Color::White => bb_en_pas.shifted_southeast(),
             Color::Black => bb_en_pas.shifted_northeast(),
-            Color::Both => unreachable!(),
         };
 
         let mut attacker_west = match self.color {
             Color::White => bb_en_pas.shifted_southwest(),
             Color::Black => bb_en_pas.shifted_northwest(),
-            Color::Both => unreachable!(),
         };
 
         if !attacker_west.intersection(self.bitboards[attacker]).is_empty() {
@@ -237,13 +223,12 @@ impl Board {
 
     fn generate_knight_moves(&self, list: &mut MoveList, captures_only: bool) {
         let knights = match self.color {
-            Color::Both => return,
             Color::White => self.bitboards[Piece::WhiteKnight],
             Color::Black => self.bitboards[Piece::BlackKnight],
         };
 
         for start in knights.iter_bit_indices() {
-            let targets = KNIGHT_MOVE_PATTERNS[start].without(self.bb_all_pieces[self.color]);
+            let targets = KNIGHT_MOVE_PATTERNS[start].without(self.bb_all_per_color[self.color]);
 
             for end in targets.iter_bit_indices() {
                 let capture = self.pieces[end];
@@ -261,7 +246,7 @@ impl Board {
 
     fn generate_king_moves(&self, list: &mut MoveList, captures_only: bool) {
         let start = self.king_square[self.color];
-        let targets = KING_MOVE_PATTERNS[start].without(self.bb_all_pieces[self.color]);
+        let targets = KING_MOVE_PATTERNS[start].without(self.bb_all_per_color[self.color]);
 
         for end in targets.iter_bit_indices() {
             let capture = self.pieces[end];
@@ -279,17 +264,16 @@ impl Board {
 
     fn generate_rook_queen_moves(&self, list: &mut MoveList, captures_only: bool) {
         let rooks_and_queens = match self.color {
-            Color::Both => return,
             Color::White => self.bitboards[Piece::WhiteRook].union(self.bitboards[Piece::WhiteQueen]),
             Color::Black => self.bitboards[Piece::BlackRook].union(self.bitboards[Piece::BlackQueen]),
         };
 
-        let blockers = self.bb_all_pieces[Color::Both];
+        let blockers = self.bb_all;
 
         for start in rooks_and_queens.iter_bit_indices() {
             let attack_pattern = magic_rook_moves(start, blockers);
-            let quiet_moves = attack_pattern.without(self.bb_all_pieces[Color::Both]);
-            let captures = attack_pattern.intersection(self.bb_all_pieces[self.color.flipped()]);
+            let quiet_moves = attack_pattern.without(self.bb_all);
+            let captures = attack_pattern.intersection(self.bb_all_per_color[self.color.flipped()]);
 
             for end in captures.iter_bit_indices() {
                 let capture = self.pieces[end];
@@ -311,17 +295,16 @@ impl Board {
 
     fn generate_bishop_queen_moves(&self, list: &mut MoveList, captures_only: bool) {
         let bishops_and_qeens = match self.color {
-            Color::Both => return,
             Color::White => self.bitboards[Piece::WhiteBishop].union(self.bitboards[Piece::WhiteQueen]),
             Color::Black => self.bitboards[Piece::BlackBishop].union(self.bitboards[Piece::BlackQueen]),
         };
 
-        let blockers = self.bb_all_pieces[Color::Both];
+        let blockers = self.bb_all;
 
         for start in bishops_and_qeens.iter_bit_indices() {
             let attack_pattern = magic_bishop_moves(start, blockers);
-            let quiet_moves = attack_pattern.without(self.bb_all_pieces[Color::Both]);
-            let captures = attack_pattern.intersection(self.bb_all_pieces[self.color.flipped()]);
+            let quiet_moves = attack_pattern.without(self.bb_all);
+            let captures = attack_pattern.intersection(self.bb_all_per_color[self.color.flipped()]);
 
             for end in captures.iter_bit_indices() {
                 let capture = self.pieces[end];

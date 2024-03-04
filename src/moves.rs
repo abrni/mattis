@@ -322,7 +322,6 @@ mod tests {
 
         assert_eq!(m.promoted_piece(Color::White), None);
         assert_eq!(m.promoted_piece(Color::Black), None);
-        assert_eq!(m.promoted_piece(Color::Both), None);
     }
 
     #[test]
@@ -350,7 +349,6 @@ mod tests {
 
                 assert_eq!(m.promoted_piece(Color::White), None);
                 assert_eq!(m.promoted_piece(Color::Black), None);
-                assert_eq!(m.promoted_piece(Color::Both), None);
             }
         }
     }

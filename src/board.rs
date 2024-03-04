@@ -78,38 +78,43 @@ pub struct Board {
     pub ply: usize,        // the number of halfmoves since the start of the game (currently unused)
     pub position_key: u64, // the current zobrist position key
 
-    pub king_square: [Square64; 2],     // the position of the white and black kings
-    pub bitboards: [BitBoard; 12],      // bitboards for each piece type
-    pub bb_all_pieces: [BitBoard; 3],   // bitboards of all pieces per color
-    pub count_pieces: [usize; 12],      // counts the number of pieces on the board fore each piece type
-    pub count_big_pieces: [usize; 2],   // counts the number of big pieces for both sides (everything exept pawns)
-    pub count_major_pieces: [usize; 2], // counts the number of major pieces for both sides (rooks, queens, king)
-    pub count_minor_pieces: [usize; 2], // counts the number of minor pieces for both sides (bishops, knights)
-    pub material: [i16; 2],             // the material in centipawns for both sides
+    pub king_square: [Square64; 2],      // the position of the white and black kings
+    pub bitboards: [BitBoard; 12],       // bitboards for each piece type
+    pub bb_all_per_color: [BitBoard; 2], // bitboards of all pieces per color
+    pub bb_all: BitBoard,                // bitboard of all pieces on the board
+    pub count_pieces: [usize; 12],       // counts the number of pieces on the board fore each piece type
+    pub count_big_pieces: [usize; 2],    // counts the number of big pieces for both sides (everything exept pawns)
+    pub count_major_pieces: [usize; 2],  // counts the number of major pieces for both sides (rooks, queens, king)
+    pub count_minor_pieces: [usize; 2],  // counts the number of minor pieces for both sides (bishops, knights)
+    pub material: [i16; 2],              // the material in centipawns for both sides
 
     pub history: Vec<HistoryEntry>, // stores the board history
 }
 
 impl Board {
     pub fn new() -> Self {
-        Self {
+        let mut this = Self {
             pieces: [None; 64],
             king_square: [Square64::Invalid; 2],
-            color: Color::Both,
+            color: Color::White,
             en_passant: None,
             fifty_move: 0,
             castle_perms: CastlePerms::NONE,
             ply: 0,
             position_key: 0,
             bitboards: [BitBoard::EMPTY; 12],
-            bb_all_pieces: [BitBoard::EMPTY; 3],
+            bb_all_per_color: [BitBoard::EMPTY; 2],
+            bb_all: BitBoard::EMPTY,
             count_pieces: [0; 12],
             count_big_pieces: [0; 2],
             count_major_pieces: [0; 2],
             count_minor_pieces: [0; 2],
             material: [0; 2],
             history: vec![],
-        }
+        };
+
+        this.position_key = this.generate_position_key();
+        this
     }
 
     pub fn generate_position_key(&self) -> u64 {
@@ -209,7 +214,8 @@ impl Board {
     pub fn update_redundant_data(&mut self) {
         // clear all redundant data first
         self.bitboards = [BitBoard::EMPTY; 12];
-        self.bb_all_pieces = [BitBoard::EMPTY; 3];
+        self.bb_all_per_color = [BitBoard::EMPTY; 2];
+        self.bb_all = BitBoard::EMPTY;
         self.count_pieces = [0; 12];
         self.count_big_pieces = [0; 2];
         self.count_major_pieces = [0; 2];
@@ -228,8 +234,8 @@ impl Board {
             let color = piece.color();
 
             self.bitboards[piece].set(square);
-            self.bb_all_pieces[color].set(square);
-            self.bb_all_pieces[Color::Both].set(square);
+            self.bb_all_per_color[color].set(square);
+            self.bb_all.set(square);
             self.count_pieces[piece] += 1;
             self.count_big_pieces[color] += piece.is_big() as usize;
             self.count_major_pieces[color] += piece.is_major() as usize;
@@ -345,7 +351,6 @@ impl Board {
         let knight_piece = match color {
             Color::Black => Piece::BlackKnight,
             Color::White => Piece::WhiteKnight,
-            Color::Both => unreachable!(),
         };
 
         if !KNIGHT_MOVE_PATTERNS[square]
@@ -359,10 +364,9 @@ impl Board {
         let (queen_piece, rook_piece) = match color {
             Color::Black => (Piece::BlackQueen, Piece::BlackRook),
             Color::White => (Piece::WhiteQueen, Piece::WhiteRook),
-            Color::Both => unreachable!(),
         };
 
-        let attack_pattern = magic_rook_moves(square, self.bb_all_pieces[Color::Both]);
+        let attack_pattern = magic_rook_moves(square, self.bb_all);
         let rooks_and_queens = self.bitboards[queen_piece].union(self.bitboards[rook_piece]);
         if !attack_pattern.intersection(rooks_and_queens).is_empty() {
             return true;
@@ -372,10 +376,9 @@ impl Board {
         let (queen_piece, bishop_piece) = match color {
             Color::Black => (Piece::BlackQueen, Piece::BlackBishop),
             Color::White => (Piece::WhiteQueen, Piece::WhiteBishop),
-            Color::Both => unreachable!(),
         };
 
-        let attack_pattern = magic_bishop_moves(square, self.bb_all_pieces[Color::Both]);
+        let attack_pattern = magic_bishop_moves(square, self.bb_all);
         let bishops_and_queens = self.bitboards[queen_piece].union(self.bitboards[bishop_piece]);
         if !attack_pattern.intersection(bishops_and_queens).is_empty() {
             return true;
@@ -385,7 +388,6 @@ impl Board {
         let king_piece = match color {
             Color::Black => Piece::BlackKing,
             Color::White => Piece::WhiteKing,
-            Color::Both => unreachable!(),
         };
 
         if !KING_MOVE_PATTERNS[square]
@@ -400,7 +402,8 @@ impl Board {
 
     pub fn check_board_integrity(&self) {
         let mut check_bitboards = [BitBoard::EMPTY; 12];
-        let mut check_bb_all_pieces = [BitBoard::EMPTY; 3];
+        let mut check_bb_all_per_color = [BitBoard::EMPTY; 2];
+        let mut check_bb_all = BitBoard::EMPTY;
         let mut check_count_pieces = [0; 12];
         let mut check_count_big_pieces = [0; 2];
         let mut check_count_major_pieces = [0; 2];
@@ -415,8 +418,8 @@ impl Board {
                 let color = piece.color();
 
                 check_bitboards[piece].set(square);
-                check_bb_all_pieces[color].set(square);
-                check_bb_all_pieces[Color::Both].set(square);
+                check_bb_all_per_color[color].set(square);
+                check_bb_all.set(square);
                 check_count_pieces[piece] += 1;
                 check_count_big_pieces[color] += piece.is_big() as usize;
                 check_count_major_pieces[color] += piece.is_major() as usize;
@@ -429,14 +432,13 @@ impl Board {
             assert_eq!(check_bb, bb);
         }
 
-        assert_eq!(check_bb_all_pieces, self.bb_all_pieces);
+        assert_eq!(check_bb_all_per_color, self.bb_all_per_color);
+        assert_eq!(check_bb_all, self.bb_all);
         assert_eq!(check_count_pieces, self.count_pieces);
         assert_eq!(check_count_big_pieces, self.count_big_pieces);
         assert_eq!(check_count_major_pieces, self.count_major_pieces);
         assert_eq!(check_count_minor_pieces, self.count_minor_pieces);
         assert_eq!(check_material, self.material);
-
-        assert!(self.color != Color::Both);
         assert_eq!(self.position_key, self.generate_position_key());
 
         if let Some(sq) = self.en_passant {
@@ -556,8 +558,9 @@ mod tests {
     #[test]
     fn empty_board() {
         let board = Board::new();
-        assert_eq!(board.generate_position_key(), 0);
-        assert_eq!(board.position_key, 0);
+        assert_eq!(board.generate_position_key(), board.position_key);
+        // assert_eq!(board.generate_position_key(), 0);
+        // assert_eq!(board.position_key, 0);
     }
 
     #[test]

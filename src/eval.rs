@@ -32,7 +32,6 @@ pub fn evaluation(board: &Board) -> i16 {
     let (my_fn, op_fn): (PieceSquareFn, PieceSquareFn) = match my_color {
         Color::White => (piece_square, piece_square_mirrored),
         Color::Black => (piece_square_mirrored, piece_square),
-        Color::Both => unreachable!(),
     };
 
     // TODO: interpolate between midgame and endgame?
@@ -67,7 +66,6 @@ pub fn evaluation(board: &Board) -> i16 {
     let (my_passed_masks, op_passed_masks) = match my_color {
         Color::White => (&*WHITE_PAWN_PASSED_MASKS, &*BLACK_PAWN_PASSED_MASKS),
         Color::Black => (&*BLACK_PAWN_PASSED_MASKS, &*WHITE_PAWN_PASSED_MASKS),
-        Color::Both => unreachable!(),
     };
 
     let bb_my_pawns = board.bitboards[Piece::new(PieceType::Pawn, my_color)];

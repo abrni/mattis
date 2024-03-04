@@ -175,7 +175,6 @@ impl Piece {
 
     pub const fn new(ty: PieceType, color: Color) -> Self {
         match (ty, color) {
-            (_, Color::Both) => panic!("cant create a piece with Color::BOTH"),
             (PieceType::Pawn, Color::White) => Piece::WhitePawn,
             (PieceType::Pawn, Color::Black) => Piece::BlackPawn,
             (PieceType::Knight, Color::White) => Piece::WhiteKnight,
@@ -280,12 +279,11 @@ impl_iterators!(Piece, PieceIter, u8);
 pub enum Color {
     White,
     Black,
-    Both,
 }
 
 impl Color {
     const MIN: Self = Self::White;
-    const MAX: Self = Self::Both;
+    const MAX: Self = Self::Black;
 
     pub fn from_char(c: char) -> Option<Self> {
         match c {
@@ -299,7 +297,6 @@ impl Color {
         match self {
             Self::White => 'w',
             Self::Black => 'b',
-            Self::Both => '-',
         }
     }
 
@@ -308,7 +305,6 @@ impl Color {
         match self {
             Self::White => Self::Black,
             Self::Black => Self::White,
-            Self::Both => Self::Both,
         }
     }
 }

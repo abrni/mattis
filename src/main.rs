@@ -113,7 +113,6 @@ fn run_go(print_output: bool, board: &mut Board, go: uci::Go, search_tables: &mu
     let (time, inc) = match board.color {
         Color::White => (go.wtime, go.winc),
         Color::Black => (go.btime, go.binc),
-        Color::Both => todo!(),
     };
 
     let movestogo = go.movestogo.unwrap_or(30) as f64;
