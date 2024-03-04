@@ -4,7 +4,7 @@ pub mod movegen;
 use self::movegen::{magic_bishop_moves, magic_rook_moves};
 use crate::{
     bitboard::{BitBoard, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS},
-    moves::Move16,
+    chess_move::ChessMove,
     types::{CastlePerm, CastlePerms, Color, File, Piece, PieceType, Rank, Square64},
 };
 use lazy_static::lazy_static;
@@ -60,7 +60,7 @@ pub enum FenError {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct HistoryEntry {
-    pub move16: Move16,
+    pub move16: ChessMove,
     pub captured: Option<PieceType>,
     pub fifty_move: usize,
     pub en_passant: Option<Square64>,
@@ -537,7 +537,7 @@ impl Display for Board {
 #[cfg(test)]
 mod tests {
     use super::Board;
-    use crate::{board::movegen::MoveList, moves::Move16, types::Square64};
+    use crate::{board::movegen::MoveList, chess_move::ChessMove, types::Square64};
 
     #[test]
     fn empty_board() {
@@ -552,7 +552,7 @@ mod tests {
         let fen = "rnbqkbnr/1ppppp1p/8/p4Pp1/8/8/PPPPP1PP/RNBQKBNR w KQkq g6 0 3";
         let board = Board::from_fen(fen).unwrap();
 
-        let ep_move16 = Move16::build()
+        let ep_move16 = ChessMove::build()
             .start(Square64::F5)
             .en_passant()
             .end(Square64::G6)

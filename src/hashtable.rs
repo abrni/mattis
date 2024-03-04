@@ -1,4 +1,4 @@
-use crate::{board::Board, moves::Move16};
+use crate::{board::Board, chess_move::ChessMove};
 use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -10,9 +10,9 @@ pub enum HEKind {
 }
 
 pub enum Probe {
-    NoHit,               // We have no hit in the table
-    PV(Move16, i16),     // We do have a hit in the table, but it is not exact and does not cause a branch cutoff
-    CutOff(Move16, i16), // We have a successful hit, that was exact or causes a branch cutoff
+    NoHit,                  // We have no hit in the table
+    PV(ChessMove, i16),     // We do have a hit in the table, but it is not exact and does not cause a branch cutoff
+    CutOff(ChessMove, i16), // We have a successful hit, that was exact or causes a branch cutoff
 }
 
 #[derive(Debug, Default)]
@@ -24,7 +24,7 @@ struct Entry {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 struct Data {
     score: i16,
-    m16: Move16,
+    m16: ChessMove,
     depth: u16,
     kind: HEKind,
     age: u8,
@@ -94,7 +94,7 @@ impl TranspositionTable {
         (key >> self.shift) as usize
     }
 
-    pub fn store(&self, position_key: u64, score: i16, m: Move16, depth: u16, kind: HEKind) {
+    pub fn store(&self, position_key: u64, score: i16, m: ChessMove, depth: u16, kind: HEKind) {
         let current_table_age = self.current_age.load(Ordering::Relaxed);
         let index = self.index(position_key);
         debug_assert!(index < self.capacity);
@@ -137,7 +137,7 @@ impl TranspositionTable {
         entry.load(key)
     }
 
-    pub fn get(&self, key: u64) -> Option<Move16> {
+    pub fn get(&self, key: u64) -> Option<ChessMove> {
         self.load(key).map(|data| data.m16)
     }
 
@@ -170,8 +170,8 @@ impl TranspositionTable {
 mod test {
     use super::HEKind;
     use crate::{
+        chess_move::ChessMove,
         hashtable::{Data, Entry, TranspositionTable},
-        moves::Move16,
     };
 
     #[test]
@@ -211,7 +211,7 @@ mod test {
                 table.store(
                     rand::random(),
                     i16::default(),
-                    Move16::default(),
+                    ChessMove::default(),
                     u16::default(),
                     HEKind::default(),
                 );
@@ -224,7 +224,7 @@ mod test {
         let key: u64 = rand::random();
         let data = Data {
             score: rand::random(),
-            m16: Move16::default(),
+            m16: ChessMove::default(),
             depth: rand::random(),
             kind: HEKind::Alpha,
             age: rand::random(),
@@ -243,7 +243,7 @@ mod test {
 
         let data = Data {
             score: rand::random(),
-            m16: Move16::default(),
+            m16: ChessMove::default(),
             depth: rand::random(),
             kind: HEKind::Alpha,
             age: rand::random(),

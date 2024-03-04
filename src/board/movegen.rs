@@ -2,13 +2,13 @@ use num_enum::FromPrimitive;
 
 use crate::{
     bitboard::{BitBoard, BISHOP_MOVE_PATTERNS, BORDER, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS, RANK_BITBOARDS},
-    moves::{Move16, Move16Builder},
+    chess_move::{ChessMove, ChessMoveBuilder},
     types::{CastlePerm, Color, File, Piece, PieceType, Rank, Square64},
 };
 
 use super::Board;
 
-pub type MoveList = smallvec::SmallVec<[Move16; 64]>;
+pub type MoveList = smallvec::SmallVec<[ChessMove; 64]>;
 
 impl Board {
     pub fn generate_capture_moves(&self, list: &mut MoveList) {
@@ -48,7 +48,7 @@ impl Board {
             .intersection(RANK_BITBOARDS[Rank::R4]);
 
         for end in target_squares_single.iter_bit_indices() {
-            let m16 = Move16::build().start(end - 8usize).end(end);
+            let m16 = ChessMove::build().start(end - 8usize).end(end);
 
             if end.rank().unwrap() == Rank::R8 {
                 insert_promotions(list, m16, Color::White);
@@ -59,7 +59,7 @@ impl Board {
 
         for end in target_squares_double.iter_bit_indices() {
             list.push(
-                Move16::build()
+                ChessMove::build()
                     .start(end - 16usize)
                     .end(end)
                     .double_pawn_push()
@@ -77,7 +77,7 @@ impl Board {
             .intersection(RANK_BITBOARDS[Rank::R5]);
 
         for end in target_squares_single.iter_bit_indices() {
-            let m16 = Move16::build().start(end + 8usize).end(end);
+            let m16 = ChessMove::build().start(end + 8usize).end(end);
 
             if end.rank().unwrap() == Rank::R1 {
                 insert_promotions(list, m16, Color::Black);
@@ -88,7 +88,7 @@ impl Board {
 
         for end in target_squares_double.iter_bit_indices() {
             list.push(
-                Move16::build()
+                ChessMove::build()
                     .start(end + 16usize)
                     .end(end)
                     .double_pawn_push()
@@ -110,7 +110,7 @@ impl Board {
             .intersection(self.bb_all_per_color[Color::Black]);
 
         for end in targets_east.iter_bit_indices() {
-            let m16 = Move16::build().start(end - 9usize).end(end).capture();
+            let m16 = ChessMove::build().start(end - 9usize).end(end).capture();
 
             if end.rank().unwrap() == Rank::R8 {
                 insert_promotions(list, m16, Color::White);
@@ -124,7 +124,7 @@ impl Board {
             .intersection(self.bb_all_per_color[Color::Black]);
 
         for end in targets_west.iter_bit_indices() {
-            let m16 = Move16::build().start(end - 7usize).end(end).capture();
+            let m16 = ChessMove::build().start(end - 7usize).end(end).capture();
 
             if end.rank().unwrap() == Rank::R8 {
                 insert_promotions(list, m16, Color::White);
@@ -140,7 +140,7 @@ impl Board {
             .intersection(self.bb_all_per_color[Color::White]);
 
         for end in targets_east.iter_bit_indices() {
-            let m16 = Move16::build().start(end + 7usize).end(end).capture();
+            let m16 = ChessMove::build().start(end + 7usize).end(end).capture();
 
             if end.rank().unwrap() == Rank::R1 {
                 insert_promotions(list, m16, Color::Black);
@@ -154,7 +154,7 @@ impl Board {
             .intersection(self.bb_all_per_color[Color::White]);
 
         for end in targets_west.iter_bit_indices() {
-            let m16 = Move16::build().start(end + 9usize).end(end).capture();
+            let m16 = ChessMove::build().start(end + 9usize).end(end).capture();
 
             if end.rank().unwrap() == Rank::R1 {
                 insert_promotions(list, m16, Color::Black);
@@ -184,7 +184,7 @@ impl Board {
 
         if !attacker_west.intersection(self.bitboards[attacker]).is_empty() {
             list.push(
-                Move16::build()
+                ChessMove::build()
                     .start(attacker_west.pop())
                     .end(en_pas_sq)
                     .en_passant()
@@ -194,7 +194,7 @@ impl Board {
 
         if !attacker_east.intersection(self.bitboards[attacker]).is_empty() {
             list.push(
-                Move16::build()
+                ChessMove::build()
                     .start(attacker_east.pop())
                     .end(en_pas_sq)
                     .en_passant()
@@ -219,7 +219,7 @@ impl Board {
                     continue;
                 }
 
-                let m = Move16::build().start(start).end(end);
+                let m = ChessMove::build().start(start).end(end);
                 let m = if capture.is_some() { m.capture() } else { m };
                 list.push(m.finish());
             }
@@ -237,7 +237,7 @@ impl Board {
                 continue;
             }
 
-            let m = Move16::build().start(start).end(end);
+            let m = ChessMove::build().start(start).end(end);
             let m = if capture.is_some() { m.capture() } else { m };
 
             list.push(m.finish());
@@ -255,7 +255,7 @@ impl Board {
             let captures = attack_pattern.intersection(self.bb_all_per_color[self.color.flipped()]);
 
             for end in captures.iter_bit_indices() {
-                list.push(Move16::build().start(start).end(end).capture().finish());
+                list.push(ChessMove::build().start(start).end(end).capture().finish());
             }
 
             if captures_only {
@@ -263,7 +263,7 @@ impl Board {
             }
 
             for end in quiet_moves.iter_bit_indices() {
-                list.push(Move16::build().start(start).end(end).finish());
+                list.push(ChessMove::build().start(start).end(end).finish());
             }
         }
     }
@@ -279,7 +279,7 @@ impl Board {
             let captures = attack_pattern.intersection(self.bb_all_per_color[self.color.flipped()]);
 
             for end in captures.iter_bit_indices() {
-                list.push(Move16::build().start(start).end(end).capture().finish());
+                list.push(ChessMove::build().start(start).end(end).capture().finish());
             }
 
             if captures_only {
@@ -287,7 +287,7 @@ impl Board {
             }
 
             for end in quiet_moves.iter_bit_indices() {
-                list.push(Move16::build().start(start).end(end).finish());
+                list.push(ChessMove::build().start(start).end(end).finish());
             }
         }
     }
@@ -301,7 +301,7 @@ impl Board {
             && !self.is_square_attacked(Square64::F1, Color::Black)
         {
             list.push(
-                Move16::build()
+                ChessMove::build()
                     .start(Square64::E1)
                     .end(Square64::G1)
                     .castle(true)
@@ -318,7 +318,7 @@ impl Board {
             && !self.is_square_attacked(Square64::D1, Color::Black)
         {
             list.push(
-                Move16::build()
+                ChessMove::build()
                     .start(Square64::E1)
                     .end(Square64::C1)
                     .castle(false)
@@ -334,7 +334,7 @@ impl Board {
             && !self.is_square_attacked(Square64::F8, Color::White)
         {
             list.push(
-                Move16::build()
+                ChessMove::build()
                     .start(Square64::E8)
                     .end(Square64::G8)
                     .castle(true)
@@ -351,7 +351,7 @@ impl Board {
             && !self.is_square_attacked(Square64::D8, Color::White)
         {
             list.push(
-                Move16::build()
+                ChessMove::build()
                     .start(Square64::E8)
                     .end(Square64::C8)
                     .castle(false)
@@ -586,7 +586,7 @@ fn blocker_permutation(mut i: usize, mut mask: BitBoard) -> BitBoard {
     blockers
 }
 
-fn insert_promotions(list: &mut MoveList, builder: Move16Builder, color: Color) {
+fn insert_promotions(list: &mut MoveList, builder: ChessMoveBuilder, color: Color) {
     let pieces = if color == Color::White {
         [
             Piece::WhiteKnight,

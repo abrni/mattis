@@ -1,8 +1,8 @@
 use crate::{
     board::{movegen::MoveList, Board},
+    chess_move::ChessMove,
     eval::evaluation,
     hashtable::{HEKind, Probe, TranspositionTable},
-    moves::Move16,
     types::{Piece, PieceType},
 };
 use std::{
@@ -16,7 +16,7 @@ use std::{
 
 pub struct SearchTables {
     pub transposition_table: Arc<TranspositionTable>,
-    pub search_killers: Vec<[Move16; 2]>,
+    pub search_killers: Vec<[ChessMove; 2]>,
     pub search_history: [[u32; 64]; 12],
 }
 
@@ -36,8 +36,8 @@ pub struct SearchStats {
     pub leaves: u64,         // Total count of visited leaf nodes
     pub fh: u64,             // Count of fail-highs (beta cut off)
     pub fhf: u64,            // Count of fail-highs at the first move
-    pub bestmove: Move16,    // The best move
-    pub pv: Vec<Move16>,     // Principle Variation Line
+    pub bestmove: ChessMove, // The best move
+    pub pv: Vec<ChessMove>,  // Principle Variation Line
     pub stop: bool,          // Should the search stop ASAP
 }
 
@@ -51,14 +51,14 @@ impl Default for SearchStats {
             leaves: 0,
             fh: 0,
             fhf: 0,
-            bestmove: Move16::default(),
+            bestmove: ChessMove::default(),
             pv: vec![],
             stop: false,
         }
     }
 }
 
-fn pv_line(tptable: &TranspositionTable, board: &mut Board) -> Vec<Move16> {
+fn pv_line(tptable: &TranspositionTable, board: &mut Board) -> Vec<ChessMove> {
     let mut key_counts = HashMap::new();
     let mut pvline = Vec::with_capacity(8);
 
@@ -87,10 +87,10 @@ fn pv_line(tptable: &TranspositionTable, board: &mut Board) -> Vec<Move16> {
 
 fn take_next_move(
     list: &mut MoveList,
-    pv_move: Option<Move16>,
+    pv_move: Option<ChessMove>,
     tables: &SearchTables,
     board: &Board,
-) -> Option<Move16> {
+) -> Option<ChessMove> {
     let (idx, _) = list
         .iter()
         .enumerate()
@@ -100,7 +100,7 @@ fn take_next_move(
     Some(m)
 }
 
-fn score_move(m: Move16, pv_move: Option<Move16>, tables: &SearchTables, board: &Board) -> i32 {
+fn score_move(m: ChessMove, pv_move: Option<ChessMove>, tables: &SearchTables, board: &Board) -> i32 {
     let captured = if m.is_en_passant() {
         Some(PieceType::Pawn)
     } else {
@@ -256,7 +256,7 @@ pub fn alpha_beta(
     let mut moves = MoveList::default();
     board.generate_all_moves(&mut moves);
 
-    let mut best_move = Move16::default(); // Will contain the best move we found during the search.
+    let mut best_move = ChessMove::default(); // Will contain the best move we found during the search.
     let mut best_score = -30_000; // TODO: do we really need this?
     let mut legal_moves = 0; // Counts the number of legal moves. Not every generated move is necessarily legal.
     let mut alpha_changed = false; // signals if alpha has changed during the evaluation of each move

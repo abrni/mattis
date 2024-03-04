@@ -2,9 +2,9 @@
 
 pub mod bitboard;
 pub mod board;
+pub mod chess_move;
 pub mod eval;
 pub mod hashtable;
-pub mod moves;
 pub mod search;
 pub mod types;
 pub mod uci;

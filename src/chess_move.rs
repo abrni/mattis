@@ -1,21 +1,25 @@
-use crate::types::{Color, Piece, Square64};
+use crate::types::{Piece, PieceType, Square64};
 use num_enum::FromPrimitive;
 use std::fmt::{Debug, Display};
 
-/// # Fields
+/// `ChessMove` contains the start and end field of a move and information about castling, piece promotion and captures.
+/// For captures it only encodes if a piece was captured but *not* which one,
+/// since this allows us to encode the move in 16 bits.
+///
+/// # Internal Representation
 /// ```text
 /// // 0000 0000 00XX XXXX  -  Start square (64-index)
 /// // 0000 XXXX XX00 0000  -  End square (64-index)
 /// // 000X 0000 0000 0000  -  Promotion Flag
 /// // 00X0 0000 0000 0000  -  Capture Flag
-/// // 0X00 0000 0000 0000  -  Special Flag 1 (used to encode the promoted pieces, en passant, castling, etc)
-/// // X000 0000 0000 0000  -  Special Flag 2 (used to encode the promoted pieces, en passant, castling, etc)
+/// // 0X00 0000 0000 0000  -  Special Flag 1 (encodes promoted pieces, en passant, castling, etc)
+/// // X000 0000 0000 0000  -  Special Flag 2 (encodes promoted pieces, en passant, castling, etc)
 /// ```
 ///
 /// If all bits are set to zero, the move is considered a No-Move.
 /// Note, that both Start and End square are set to A1 in this case.
 ///
-/// # Flags
+/// ## Flags
 /// ```text
 /// // Pro Cap Sp1 Sp2                          Pro Cap Sp1 Sp2
 /// //   0   0   0   0  -  Quiet Move             1   0   0   0  -  Knight promotion
@@ -28,11 +32,11 @@ use std::fmt::{Debug, Display};
 /// //   0   1   0   1  -  *Unused*               1   1   1   1  -  Queen promo capture
 /// ```
 #[derive(PartialEq, Eq, Clone, Copy, Hash)]
-pub struct Move16(u16);
+pub struct ChessMove(u16);
 
-impl Move16 {
-    pub fn build() -> Move16Builder {
-        Move16Builder(0)
+impl ChessMove {
+    pub fn build() -> ChessMoveBuilder {
+        ChessMoveBuilder(0)
     }
 
     pub fn is_nomove(self) -> bool {
@@ -71,27 +75,21 @@ impl Move16 {
         Square64::from_primitive(((self.0 & 0xFC0) >> 6) as usize)
     }
 
-    pub fn promoted_piece(self, color: Color) -> Option<Piece> {
-        match (self.0 & 0xB000, color) {
-            (0x8000, Color::White) => Some(Piece::WhiteKnight),
-            (0x9000, Color::White) => Some(Piece::WhiteBishop),
-            (0xA000, Color::White) => Some(Piece::WhiteRook),
-            (0xB000, Color::White) => Some(Piece::WhiteQueen),
-
-            (0x8000, Color::Black) => Some(Piece::BlackKnight),
-            (0x9000, Color::Black) => Some(Piece::BlackBishop),
-            (0xA000, Color::Black) => Some(Piece::BlackRook),
-            (0xB000, Color::Black) => Some(Piece::BlackQueen),
-
+    pub fn promoted(self) -> Option<PieceType> {
+        match self.0 & 0xB000 {
+            0x8000 => Some(PieceType::Knight),
+            0x9000 => Some(PieceType::Bishop),
+            0xA000 => Some(PieceType::Rook),
+            0xB000 => Some(PieceType::Queen),
             _ => None,
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Move16Builder(u16);
+pub struct ChessMoveBuilder(u16);
 
-impl Move16Builder {
+impl ChessMoveBuilder {
     #[must_use]
     pub fn start(mut self, square: Square64) -> Self {
         let square: usize = square.into();
@@ -180,8 +178,8 @@ impl Move16Builder {
         self
     }
 
-    pub fn finish(self) -> Move16 {
-        let m = Move16(self.0);
+    pub fn finish(self) -> ChessMove {
+        let m = ChessMove(self.0);
 
         debug_assert_ne!(m.0 & 0xF000, 0x6000); // unused flag configuration
         debug_assert_ne!(m.0 & 0xF000, 0x7000); // unused flag configuration
@@ -191,19 +189,19 @@ impl Move16Builder {
     }
 }
 
-impl Default for Move16 {
+impl Default for ChessMove {
     fn default() -> Self {
         Self::build().finish()
     }
 }
 
-impl Debug for Move16 {
+impl Debug for ChessMove {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Move16")
             .field("raw", &format!("{:016b}", self.0))
             .field("start", &self.start())
             .field("end", &self.end())
-            .field("promotion", &self.promoted_piece(Color::White))
+            .field("promotion", &self.promoted())
             .field("capture", &self.is_capture())
             .field("double_pawn_push", &self.is_doube_pawn_push())
             .field("en_passant", &self.is_en_passant())
@@ -214,12 +212,12 @@ impl Debug for Move16 {
     }
 }
 
-impl Display for Move16 {
+impl Display for ChessMove {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}{}", self.start(), self.end())?;
 
-        if let Some(piece) = self.promoted_piece(Color::Black) {
-            write!(f, "{}", piece.to_char())?;
+        if let Some(pt) = self.promoted() {
+            write!(f, "{}", pt.to_char())?;
         }
 
         Ok(())
@@ -228,18 +226,18 @@ impl Display for Move16 {
 
 #[cfg(test)]
 mod tests {
-    use super::Move16;
+    use super::ChessMove;
     use crate::types::*;
     use num_enum::FromPrimitive;
 
     #[test]
     fn type_size() {
-        assert_eq!(std::mem::size_of::<Move16>(), 2);
+        assert_eq!(std::mem::size_of::<ChessMove>(), 2);
     }
 
     #[test]
     fn m16_nomove() {
-        let m = Move16::build().finish();
+        let m = ChessMove::build().finish();
 
         assert!(m.is_nomove());
         assert!(!m.is_doube_pawn_push());
@@ -251,9 +249,7 @@ mod tests {
 
         assert_eq!(m.start(), Square64::A1);
         assert_eq!(m.end(), Square64::A1);
-
-        assert_eq!(m.promoted_piece(Color::White), None);
-        assert_eq!(m.promoted_piece(Color::Black), None);
+        assert_eq!(m.promoted(), None);
     }
 
     #[test]
@@ -266,7 +262,7 @@ mod tests {
 
                 let start = Square64::from_primitive(start);
                 let end = Square64::from_primitive(end);
-                let m = Move16::build().start(start).end(end).finish();
+                let m = ChessMove::build().start(start).end(end).finish();
 
                 assert!(!m.is_nomove());
                 assert!(!m.is_doube_pawn_push());
@@ -278,16 +274,18 @@ mod tests {
 
                 assert_eq!(m.start(), start);
                 assert_eq!(m.end(), end);
-
-                assert_eq!(m.promoted_piece(Color::White), None);
-                assert_eq!(m.promoted_piece(Color::Black), None);
+                assert_eq!(m.promoted(), None);
             }
         }
     }
 
     #[test]
     fn m16_capture() {
-        let m = Move16::build().start(Square64::A1).end(Square64::A2).capture().finish();
+        let m = ChessMove::build()
+            .start(Square64::A1)
+            .end(Square64::A2)
+            .capture()
+            .finish();
 
         assert_eq!(m.start(), Square64::A1);
         assert_eq!(m.end(), Square64::A2);
@@ -297,7 +295,7 @@ mod tests {
 
     #[test]
     fn m16_en_passant_capture() {
-        let m = Move16::build()
+        let m = ChessMove::build()
             .start(Square64::A4)
             .end(Square64::B3)
             .en_passant()
@@ -311,25 +309,25 @@ mod tests {
 
     #[test]
     fn m16_promotion() {
-        const CASES: [(Piece, Color); 8] = [
-            (Piece::WhiteKnight, Color::White),
-            (Piece::WhiteBishop, Color::White),
-            (Piece::WhiteRook, Color::White),
-            (Piece::WhiteQueen, Color::White),
-            (Piece::BlackKnight, Color::Black),
-            (Piece::BlackBishop, Color::Black),
-            (Piece::BlackRook, Color::Black),
-            (Piece::BlackQueen, Color::Black),
+        const CASES: [Piece; 8] = [
+            Piece::WhiteKnight,
+            Piece::WhiteBishop,
+            Piece::WhiteRook,
+            Piece::WhiteQueen,
+            Piece::BlackKnight,
+            Piece::BlackBishop,
+            Piece::BlackRook,
+            Piece::BlackQueen,
         ];
 
-        for (piece, color) in CASES {
-            let m = Move16::build()
+        for piece in CASES {
+            let m = ChessMove::build()
                 .start(Square64::H7)
                 .end(Square64::H8)
                 .promote(piece)
                 .finish();
 
-            assert_eq!(m.promoted_piece(color), Some(piece));
+            assert_eq!(m.promoted(), Some(piece.piece_type()));
             assert!(m.is_promotion());
             assert!(!m.is_capture());
             assert!(!m.is_doube_pawn_push());

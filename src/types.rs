@@ -114,6 +114,17 @@ impl PieceType {
             Self::King => 15_000,
         }
     }
+
+    pub fn to_char(self) -> char {
+        match self {
+            Self::Pawn => 'p',
+            Self::Knight => 'n',
+            Self::Bishop => 'b',
+            Self::Rook => 'r',
+            Self::Queen => 'q',
+            Self::King => 'k',
+        }
+    }
 }
 
 impl_array_indexing!(PieceType, u8, 6);

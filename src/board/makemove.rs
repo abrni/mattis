@@ -1,7 +1,7 @@
 use super::Board;
 use crate::{
     board::{HistoryEntry, CASTLE_KEYS, COLOR_KEY, EN_PASSANT_KEYS, PIECE_KEYS},
-    moves::Move16,
+    chess_move::ChessMove,
     types::{CastlePerms, Color, Piece, PieceType, Square64},
 };
 
@@ -13,7 +13,7 @@ impl Board {
     /// so the board stays in its current state.
     ///
     /// Returns `true` if the move was successful and `false` otherwise.
-    pub fn make_move(&mut self, m: Move16) -> bool {
+    pub fn make_move(&mut self, m: ChessMove) -> bool {
         let from = m.start();
         let to = m.end();
         let color = self.color;
@@ -89,9 +89,9 @@ impl Board {
         self.move_piece(from, to);
 
         // if the move is a promotion, switch the piece
-        if let Some(promoted_piece) = m.promoted_piece(color) {
+        if let Some(promoted) = m.promoted() {
             self.clear_piece(to);
-            self.add_piece(to, promoted_piece);
+            self.add_piece(to, Piece::new(promoted, color));
         }
 
         // update the king square, if the move was a king move
@@ -195,7 +195,7 @@ impl Board {
 
         self.ply += 1;
         self.history.push(HistoryEntry {
-            move16: Move16::default(),
+            move16: ChessMove::default(),
             captured: None,
             fifty_move: self.fifty_move,
             en_passant: self.en_passant,
