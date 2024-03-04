@@ -1,7 +1,7 @@
 use crate::{
     bitboard::{BLACK_PAWN_PASSED_MASKS, FILE_BITBOARDS, ISOLATED_PAWN_MASKS, WHITE_PAWN_PASSED_MASKS},
     board::Board,
-    types::{Color, Piece, PieceType, Square64},
+    types::{Color, Piece, PieceType, Square},
 };
 
 // First and last entry should never be used, because pawns cant be on the first or last rank
@@ -239,7 +239,7 @@ fn is_draw_by_material(board: &Board) -> bool {
 // ---------------------------------------------------------------------------------------------------------------------
 
 #[rustfmt::skip]
-const INDEX_MIRROR: [Square64; 64] = { use Square64::*; [
+const INDEX_MIRROR: [Square; 64] = { use Square::*; [
     A8, B8, C8, D8, E8, F8, G8, H8,
     A7, B7, C7, D7, E7, F7, G7, H7,
     A6, B6, C6, D6, E6, F6, G6, H6,

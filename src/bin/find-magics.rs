@@ -3,7 +3,7 @@ use std::{io::Write, ops::BitAnd};
 use mattis::{
     bitboard::BitBoard,
     board::movegen::{BISHOP_MAGIC_BIT_COUNT, BISHOP_MAGIC_MASKS, ROOK_MAGIC_BIT_COUNT, ROOK_MAGIC_MASKS},
-    types::Square64,
+    types::Square,
 };
 use num_enum::FromPrimitive;
 use rand::{thread_rng, Rng};
@@ -11,7 +11,7 @@ use rand::{thread_rng, Rng};
 fn main() {
     let mut rook_file = std::fs::File::create("./rook_magics").unwrap();
     for square in 0..64 {
-        let square = Square64::from_primitive(square);
+        let square = Square::from_primitive(square);
 
         let rmagic = loop {
             if let Some(m) = find_magic(square, ROOK_MAGIC_BIT_COUNT[square as usize], false) {
@@ -25,7 +25,7 @@ fn main() {
 
     let mut bishop_file = std::fs::File::create("./bishop_magics").unwrap();
     for square in 0..64 {
-        let square = Square64::from_primitive(square);
+        let square = Square::from_primitive(square);
 
         let bmagic = loop {
             if let Some(m) = find_magic(square, BISHOP_MAGIC_BIT_COUNT[square as usize], true) {
@@ -38,7 +38,7 @@ fn main() {
     }
 }
 
-fn find_magic(square: Square64, m: u32, is_bishop: bool) -> Option<u64> {
+fn find_magic(square: Square, m: u32, is_bishop: bool) -> Option<u64> {
     let mut b = [BitBoard::EMPTY; 4096];
     let mut a = [BitBoard::EMPTY; 4096];
 
@@ -111,7 +111,7 @@ fn index_to_bb(index: usize, bits: u32, mut mask: BitBoard) -> BitBoard {
     BitBoard::from_u64(result)
 }
 
-fn ratt(square: Square64, block: BitBoard) -> BitBoard {
+fn ratt(square: Square, block: BitBoard) -> BitBoard {
     let mut result = 0;
     let block = block.to_u64();
     let rank: u8 = square.rank().unwrap().into();
@@ -148,7 +148,7 @@ fn ratt(square: Square64, block: BitBoard) -> BitBoard {
     BitBoard::from_u64(result)
 }
 
-fn batt(square: Square64, block: BitBoard) -> BitBoard {
+fn batt(square: Square, block: BitBoard) -> BitBoard {
     let mut result = 0;
     let block = block.to_u64();
     let rank: u8 = square.rank().unwrap().into();

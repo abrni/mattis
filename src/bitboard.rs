@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use crate::types::{File, Rank, Square64};
+use crate::types::{File, Rank, Square};
 use num_enum::{FromPrimitive, UnsafeFromPrimitive};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
@@ -46,7 +46,7 @@ impl BitBoard {
         Self(self.0 & !other.0)
     }
 
-    pub fn set(&mut self, idx: Square64) {
+    pub fn set(&mut self, idx: Square) {
         let idx: usize = idx.into();
 
         if let Some(v) = 1u64.checked_shl(idx as u32) {
@@ -54,7 +54,7 @@ impl BitBoard {
         }
     }
 
-    pub fn set_to(&mut self, idx: Square64, value: bool) {
+    pub fn set_to(&mut self, idx: Square, value: bool) {
         if value {
             self.set(idx);
         } else {
@@ -62,7 +62,7 @@ impl BitBoard {
         }
     }
 
-    pub fn clear(&mut self, idx: Square64) {
+    pub fn clear(&mut self, idx: Square) {
         let idx: usize = idx.into();
 
         if let Some(v) = 1u64.checked_shl(idx as u32) {
@@ -70,7 +70,7 @@ impl BitBoard {
         }
     }
 
-    pub fn get(&self, idx: Square64) -> bool {
+    pub fn get(&self, idx: Square) -> bool {
         let idx: usize = idx.into();
 
         if let Some(v) = 1u64.checked_shl(idx as u32) {
@@ -86,7 +86,7 @@ impl BitBoard {
 
     /// Clears the least significant 1-bit and returns its index
 
-    pub fn pop(&mut self) -> Square64 {
+    pub fn pop(&mut self) -> Square {
         #[rustfmt::skip]
         const POP_MAGIC_TABLE: [usize ; 64] = [
             63, 30,  3, 32, 25, 41, 22, 33,
@@ -100,7 +100,7 @@ impl BitBoard {
         ];
 
         if self.is_empty() {
-            return Square64::Invalid;
+            return Square::Invalid;
         }
 
         let b = self.0 ^ (self.0 - 1);
@@ -108,15 +108,15 @@ impl BitBoard {
         self.0 &= self.0 - 1;
 
         let idx = POP_MAGIC_TABLE[(fold.wrapping_mul(0x783a9b23) >> 26) as usize];
-        Square64::from_primitive(idx)
+        Square::from_primitive(idx)
     }
 
-    pub fn iter_bit_indices(self) -> impl Iterator<Item = Square64> {
+    pub fn iter_bit_indices(self) -> impl Iterator<Item = Square> {
         let mut b = self;
         std::iter::from_fn(move || {
             let sq = b.pop();
 
-            if sq == Square64::Invalid {
+            if sq == Square::Invalid {
                 None
             } else {
                 Some(sq)
@@ -175,7 +175,7 @@ impl Display for BitBoard {
             let rank = unsafe { Rank::unchecked_transmute_from(rank) };
             for file in 0..8 {
                 let file = unsafe { File::unchecked_transmute_from(file) };
-                let sq = Square64::from_file_rank(file, rank);
+                let sq = Square::from_file_rank(file, rank);
 
                 write!(f, "{} ", if self.get(sq) { "X" } else { "." })?;
             }
@@ -199,7 +199,7 @@ lazy_static::lazy_static! {
 
         for f in File::iter_all() {
             for r in Rank::iter_all() {
-                boards[f].set(Square64::from_file_rank(f, r));
+                boards[f].set(Square::from_file_rank(f, r));
             }
         }
 
@@ -221,7 +221,7 @@ lazy_static::lazy_static! {
 
         for r in Rank::iter_all() {
             for f in File::iter_all() {
-                boards[r].set(Square64::from_file_rank(f, r));
+                boards[r].set(Square::from_file_rank(f, r));
             }
         }
 
@@ -250,24 +250,24 @@ lazy_static::lazy_static! {
         let mut bitboards = [BitBoard::EMPTY; 64];
 
         for (i, board) in bitboards.iter_mut().enumerate() {
-            let square = Square64::from_primitive(i);
+            let square = Square::from_primitive(i);
             let (file, rank) = (square.file().unwrap(), square.rank().unwrap());
 
             for r in rank.iter_up().skip(1) {
-                let sq = Square64::from_file_rank(file, r);
+                let sq = Square::from_file_rank(file, r);
                 board.set(sq);
             }
 
             if let Some(file) = file.up() {
                 for r in rank.iter_up().skip(1) {
-                    let sq = Square64::from_file_rank(file, r);
+                    let sq = Square::from_file_rank(file, r);
                     board.set(sq);
                 }
             }
 
             if let Some(file) = file.down() {
                 for r in rank.iter_up().skip(1) {
-                    let sq = Square64::from_file_rank(file, r);
+                    let sq = Square::from_file_rank(file, r);
                     board.set(sq);
                 }
             }
@@ -280,24 +280,24 @@ lazy_static::lazy_static! {
         let mut bitboards = [BitBoard::EMPTY; 64];
 
         for (i, board) in bitboards.iter_mut().enumerate() {
-            let square = Square64::from_primitive(i);
+            let square = Square::from_primitive(i);
             let (file, rank) = (square.file().unwrap(), square.rank().unwrap());
 
             for r in rank.iter_down().skip(1) {
-                let sq = Square64::from_file_rank(file, r);
+                let sq = Square::from_file_rank(file, r);
                 board.set(sq);
             }
 
             if let Some(file) = file.up() {
                 for r in rank.iter_down().skip(1) {
-                    let sq = Square64::from_file_rank(file, r);
+                    let sq = Square::from_file_rank(file, r);
                     board.set(sq);
                 }
             }
 
             if let Some(file) = file.down() {
                 for r in rank.iter_down().skip(1) {
-                    let sq = Square64::from_file_rank(file, r);
+                    let sq = Square::from_file_rank(file, r);
                     board.set(sq);
                 }
             }
@@ -311,7 +311,7 @@ lazy_static::lazy_static! {
         let mut bitboards = [BitBoard::EMPTY; 64];
 
         for (i, board) in bitboards.iter_mut().enumerate() {
-            let square = Square64::from_primitive(i);
+            let square = Square::from_primitive(i);
             let file = square.file().unwrap();
 
             if let Some(f) = file.up() {
@@ -342,7 +342,7 @@ lazy_static::lazy_static! {
 
         for (i, m) in boards.iter_mut().enumerate() {
             let mut result = BitBoard::EMPTY;
-            let square = Square64::from_primitive(i);
+            let square = Square::from_primitive(i);
             let rank = square.rank().unwrap();
             let file = square.file().unwrap();
 
@@ -377,7 +377,7 @@ lazy_static::lazy_static! {
 
         for (i, m) in boards.iter_mut().enumerate() {
             let mut result = BitBoard::EMPTY;
-            let square = Square64::from_primitive(i);
+            let square = Square::from_primitive(i);
             let rank = square.rank().unwrap();
             let file = square.file().unwrap();
 
@@ -402,31 +402,31 @@ lazy_static::lazy_static! {
 
         for (i, m) in boards.iter_mut().enumerate() {
             let mut result = BitBoard::EMPTY;
-            let square = Square64::from_primitive(i);
+            let square = Square::from_primitive(i);
             let rank = square.rank().unwrap();
             let file = square.file().unwrap();
 
             if let Some(r) = rank.up() {
                 for r in Rank::range_inclusive(r, Rank::R8) {
-                    result.set(Square64::from_file_rank(file, r));
+                    result.set(Square::from_file_rank(file, r));
                 }
             }
 
             if let Some(r) = rank.down() {
                 for r in Rank::range_inclusive(Rank::R1, r) {
-                    result.set(Square64::from_file_rank(file, r));
+                    result.set(Square::from_file_rank(file, r));
                 }
             }
 
             if let Some(f) = file.up() {
                 for f in File::range_inclusive(f, File::H) {
-                    result.set(Square64::from_file_rank(f, rank));
+                    result.set(Square::from_file_rank(f, rank));
                 }
             }
 
             if let Some(f) = file.down() {
                 for f in File::range_inclusive(File::A, f) {
-                    result.set(Square64::from_file_rank(f, rank));
+                    result.set(Square::from_file_rank(f, rank));
                 }
             }
 
@@ -441,31 +441,31 @@ lazy_static::lazy_static! {
 
         for (i, m) in boards.iter_mut().enumerate() {
             let mut result = BitBoard::EMPTY;
-            let square = Square64::from_primitive(i);
+            let square = Square::from_primitive(i);
             let rank = square.rank().unwrap();
             let file = square.file().unwrap();
 
             if let Some((r, f)) = rank.up().zip(file.up()) {
                 for (r, f) in std::iter::zip(Rank::range_inclusive(r, Rank::R8), File::range_inclusive(f, File::H)) {
-                    result.set(Square64::from_file_rank(f, r));
+                    result.set(Square::from_file_rank(f, r));
                 }
             }
 
             if let Some((r, f)) = rank.up().zip(file.down()) {
                 for (r, f) in std::iter::zip(Rank::range_inclusive(r, Rank::R8), File::range_inclusive(File::A, f).rev()) {
-                    result.set(Square64::from_file_rank(f, r));
+                    result.set(Square::from_file_rank(f, r));
                 }
             }
 
             if let Some((r, f)) = rank.down().zip(file.up()) {
                 for (r, f) in std::iter::zip(Rank::range_inclusive(Rank::R1, r).rev(), File::range_inclusive(f, File::H)) {
-                    result.set(Square64::from_file_rank(f, r));
+                    result.set(Square::from_file_rank(f, r));
                 }
             }
 
             if let Some((r, f)) = rank.down().zip(file.down()) {
                 for (r, f) in std::iter::zip(Rank::range_inclusive(Rank::R1, r).rev(), File::range_inclusive(File::A, f).rev()) {
-                    result.set(Square64::from_file_rank(f, r));
+                    result.set(Square::from_file_rank(f, r));
                 }
             }
 
@@ -485,23 +485,23 @@ lazy_static::lazy_static! {
 #[cfg(test)]
 mod tests {
     use super::BitBoard;
-    use crate::types::Square64;
+    use crate::types::Square;
     use num_enum::FromPrimitive;
 
     #[test]
     fn invalid_index() {
         let mut bitboard = BitBoard::EMPTY;
-        assert!(!bitboard.get(Square64::Invalid));
+        assert!(!bitboard.get(Square::Invalid));
 
-        bitboard.set(Square64::Invalid);
-        assert!(!bitboard.get(Square64::Invalid));
+        bitboard.set(Square::Invalid);
+        assert!(!bitboard.get(Square::Invalid));
         assert!(bitboard.is_empty());
 
         let mut bitboard = BitBoard::FULL;
-        assert!(!bitboard.get(Square64::Invalid));
+        assert!(!bitboard.get(Square::Invalid));
 
-        bitboard.set(Square64::Invalid);
-        assert!(!bitboard.get(Square64::Invalid));
+        bitboard.set(Square::Invalid);
+        assert!(!bitboard.get(Square::Invalid));
         assert!(bitboard.is_full());
     }
 
@@ -510,7 +510,7 @@ mod tests {
         let mut bitboard = BitBoard::EMPTY;
 
         for sq in 0..64 {
-            let sq = Square64::from_primitive(sq);
+            let sq = Square::from_primitive(sq);
             assert!(!bitboard.get(sq));
             bitboard.set(sq);
             assert!(bitboard.get(sq));
@@ -525,14 +525,14 @@ mod tests {
         let mut bitboard = BitBoard::EMPTY;
 
         for i in 0..64 {
-            let sq = Square64::from_primitive(i);
+            let sq = Square::from_primitive(i);
             bitboard.set(sq);
         }
 
         assert_eq!(BitBoard::FULL, bitboard);
 
         for i in 0..64 {
-            let sq = Square64::from_primitive(i);
+            let sq = Square::from_primitive(i);
             bitboard.clear(sq);
         }
 
@@ -554,7 +554,7 @@ mod tests {
     fn pop_empty() {
         let mut bitboard = BitBoard::EMPTY;
         let sq = bitboard.pop();
-        assert_eq!(sq, Square64::Invalid);
+        assert_eq!(sq, Square::Invalid);
     }
 
     #[test]
@@ -563,7 +563,7 @@ mod tests {
         let mut iter = bb.iter_bit_indices();
 
         for sq in 0..64 {
-            let sq = Square64::from_primitive(sq);
+            let sq = Square::from_primitive(sq);
             assert_eq!(iter.next(), Some(sq));
         }
 

@@ -5,7 +5,7 @@ use self::movegen::{magic_bishop_moves, magic_rook_moves};
 use crate::{
     bitboard::{BitBoard, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS},
     chess_move::ChessMove,
-    types::{CastlePerm, CastlePerms, Color, File, Piece, PieceType, Rank, Square64},
+    types::{CastlePerm, CastlePerms, Color, File, Piece, PieceType, Rank, Square},
 };
 use lazy_static::lazy_static;
 use num_enum::{FromPrimitive, TryFromPrimitive};
@@ -63,23 +63,23 @@ pub struct HistoryEntry {
     pub move16: ChessMove,
     pub captured: Option<PieceType>,
     pub fifty_move: usize,
-    pub en_passant: Option<Square64>,
+    pub en_passant: Option<Square>,
     pub castle_perms: CastlePerms,
     pub position_key: u64,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Board {
-    pub pieces: [Option<Piece>; 64],  // the main representation of pieces on the board
-    pub color: Color,                 // the current active color
-    pub en_passant: Option<Square64>, // the current en passant square, if there is one
-    pub castle_perms: CastlePerms,    // the current castle permitions
+    pub pieces: [Option<Piece>; 64], // the main representation of pieces on the board
+    pub color: Color,                // the current active color
+    pub en_passant: Option<Square>,  // the current en passant square, if there is one
+    pub castle_perms: CastlePerms,   // the current castle permitions
 
     pub fifty_move: usize, // the amount of *halfmoves* (triggers the rule at 100) since a fifty-move-rule reset
     pub ply: usize,        // the number of halfmoves since the start of the game (currently unused)
     pub position_key: u64, // the current zobrist position key
 
-    pub king_square: [Square64; 2],      // the position of the white and black kings
+    pub king_square: [Square; 2],        // the position of the white and black kings
     pub bitboards: [BitBoard; 12],       // bitboards for each piece type
     pub bb_all_per_color: [BitBoard; 2], // bitboards of all pieces per color
     pub bb_all: BitBoard,                // bitboard of all pieces on the board
@@ -96,7 +96,7 @@ impl Board {
     pub fn new() -> Self {
         let mut this = Self {
             pieces: [None; 64],
-            king_square: [Square64::Invalid; 2],
+            king_square: [Square::Invalid; 2],
             color: Color::White,
             en_passant: None,
             fifty_move: 0,
@@ -165,7 +165,7 @@ impl Board {
                 } else if let Some(piece) = Piece::from_char(c) {
                     let file = File::try_from_primitive(file_num as u8).map_err(|_| FenError::WrongFileCount)?;
                     let rank = Rank::try_from_primitive((7 - rank_num) as u8).unwrap();
-                    let square = Square64::from_file_rank(file, rank);
+                    let square = Square::from_file_rank(file, rank);
                     board.pieces[square] = Some(piece);
                     file_num += 1;
                 }
@@ -201,7 +201,7 @@ impl Board {
         if parts[3] != "-" {
             let file = File::from_char(parts[3].chars().next().unwrap()).ok_or(FenError::InvalidEnPassantSquare)?;
             let rank = Rank::from_char(parts[3].chars().nth(1).unwrap()).ok_or(FenError::InvalidEnPassantSquare)?;
-            let square = Square64::from_file_rank(file, rank);
+            let square = Square::from_file_rank(file, rank);
             board.en_passant = Some(square);
         }
 
@@ -224,7 +224,7 @@ impl Board {
         self.material = [0; 2];
 
         for i in 0..64 {
-            let square = Square64::from_primitive(i);
+            let square = Square::from_primitive(i);
             let piece = self.pieces[square];
 
             if piece.is_none() {
@@ -258,7 +258,7 @@ impl Board {
 
             for file in 0..8 {
                 let file = File::try_from_primitive(file).unwrap();
-                let sq = Square64::from_file_rank(file, rank);
+                let sq = Square::from_file_rank(file, rank);
 
                 if let Some(piece) = self.pieces[sq] {
                     if empty > 0 {
@@ -323,8 +323,8 @@ impl Board {
         self.is_square_attacked(my_king_square, op_color)
     }
 
-    pub fn is_square_attacked(&self, square: Square64, color: Color) -> bool {
-        if square == Square64::Invalid {
+    pub fn is_square_attacked(&self, square: Square, color: Color) -> bool {
+        if square == Square::Invalid {
             return false;
         }
 
@@ -412,7 +412,7 @@ impl Board {
         let mut check_material = [0; 2];
 
         for i in 0..64 {
-            let square = Square64::from_primitive(i);
+            let square = Square::from_primitive(i);
             let piece = self.pieces[square];
 
             if let Some(piece) = piece {
@@ -480,7 +480,7 @@ impl Display for Board {
             for file in 0..8 {
                 let rank = Rank::try_from_primitive(rank).unwrap();
                 let file = File::try_from_primitive(file).unwrap();
-                let sq = Square64::from_file_rank(file, rank);
+                let sq = Square::from_file_rank(file, rank);
                 let piece = self.pieces[sq];
 
                 if let Some(piece) = piece {
@@ -537,7 +537,7 @@ impl Display for Board {
 #[cfg(test)]
 mod tests {
     use super::Board;
-    use crate::{board::movegen::MoveList, chess_move::ChessMove, types::Square64};
+    use crate::{board::movegen::MoveList, chess_move::ChessMove, types::Square};
 
     #[test]
     fn empty_board() {
@@ -553,9 +553,9 @@ mod tests {
         let board = Board::from_fen(fen).unwrap();
 
         let ep_move16 = ChessMove::build()
-            .start(Square64::F5)
+            .start(Square::F5)
             .en_passant()
-            .end(Square64::G6)
+            .end(Square::G6)
             .finish();
 
         let mut movelist = MoveList::new();

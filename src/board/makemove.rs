@@ -2,7 +2,7 @@ use super::Board;
 use crate::{
     board::{HistoryEntry, CASTLE_KEYS, COLOR_KEY, EN_PASSANT_KEYS, PIECE_KEYS},
     chess_move::ChessMove,
-    types::{CastlePerms, Color, Piece, PieceType, Square64},
+    types::{CastlePerms, Color, Piece, PieceType, Square},
 };
 
 impl Board {
@@ -21,8 +21,8 @@ impl Board {
         #[cfg(debug_assertions)]
         {
             self.check_board_integrity();
-            assert_ne!(from, Square64::Invalid);
-            assert_ne!(to, Square64::Invalid);
+            assert_ne!(from, Square::Invalid);
+            assert_ne!(to, Square::Invalid);
             assert!(self.pieces[from].is_some());
         }
 
@@ -241,8 +241,8 @@ impl Board {
         self.check_board_integrity();
     }
 
-    fn clear_piece(&mut self, square: Square64) {
-        debug_assert_ne!(square, Square64::Invalid);
+    fn clear_piece(&mut self, square: Square) {
+        debug_assert_ne!(square, Square::Invalid);
         let piece = self.pieces[square].take().unwrap();
         let color = piece.color();
 
@@ -262,8 +262,8 @@ impl Board {
         }
     }
 
-    fn add_piece(&mut self, square: Square64, piece: Piece) {
-        debug_assert_ne!(square, Square64::Invalid);
+    fn add_piece(&mut self, square: Square, piece: Piece) {
+        debug_assert_ne!(square, Square::Invalid);
         debug_assert_eq!(self.pieces[square], None);
         let color = piece.color();
 
@@ -284,9 +284,9 @@ impl Board {
         }
     }
 
-    fn move_piece(&mut self, from: Square64, to: Square64) {
-        debug_assert_ne!(from, Square64::Invalid);
-        debug_assert_ne!(to, Square64::Invalid);
+    fn move_piece(&mut self, from: Square, to: Square) {
+        debug_assert_ne!(from, Square::Invalid);
+        debug_assert_ne!(to, Square::Invalid);
 
         let piece = self.pieces[from].take().unwrap();
         let color = piece.color();

@@ -543,7 +543,7 @@ impl CastlePerms {
 #[derive(Debug, PartialEq, Eq, Clone, Copy, IntoPrimitive, Hash)]
 #[repr(usize)]
 #[rustfmt::skip]
-pub enum Square64 {
+pub enum Square {
     A1, B1, C1, D1, E1, F1, G1, H1,
     A2, B2, C2, D2, E2, F2, G2, H2,
     A3, B3, C3, D3, E3, F3, G3, H3,
@@ -556,9 +556,9 @@ pub enum Square64 {
     Invalid
 }
 
-impl_array_indexing!(Square64, usize, 64);
+impl_array_indexing!(Square, usize, 64);
 
-impl FromPrimitive for Square64 {
+impl FromPrimitive for Square {
     type Primitive = usize;
 
     fn from_primitive(number: Self::Primitive) -> Self {
@@ -570,28 +570,28 @@ impl FromPrimitive for Square64 {
     }
 }
 
-impl<T> Index<Square64> for Vec<T> {
+impl<T> Index<Square> for Vec<T> {
     type Output = T;
 
-    fn index(&self, index: Square64) -> &Self::Output {
+    fn index(&self, index: Square) -> &Self::Output {
         let index: usize = index.into();
         &self[index]
     }
 }
 
-impl<T> IndexMut<Square64> for Vec<T> {
-    fn index_mut(&mut self, index: Square64) -> &mut Self::Output {
+impl<T> IndexMut<Square> for Vec<T> {
+    fn index_mut(&mut self, index: Square) -> &mut Self::Output {
         let index: usize = index.into();
         &mut self[index]
     }
 }
 
-impl Square64 {
+impl Square {
     pub fn from_file_rank(file: File, rank: Rank) -> Self {
         let file: u8 = file.into();
         let rank: u8 = rank.into();
         let square = file + rank * 8;
-        Square64::from_primitive(square as usize)
+        Square::from_primitive(square as usize)
     }
 
     pub fn file(self) -> Option<File> {
@@ -615,8 +615,8 @@ impl Square64 {
     }
 }
 
-impl Add<usize> for Square64 {
-    type Output = Square64;
+impl Add<usize> for Square {
+    type Output = Square;
 
     fn add(self, rhs: usize) -> Self::Output {
         let this: usize = self.into();
@@ -624,14 +624,14 @@ impl Add<usize> for Square64 {
     }
 }
 
-impl AddAssign<usize> for Square64 {
+impl AddAssign<usize> for Square {
     fn add_assign(&mut self, rhs: usize) {
         *self = *self + rhs;
     }
 }
 
-impl Sub<usize> for Square64 {
-    type Output = Square64;
+impl Sub<usize> for Square {
+    type Output = Square;
 
     fn sub(self, rhs: usize) -> Self::Output {
         let this: usize = self.into();
@@ -639,14 +639,14 @@ impl Sub<usize> for Square64 {
     }
 }
 
-impl SubAssign<usize> for Square64 {
+impl SubAssign<usize> for Square {
     fn sub_assign(&mut self, rhs: usize) {
         *self = *self - rhs;
     }
 }
 
-impl Add<isize> for Square64 {
-    type Output = Square64;
+impl Add<isize> for Square {
+    type Output = Square;
 
     fn add(self, rhs: isize) -> Self::Output {
         let this: usize = self.into();
@@ -654,14 +654,14 @@ impl Add<isize> for Square64 {
     }
 }
 
-impl AddAssign<isize> for Square64 {
+impl AddAssign<isize> for Square {
     fn add_assign(&mut self, rhs: isize) {
         *self = *self + rhs;
     }
 }
 
-impl Sub<isize> for Square64 {
-    type Output = Square64;
+impl Sub<isize> for Square {
+    type Output = Square;
 
     fn sub(self, rhs: isize) -> Self::Output {
         let this: usize = self.into();
@@ -669,13 +669,13 @@ impl Sub<isize> for Square64 {
     }
 }
 
-impl SubAssign<isize> for Square64 {
+impl SubAssign<isize> for Square {
     fn sub_assign(&mut self, rhs: isize) {
         *self = *self - rhs;
     }
 }
 
-impl Display for Square64 {
+impl Display for Square {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if *self == Self::Invalid {
             write!(f, "!!")
@@ -692,11 +692,11 @@ impl Display for Square64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{Color, Piece, PieceType, Square64};
+    use super::{Color, Piece, PieceType, Square};
 
     #[test]
-    fn sq64_invalid() {
-        let sq = Square64::Invalid;
+    fn square_invalid() {
+        let sq = Square::Invalid;
         assert_eq!(None, sq.file());
         assert_eq!(None, sq.rank());
     }

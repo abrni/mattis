@@ -3,7 +3,7 @@ use num_enum::FromPrimitive;
 use crate::{
     bitboard::{BitBoard, BISHOP_MOVE_PATTERNS, BORDER, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS, RANK_BITBOARDS},
     chess_move::{ChessMove, ChessMoveBuilder},
-    types::{CastlePerm, Color, File, Piece, PieceType, Rank, Square64},
+    types::{CastlePerm, Color, File, Piece, PieceType, Rank, Square},
 };
 
 use super::Board;
@@ -295,15 +295,15 @@ impl Board {
     fn generate_castling_moves(&self, list: &mut MoveList) {
         if self.color == Color::White
             && self.castle_perms.get(CastlePerm::WhiteKingside)
-            && self.pieces[Square64::F1].is_none()
-            && self.pieces[Square64::G1].is_none()
-            && !self.is_square_attacked(Square64::E1, Color::Black)
-            && !self.is_square_attacked(Square64::F1, Color::Black)
+            && self.pieces[Square::F1].is_none()
+            && self.pieces[Square::G1].is_none()
+            && !self.is_square_attacked(Square::E1, Color::Black)
+            && !self.is_square_attacked(Square::F1, Color::Black)
         {
             list.push(
                 ChessMove::build()
-                    .start(Square64::E1)
-                    .end(Square64::G1)
+                    .start(Square::E1)
+                    .end(Square::G1)
                     .castle(true)
                     .finish(),
             );
@@ -311,16 +311,16 @@ impl Board {
 
         if self.color == Color::White
             && self.castle_perms.get(CastlePerm::WhiteQueenside)
-            && self.pieces[Square64::D1].is_none()
-            && self.pieces[Square64::C1].is_none()
-            && self.pieces[Square64::B1].is_none()
-            && !self.is_square_attacked(Square64::E1, Color::Black)
-            && !self.is_square_attacked(Square64::D1, Color::Black)
+            && self.pieces[Square::D1].is_none()
+            && self.pieces[Square::C1].is_none()
+            && self.pieces[Square::B1].is_none()
+            && !self.is_square_attacked(Square::E1, Color::Black)
+            && !self.is_square_attacked(Square::D1, Color::Black)
         {
             list.push(
                 ChessMove::build()
-                    .start(Square64::E1)
-                    .end(Square64::C1)
+                    .start(Square::E1)
+                    .end(Square::C1)
                     .castle(false)
                     .finish(),
             );
@@ -328,15 +328,15 @@ impl Board {
 
         if self.color == Color::Black
             && self.castle_perms.get(CastlePerm::BlackKingside)
-            && self.pieces[Square64::F8].is_none()
-            && self.pieces[Square64::G8].is_none()
-            && !self.is_square_attacked(Square64::E8, Color::White)
-            && !self.is_square_attacked(Square64::F8, Color::White)
+            && self.pieces[Square::F8].is_none()
+            && self.pieces[Square::G8].is_none()
+            && !self.is_square_attacked(Square::E8, Color::White)
+            && !self.is_square_attacked(Square::F8, Color::White)
         {
             list.push(
                 ChessMove::build()
-                    .start(Square64::E8)
-                    .end(Square64::G8)
+                    .start(Square::E8)
+                    .end(Square::G8)
                     .castle(true)
                     .finish(),
             );
@@ -344,16 +344,16 @@ impl Board {
 
         if self.color == Color::Black
             && self.castle_perms.get(CastlePerm::BlackQueenside)
-            && self.pieces[Square64::D8].is_none()
-            && self.pieces[Square64::C8].is_none()
-            && self.pieces[Square64::B8].is_none()
-            && !self.is_square_attacked(Square64::E8, Color::White)
-            && !self.is_square_attacked(Square64::D8, Color::White)
+            && self.pieces[Square::D8].is_none()
+            && self.pieces[Square::C8].is_none()
+            && self.pieces[Square::B8].is_none()
+            && !self.is_square_attacked(Square::E8, Color::White)
+            && !self.is_square_attacked(Square::D8, Color::White)
         {
             list.push(
                 ChessMove::build()
-                    .start(Square64::E8)
-                    .end(Square64::C8)
+                    .start(Square::E8)
+                    .end(Square::C8)
                     .castle(false)
                     .finish(),
             );
@@ -367,14 +367,14 @@ impl Board {
 // ---------------------------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
 
-pub fn magic_bishop_moves(square: Square64, blockers: BitBoard) -> BitBoard {
+pub fn magic_bishop_moves(square: Square, blockers: BitBoard) -> BitBoard {
     let blockers = blockers.intersection(BISHOP_MAGIC_MASKS[square]);
     let key = blockers.to_u64().wrapping_mul(BISHOP_MAGICS[square]);
     let key = key >> (64 - BISHOP_MAGIC_BIT_COUNT[square]);
     BISHOP_ATTACK_TABLE[square][key as usize]
 }
 
-pub fn magic_rook_moves(square: Square64, blockers: BitBoard) -> BitBoard {
+pub fn magic_rook_moves(square: Square, blockers: BitBoard) -> BitBoard {
     let blockers = blockers.intersection(ROOK_MAGIC_MASKS[square]);
     let key = blockers.to_u64().wrapping_mul(ROOK_MAGICS[square]);
     let key = key >> (64 - ROOK_MAGIC_BIT_COUNT[square]);
@@ -415,31 +415,31 @@ lazy_static::lazy_static! {
 
         for (i, m) in boards.iter_mut().enumerate() {
             let mut result = BitBoard::EMPTY;
-            let square = Square64::from_primitive(i);
+            let square = Square::from_primitive(i);
             let rank = square.rank().unwrap();
             let file = square.file().unwrap();
 
             if let Some(r) = rank.up() {
                 for r in Rank::range_inclusive(r, Rank::R7) {
-                    result.set(Square64::from_file_rank(file, r));
+                    result.set(Square::from_file_rank(file, r));
                 }
             }
 
             if let Some(r) = rank.down() {
                 for r in Rank::range_inclusive(Rank::R2, r) {
-                    result.set(Square64::from_file_rank(file, r));
+                    result.set(Square::from_file_rank(file, r));
                 }
             }
 
             if let Some(f) = file.up() {
                 for f in File::range_inclusive(f, File::G) {
-                    result.set(Square64::from_file_rank(f, rank));
+                    result.set(Square::from_file_rank(f, rank));
                 }
             }
 
             if let Some(f) = file.down() {
                 for f in File::range_inclusive(File::B, f) {
-                    result.set(Square64::from_file_rank(f, rank));
+                    result.set(Square::from_file_rank(f, rank));
                 }
             }
 
@@ -463,7 +463,7 @@ lazy_static::lazy_static! {
         let mut table = vec![vec![]; 64];
 
         for square_num in 0..64 {
-            let square = Square64::from_primitive(square_num);
+            let square = Square::from_primitive(square_num);
             let mask = ROOK_MAGIC_MASKS[square_num];
             let permutations = 1 << mask.bit_count();
             let file = square.file().unwrap();
@@ -476,29 +476,29 @@ lazy_static::lazy_static! {
 
                 if let Some(r) = rank.up() {
                     for r in Rank::range_inclusive(r, Rank::R8) {
-                        attack.set(Square64::from_file_rank(file, r));
-                        if blockers.get(Square64::from_file_rank(file, r)) { break; }
+                        attack.set(Square::from_file_rank(file, r));
+                        if blockers.get(Square::from_file_rank(file, r)) { break; }
                     }
                 }
 
                 if let Some(r) = rank.down() {
                     for r in Rank::range_inclusive(Rank::R1, r).rev() {
-                        attack.set(Square64::from_file_rank(file, r));
-                        if blockers.get(Square64::from_file_rank(file, r)) { break; }
+                        attack.set(Square::from_file_rank(file, r));
+                        if blockers.get(Square::from_file_rank(file, r)) { break; }
                     }
                 }
 
                 if let Some(f) = file.up() {
                     for f in File::range_inclusive(f, File::H) {
-                        attack.set(Square64::from_file_rank(f, rank));
-                        if blockers.get(Square64::from_file_rank(f, rank)) { break; }
+                        attack.set(Square::from_file_rank(f, rank));
+                        if blockers.get(Square::from_file_rank(f, rank)) { break; }
                     }
                 }
 
                 if let Some(f) = file.down() {
                     for f in File::range_inclusive(File::A, f).rev() {
-                        attack.set(Square64::from_file_rank(f, rank));
-                        if blockers.get(Square64::from_file_rank(f, rank)) { break; }
+                        attack.set(Square::from_file_rank(f, rank));
+                        if blockers.get(Square::from_file_rank(f, rank)) { break; }
                     }
                 }
 
@@ -515,7 +515,7 @@ lazy_static::lazy_static! {
         let mut table = vec![vec![]; 64];
 
         for square_num in 0..64 {
-            let square = Square64::from_primitive(square_num);
+            let square = Square::from_primitive(square_num);
             let mask = BISHOP_MAGIC_MASKS[square_num];
             let permutations = 1 << mask.bit_count();
             let file = square.file().unwrap();
@@ -528,29 +528,29 @@ lazy_static::lazy_static! {
 
                 if let Some((r, f)) = rank.up().zip(file.up()) {
                     for (r, f) in std::iter::zip(Rank::range_inclusive(r, Rank::R8), File::range_inclusive(f, File::H)) {
-                        attack.set(Square64::from_file_rank(f, r));
-                        if blockers.get(Square64::from_file_rank(f, r)) { break; }
+                        attack.set(Square::from_file_rank(f, r));
+                        if blockers.get(Square::from_file_rank(f, r)) { break; }
                     }
                 }
 
                 if let Some((r, f)) = rank.up().zip(file.down()) {
                     for (r, f) in std::iter::zip(Rank::range_inclusive(r, Rank::R8), File::range_inclusive(File::A, f).rev()) {
-                        attack.set(Square64::from_file_rank(f, r));
-                        if blockers.get(Square64::from_file_rank(f, r)) { break; }
+                        attack.set(Square::from_file_rank(f, r));
+                        if blockers.get(Square::from_file_rank(f, r)) { break; }
                     }
                 }
 
                 if let Some((r, f)) = rank.down().zip(file.up()) {
                     for (r, f) in std::iter::zip(Rank::range_inclusive(Rank::R1, r).rev(), File::range_inclusive(f, File::H)) {
-                        attack.set(Square64::from_file_rank(f, r));
-                        if blockers.get(Square64::from_file_rank(f, r)) { break; }
+                        attack.set(Square::from_file_rank(f, r));
+                        if blockers.get(Square::from_file_rank(f, r)) { break; }
                     }
                 }
 
                 if let Some((r, f)) = rank.down().zip(file.down()) {
                     for (r, f) in std::iter::zip(Rank::range_inclusive(Rank::R1, r).rev(), File::range_inclusive(File::A, f).rev()) {
-                        attack.set(Square64::from_file_rank(f, r));
-                        if blockers.get(Square64::from_file_rank(f, r)) { break; }
+                        attack.set(Square::from_file_rank(f, r));
+                        if blockers.get(Square::from_file_rank(f, r)) { break; }
                     }
                 }
 
@@ -575,7 +575,7 @@ fn blocker_permutation(mut i: usize, mut mask: BitBoard) -> BitBoard {
 
     while i != 0 {
         if (i & 1) != 0 {
-            let idx = Square64::from_primitive(mask.to_u64().trailing_zeros() as usize);
+            let idx = Square::from_primitive(mask.to_u64().trailing_zeros() as usize);
             blockers.set(idx);
         }
 

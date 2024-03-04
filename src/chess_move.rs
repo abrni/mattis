@@ -1,4 +1,4 @@
-use crate::types::{Piece, PieceType, Square64};
+use crate::types::{Piece, PieceType, Square};
 use num_enum::FromPrimitive;
 use std::fmt::{Debug, Display};
 
@@ -67,12 +67,12 @@ impl ChessMove {
         self.0 & 0xF000 == 0x5000
     }
 
-    pub fn start(self) -> Square64 {
-        Square64::from_primitive((self.0 & 0x3F) as usize)
+    pub fn start(self) -> Square {
+        Square::from_primitive((self.0 & 0x3F) as usize)
     }
 
-    pub fn end(self) -> Square64 {
-        Square64::from_primitive(((self.0 & 0xFC0) >> 6) as usize)
+    pub fn end(self) -> Square {
+        Square::from_primitive(((self.0 & 0xFC0) >> 6) as usize)
     }
 
     pub fn promoted(self) -> Option<PieceType> {
@@ -91,7 +91,7 @@ pub struct ChessMoveBuilder(u16);
 
 impl ChessMoveBuilder {
     #[must_use]
-    pub fn start(mut self, square: Square64) -> Self {
+    pub fn start(mut self, square: Square) -> Self {
         let square: usize = square.into();
         self.0 &= !0x3f; // Clear the bits first
         self.0 |= square as u16 & 0x3f; // Set the square
@@ -99,7 +99,7 @@ impl ChessMoveBuilder {
     }
 
     #[must_use]
-    pub fn end(mut self, square: Square64) -> Self {
+    pub fn end(mut self, square: Square) -> Self {
         let square: usize = square.into();
         self.0 &= !0xFC0; // Clear the bits first
         self.0 |= (square as u16 & 0x3F) << 6; // Set the square
@@ -247,8 +247,8 @@ mod tests {
         assert!(!m.is_queenside_castle());
         assert!(!m.is_promotion());
 
-        assert_eq!(m.start(), Square64::A1);
-        assert_eq!(m.end(), Square64::A1);
+        assert_eq!(m.start(), Square::A1);
+        assert_eq!(m.end(), Square::A1);
         assert_eq!(m.promoted(), None);
     }
 
@@ -260,8 +260,8 @@ mod tests {
                     continue;
                 }
 
-                let start = Square64::from_primitive(start);
-                let end = Square64::from_primitive(end);
+                let start = Square::from_primitive(start);
+                let end = Square::from_primitive(end);
                 let m = ChessMove::build().start(start).end(end).finish();
 
                 assert!(!m.is_nomove());
@@ -281,14 +281,10 @@ mod tests {
 
     #[test]
     fn m16_capture() {
-        let m = ChessMove::build()
-            .start(Square64::A1)
-            .end(Square64::A2)
-            .capture()
-            .finish();
+        let m = ChessMove::build().start(Square::A1).end(Square::A2).capture().finish();
 
-        assert_eq!(m.start(), Square64::A1);
-        assert_eq!(m.end(), Square64::A2);
+        assert_eq!(m.start(), Square::A1);
+        assert_eq!(m.end(), Square::A2);
         assert!(m.is_capture());
         assert!(!m.is_en_passant());
     }
@@ -296,13 +292,13 @@ mod tests {
     #[test]
     fn m16_en_passant_capture() {
         let m = ChessMove::build()
-            .start(Square64::A4)
-            .end(Square64::B3)
+            .start(Square::A4)
+            .end(Square::B3)
             .en_passant()
             .finish();
 
-        assert_eq!(m.start(), Square64::A4);
-        assert_eq!(m.end(), Square64::B3);
+        assert_eq!(m.start(), Square::A4);
+        assert_eq!(m.end(), Square::B3);
         assert!(m.is_capture());
         assert!(m.is_en_passant());
     }
@@ -322,8 +318,8 @@ mod tests {
 
         for piece in CASES {
             let m = ChessMove::build()
-                .start(Square64::H7)
-                .end(Square64::H8)
+                .start(Square::H7)
+                .end(Square::H8)
                 .promote(piece)
                 .finish();
 
