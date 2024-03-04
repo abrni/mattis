@@ -8,7 +8,7 @@ use crate::{
 
 use super::Board;
 
-pub type MoveList = smallvec::SmallVec<[ChessMove; 64]>;
+pub type MoveList = smallvec::SmallVec<[ChessMove; 128]>;
 
 impl Board {
     pub fn generate_capture_moves(&self, list: &mut MoveList) {
