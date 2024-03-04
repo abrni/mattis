@@ -174,20 +174,7 @@ impl Piece {
     ];
 
     pub const fn new(ty: PieceType, color: Color) -> Self {
-        match (ty, color) {
-            (PieceType::Pawn, Color::White) => Piece::WhitePawn,
-            (PieceType::Pawn, Color::Black) => Piece::BlackPawn,
-            (PieceType::Knight, Color::White) => Piece::WhiteKnight,
-            (PieceType::Knight, Color::Black) => Piece::BlackKnight,
-            (PieceType::Bishop, Color::White) => Piece::WhiteBishop,
-            (PieceType::Bishop, Color::Black) => Piece::BlackBishop,
-            (PieceType::Rook, Color::White) => Piece::WhiteRook,
-            (PieceType::Rook, Color::Black) => Piece::BlackRook,
-            (PieceType::Queen, Color::White) => Piece::WhiteQueen,
-            (PieceType::Queen, Color::Black) => Piece::BlackQueen,
-            (PieceType::King, Color::White) => Piece::WhiteKing,
-            (PieceType::King, Color::Black) => Piece::BlackKing,
-        }
+        unsafe { std::mem::transmute(ty as u8 + 6 * color as u8) }
     }
 
     pub const fn from_char(c: char) -> Option<Self> {
