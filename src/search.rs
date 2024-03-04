@@ -3,7 +3,7 @@ use crate::{
     eval::evaluation,
     hashtable::{HEKind, Probe, TranspositionTable},
     moves::Move32,
-    types::Piece,
+    types::PieceType,
 };
 use std::{
     collections::HashMap,
@@ -104,9 +104,9 @@ fn take_next_move(
 fn score_move(m: Move32, pv_move: Option<Move32>, tables: &SearchTables, board: &Board) -> i32 {
     if Some(m) == pv_move {
         2_000_000
-    } else if let Some(victim) = m.captured() {
+    } else if let Some(victim) = m.captured {
         //SAFETY: A chess move always moves a piece
-        let attacker = unsafe { board.pieces[m.m16.start()].unwrap_unchecked() };
+        let attacker = unsafe { board.pieces[m.m16.start()].unwrap_unchecked().piece_type() };
         1_000_000 + mvv_lva(attacker, victim)
     } else if tables.search_killers[board.ply][0] == m {
         900_000
@@ -118,8 +118,8 @@ fn score_move(m: Move32, pv_move: Option<Move32>, tables: &SearchTables, board: 
     }
 }
 
-fn mvv_lva(attacker: Piece, victim: Piece) -> i32 {
-    const SCORES: [i32; Piece::ALL.len()] = [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6];
+fn mvv_lva(attacker: PieceType, victim: PieceType) -> i32 {
+    const SCORES: [i32; PieceType::ALL.len()] = [1, 2, 3, 4, 5, 6];
     (SCORES[victim] << 3) - SCORES[attacker]
 }
 

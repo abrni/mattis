@@ -163,7 +163,7 @@ impl Board {
 
         // add the captured piece back in, if there is one
         if m.m16.is_capture() && !m.m16.is_en_passant() {
-            self.add_piece(to, m.captured().unwrap());
+            self.add_piece(to, Piece::new(m.captured.unwrap(), self.color.flipped()));
         }
 
         if m.m16.is_promotion() {

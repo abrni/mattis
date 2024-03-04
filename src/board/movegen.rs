@@ -118,7 +118,7 @@ impl Board {
             if end.rank().unwrap() == Rank::R8 {
                 insert_promotions(list, m16, Color::White, capture);
             } else {
-                list.push(Move32::new(m16.finish(), capture));
+                list.push(Move32::new(m16.finish(), capture.map(Piece::piece_type)));
             }
         }
 
@@ -133,7 +133,7 @@ impl Board {
             if end.rank().unwrap() == Rank::R8 {
                 insert_promotions(list, m16, Color::White, capture);
             } else {
-                list.push(Move32::new(m16.finish(), capture));
+                list.push(Move32::new(m16.finish(), capture.map(Piece::piece_type)));
             }
         }
     }
@@ -150,7 +150,7 @@ impl Board {
             if end.rank().unwrap() == Rank::R1 {
                 insert_promotions(list, m16, Color::Black, capture);
             } else {
-                list.push(Move32::new(m16.finish(), capture));
+                list.push(Move32::new(m16.finish(), capture.map(Piece::piece_type)));
             }
         }
 
@@ -165,7 +165,7 @@ impl Board {
             if end.rank().unwrap() == Rank::R1 {
                 insert_promotions(list, m16, Color::Black, capture);
             } else {
-                list.push(Move32::new(m16.finish(), capture));
+                list.push(Move32::new(m16.finish(), capture.map(Piece::piece_type)));
             }
         }
     }
@@ -196,7 +196,7 @@ impl Board {
                     .end(en_pas_sq)
                     .en_passant()
                     .finish(),
-                Some(captured_piece),
+                Some(captured_piece.piece_type()),
             ));
         }
 
@@ -207,7 +207,7 @@ impl Board {
                     .end(en_pas_sq)
                     .en_passant()
                     .finish(),
-                Some(captured_piece),
+                Some(captured_piece.piece_type()),
             ));
         }
     }
@@ -230,7 +230,7 @@ impl Board {
 
                 let m = Move16::build().start(start).end(end);
                 let m = if capture.is_some() { m.capture() } else { m };
-                list.push(Move32::new(m.finish(), capture));
+                list.push(Move32::new(m.finish(), capture.map(Piece::piece_type)));
             }
         }
     }
@@ -249,7 +249,7 @@ impl Board {
             let m = Move16::build().start(start).end(end);
             let m = if capture.is_some() { m.capture() } else { m };
 
-            list.push(Move32::new(m.finish(), capture));
+            list.push(Move32::new(m.finish(), capture.map(Piece::piece_type)));
         }
     }
 
@@ -267,7 +267,7 @@ impl Board {
                 let capture = self.pieces[end];
                 list.push(Move32::new(
                     Move16::build().start(start).end(end).capture().finish(),
-                    capture,
+                    capture.map(Piece::piece_type),
                 ));
             }
 
@@ -295,7 +295,7 @@ impl Board {
                 let capture = self.pieces[end];
                 list.push(Move32::new(
                     Move16::build().start(start).end(end).capture().finish(),
-                    capture,
+                    capture.map(Piece::piece_type),
                 ));
             }
 
@@ -625,6 +625,6 @@ fn insert_promotions(list: &mut MoveList, builder: Move16Builder, color: Color, 
     };
 
     for p in pieces {
-        list.push(Move32::new(builder.promote(p).finish(), capture));
+        list.push(Move32::new(builder.promote(p).finish(), capture.map(Piece::piece_type)));
     }
 }

@@ -69,7 +69,7 @@ macro_rules! impl_iterators {
     };
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive, Hash)]
 #[repr(u8)]
 pub enum PieceType {
     Pawn,
@@ -119,7 +119,7 @@ impl PieceType {
 impl_array_indexing!(PieceType, u8, 6);
 impl_iterators!(PieceType, PieceTypeIter, u8);
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive, Hash)]
 #[repr(u8)]
 pub enum Piece {
     WhitePawn,
@@ -261,7 +261,7 @@ impl Piece {
 impl_array_indexing!(Piece, u8, 12);
 impl_iterators!(Piece, PieceIter, u8);
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive, Hash)]
 #[repr(u8)]
 pub enum Color {
     White,
@@ -376,7 +376,9 @@ impl File {
 impl_array_indexing!(File, u8, 8);
 impl_iterators!(File, FileIter, u8);
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive)]
+#[derive(
+    Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive, Hash,
+)]
 #[repr(u8)]
 pub enum Rank {
     R1,
@@ -466,7 +468,7 @@ impl Rank {
 impl_array_indexing!(Rank, u8, 8);
 impl_iterators!(Rank, RankIter, u8);
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive, Hash)]
 #[repr(u8)]
 pub enum CastlePerm {
     WhiteKingside = 1,
@@ -527,7 +529,7 @@ impl CastlePerms {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, FromPrimitive, IntoPrimitive)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, FromPrimitive, IntoPrimitive, Hash)]
 #[repr(usize)]
 #[rustfmt::skip]
 pub enum Square120 {
@@ -658,7 +660,7 @@ impl Display for Square120 {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, IntoPrimitive)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, IntoPrimitive, Hash)]
 #[repr(usize)]
 #[rustfmt::skip]
 pub enum Square64 {

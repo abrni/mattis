@@ -459,9 +459,12 @@ impl Board {
 
         if m16.is_en_passant() {
             let dir = if self.color == Color::White { -8 } else { 8 };
-            Move32::new(m16, self.pieces[(m16.end() as usize).wrapping_add_signed(dir)])
+            Move32::new(
+                m16,
+                self.pieces[(m16.end() as usize).wrapping_add_signed(dir)].map(Piece::piece_type),
+            )
         } else {
-            Move32::new(m16, self.pieces[m16.end()])
+            Move32::new(m16, self.pieces[m16.end()].map(Piece::piece_type))
         }
     }
 
@@ -552,7 +555,7 @@ mod tests {
     use crate::{
         board::movegen::MoveList,
         moves::Move16,
-        types::{Piece, Square64},
+        types::{PieceType, Square64},
     };
 
     #[test]
@@ -578,6 +581,6 @@ mod tests {
         let mut movelist = MoveList::new();
         board.generate_all_moves(&mut movelist);
         assert!(movelist.contains(&ep_move32));
-        assert_eq!(ep_move32.captured(), Some(Piece::BlackPawn));
+        assert_eq!(ep_move32.captured, Some(PieceType::Pawn));
     }
 }

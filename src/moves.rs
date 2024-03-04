@@ -1,5 +1,5 @@
-use crate::types::{Color, Piece, Square64};
-use num_enum::{FromPrimitive, UnsafeFromPrimitive};
+use crate::types::{Color, Piece, PieceType, Square64};
+use num_enum::FromPrimitive;
 use std::fmt::{Debug, Display};
 
 /// # Fields
@@ -10,34 +10,20 @@ use std::fmt::{Debug, Display};
 /// ```
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Default)]
 pub struct Move32 {
-    v: u16,
     pub m16: Move16,
+    pub captured: Option<PieceType>,
 }
 
 impl Move32 {
-    pub fn new(m16: Move16, captured: Option<Piece>) -> Self {
-        let v = if let Some(piece) = captured {
-            Into::<u8>::into(piece) as u16 + 1
-        } else {
-            0
-        };
-
-        Self { v, m16 }
-    }
-
-    pub fn captured(self) -> Option<Piece> {
-        if self.v == 0 {
-            None
-        } else {
-            unsafe { Some(Piece::unchecked_transmute_from(self.v as u8 - 1)) }
-        }
+    pub fn new(m16: Move16, captured: Option<PieceType>) -> Self {
+        Self { m16, captured }
     }
 }
 
 impl Debug for Move32 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Move32")
-            .field("captured", &self.captured())
+            .field("captured", &self.captured)
             .field("m16", &self.m16)
             .finish()
     }
@@ -288,7 +274,7 @@ mod tests {
     #[test]
     fn m32_quiet() {
         let m = Move32::new(Move16::build().finish(), None);
-        assert_eq!(m.captured(), None);
+        assert_eq!(m.captured, None);
         assert!(m.m16.is_nomove());
     }
 
@@ -297,10 +283,10 @@ mod tests {
         for piece in Piece::ALL {
             let m = Move32::new(
                 Move16::build().start(Square64::A1).end(Square64::A2).capture().finish(),
-                Some(piece),
+                Some(piece.piece_type()),
             );
 
-            assert_eq!(m.captured(), Some(piece));
+            assert_eq!(m.captured, Some(piece.piece_type()));
             assert!(m.m16.is_capture());
         }
     }
