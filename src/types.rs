@@ -92,6 +92,28 @@ impl PieceType {
         Self::Queen,
         Self::King,
     ];
+
+    pub const fn is_big(self) -> bool {
+        !matches!(self, Self::Pawn)
+    }
+
+    pub const fn is_major(self) -> bool {
+        matches!(self, Self::Rook | Self::Queen | Self::King)
+    }
+
+    pub const fn is_minor(self) -> bool {
+        matches!(self, Self::Bishop | Self::Knight)
+    }
+
+    pub const fn value(self) -> i16 {
+        match self {
+            Self::Pawn => 100,
+            Self::Knight | PieceType::Bishop => 325,
+            Self::Rook => 550,
+            Self::Queen => 1000,
+            Self::King => 15_000,
+        }
+    }
 }
 
 impl_array_indexing!(PieceType, u8, 6);
@@ -151,7 +173,7 @@ impl Piece {
         Self::BlackKing,
     ];
 
-    pub fn new(ty: PieceType, color: Color) -> Self {
+    pub const fn new(ty: PieceType, color: Color) -> Self {
         match (ty, color) {
             (_, Color::Both) => panic!("cant create a piece with Color::BOTH"),
             (PieceType::Pawn, Color::White) => Piece::WhitePawn,
@@ -205,30 +227,29 @@ impl Piece {
     }
 
     pub const fn is_big(self) -> bool {
-        !matches!(self, Self::BlackPawn | Self::WhitePawn)
+        self.piece_type().is_big()
     }
 
     pub const fn is_major(self) -> bool {
-        matches!(
-            self,
-            Self::WhiteRook | Self::WhiteQueen | Self::WhiteKing | Self::BlackRook | Self::BlackQueen | Self::BlackKing
-        )
+        self.piece_type().is_major()
     }
 
     pub const fn is_minor(self) -> bool {
-        matches!(
-            self,
-            Self::WhiteBishop | Self::WhiteKnight | Self::BlackBishop | Self::BlackKnight
-        )
+        self.piece_type().is_minor()
     }
 
     pub const fn value(self) -> i16 {
+        self.piece_type().value()
+    }
+
+    pub const fn piece_type(self) -> PieceType {
         match self {
-            Self::WhitePawn | Self::BlackPawn => 100,
-            Self::WhiteKnight | Self::WhiteBishop | Self::BlackKnight | Self::BlackBishop => 325,
-            Self::WhiteRook | Self::BlackRook => 550,
-            Self::WhiteQueen | Self::BlackQueen => 1000,
-            Self::WhiteKing | Self::BlackKing => 15_000,
+            Self::WhitePawn | Self::BlackPawn => PieceType::Pawn,
+            Self::WhiteKnight | Self::BlackKnight => PieceType::Knight,
+            Self::WhiteBishop | Self::BlackBishop => PieceType::Bishop,
+            Self::WhiteRook | Self::BlackRook => PieceType::Rook,
+            Self::WhiteQueen | Self::BlackQueen => PieceType::Queen,
+            Self::WhiteKing | Self::BlackKing => PieceType::King,
         }
     }
 
@@ -814,7 +835,7 @@ impl Display for Square64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{Square120, Square64};
+    use super::{Color, Piece, PieceType, Square120, Square64};
     use num_enum::FromPrimitive;
 
     #[test]
@@ -854,5 +875,17 @@ mod tests {
 
         let sq120 = Square120::Invalid;
         assert_eq!(Err(()), Square64::try_from(sq120));
+    }
+
+    #[test]
+    fn convert_piece_types() {
+        for color in [Color::White, Color::Black] {
+            for piece_type in PieceType::ALL {
+                let piece = Piece::new(piece_type, color);
+                println!("{color:?}, {piece_type:?} -> {piece:?}");
+                assert_eq!(piece.piece_type(), piece_type);
+                assert_eq!(piece.color(), color);
+            }
+        }
     }
 }
