@@ -1,3 +1,4 @@
+use crate::eval::Eval;
 use std::fmt::Display;
 
 #[derive(Debug, thiserror::Error)]
@@ -205,11 +206,7 @@ pub enum Id {
 }
 
 #[derive(Debug)]
-pub enum Score {
-    Cp(i32),
-    Mate(i32),
-    // TODO: Lowerbound, Upperbound
-}
+pub struct Score(pub Eval);
 
 impl Display for EngineMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -238,9 +235,12 @@ impl Display for EngineMessage {
 
 impl Display for Score {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Cp(cp) => write!(f, "cp {cp}"),
-            Self::Mate(mate) => write!(f, "mate {mate}"),
+        if let Some(ply) = self.0.mate_ply() {
+            let moves = ((ply + 1) / 2) as i16;
+            let moves = if self.0 > Eval::DRAW { moves } else { -moves };
+            write!(f, "mate {}", moves)
+        } else {
+            write!(f, "cp {}", self.0.inner())
         }
     }
 }

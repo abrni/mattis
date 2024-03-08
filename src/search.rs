@@ -1,7 +1,7 @@
 use crate::{
     board::{movegen::MoveList, Board},
     chess_move::ChessMove,
-    eval::evaluation,
+    eval::{evaluation, Eval},
     hashtable::{HEKind, Probe, TranspositionTable},
     types::{Piece, PieceType},
 };
@@ -31,7 +31,7 @@ pub struct SearchParams {
 pub struct SearchStats {
     pub start_time: Instant, // When we started the search
     pub depth: u16,          // Search depth
-    pub score: i16,          // Score in centipawns
+    pub score: Eval,         // Score in centipawns
     pub nodes: u64,          // Total count of visited nodes
     pub leaves: u64,         // Total count of visited leaf nodes
     pub fh: u64,             // Count of fail-highs (beta cut off)
@@ -46,7 +46,7 @@ impl Default for SearchStats {
         Self {
             start_time: Instant::now(),
             depth: 0,
-            score: 0,
+            score: Eval::DRAW,
             nodes: 0,
             leaves: 0,
             fh: 0,
@@ -59,23 +59,25 @@ impl Default for SearchStats {
 }
 
 fn pv_line(tptable: &TranspositionTable, board: &mut Board) -> Vec<ChessMove> {
-    let mut key_counts = HashMap::new();
+    let mut pos_key_counts = HashMap::new();
     let mut pvline = Vec::with_capacity(8);
 
-    while let Some(m16) = tptable.get(board.position_key) {
-        if m16.is_nomove() {
+    while let Some(cmove) = tptable.get(board.position_key) {
+        if cmove.is_nomove() {
             break;
         }
 
-        let kc = key_counts.entry(board.position_key).or_insert(0);
-        *kc += 1;
+        let kc_entry = pos_key_counts.entry(board.position_key).or_insert(0);
+        *kc_entry += 1;
 
-        if *kc >= 3 {
+        if *kc_entry >= 3 {
+            // We have seen a position 3 times.
+            // Stop, because this is a threefold repetition and we'd be stuck in an infinite loop.
             break;
         }
 
-        board.make_move(m16);
-        pvline.push(m16);
+        board.make_move(cmove);
+        pvline.push(cmove);
     }
 
     for _ in 0..pvline.len() {
@@ -165,7 +167,16 @@ pub fn iterative_deepening<'a>(
             return None;
         };
 
-        let score = alpha_beta(-30_002, 30_002, stats.depth, board, &params, &mut stats, tables, true);
+        let score = alpha_beta(
+            -Eval::MAX,
+            Eval::MAX,
+            stats.depth,
+            board,
+            &params,
+            &mut stats,
+            tables,
+            true,
+        );
 
         if stats.stop {
             return None;
@@ -181,17 +192,17 @@ pub fn iterative_deepening<'a>(
 
 #[allow(clippy::too_many_arguments)] // TODO: reduce the number of arguments into an args struct or something
 pub fn alpha_beta(
-    mut alpha: i16,
-    beta: i16,
+    mut alpha: Eval,
+    beta: Eval,
     mut depth: u16,
     board: &mut Board,
     params: &SearchParams,
     stats: &mut SearchStats,
     tables: &mut SearchTables,
     allow_null_move: bool,
-) -> i16 {
+) -> Eval {
     if stats.stop {
-        return 0;
+        return Eval::DRAW;
     }
 
     // We frequently check, if the search should stop
@@ -211,7 +222,7 @@ pub fn alpha_beta(
     // We actually evaluate a single repetition as a draw, so we can find
     // drawn positions earlier.
     if board.ply >= 1 && (board.is_repetition() || board.fifty_move >= 100) {
-        return 0;
+        return Eval::DRAW;
     }
 
     // We extend the depth, if we are in check. This increases the chance to
@@ -238,17 +249,18 @@ pub fn alpha_beta(
     // We don't want null move pruning, if we are in check, because that would cause an illegal position.
     if allow_null_move && !board.in_check() && board.ply != 0 && board.count_big_pieces[board.color] > 1 && depth >= 4 {
         board.make_null_move();
-        let score = -alpha_beta(-beta, -beta + 1, depth - 4, board, params, stats, tables, false);
+        let score = -alpha_beta(-beta, -beta + 1i16, depth - 4, board, params, stats, tables, false);
         board.take_null_move();
 
         // Don't use the results, if we entered stop-mode in the meantime.
         if stats.stop {
-            return 0;
+            return Eval::DRAW;
         }
 
-        // A score above 29_000 probably signals a mate. That result was likely caused by a zugzwang, that wouldn't have
-        // occured without the null move. Do not use the result in that case.
-        if score >= beta && score.abs() < 29_000 {
+        // Finding a mate during null-move pruning is likely caused by a zugzwang,
+        // which would not have occured without the null move.
+        // Do not use the result in that case.
+        if score >= beta && !score.is_mate() {
             return beta;
         }
     }
@@ -257,7 +269,7 @@ pub fn alpha_beta(
     board.generate_all_moves(&mut moves);
 
     let mut best_move = ChessMove::default(); // Will contain the best move we found during the search.
-    let mut best_score = -30_000; // TODO: do we really need this?
+    let mut best_score = -Eval::MAX; // TODO: do we really need this?
     let mut legal_moves = 0; // Counts the number of legal moves. Not every generated move is necessarily legal.
     let mut alpha_changed = false; // signals if alpha has changed during the evaluation of each move
 
@@ -276,7 +288,7 @@ pub fn alpha_beta(
         // Don't use the result of alpha-beta if we entered stop-mode in the meantime. The result is probably nonsense.
         // Instead just return ASAP.
         if stats.stop {
-            return 0;
+            return Eval::DRAW;
         }
 
         // A score higher than beta allows us to perform a beta cutoff (fail-high)
@@ -327,10 +339,10 @@ pub fn alpha_beta(
     // If we haven't found any legal move, we are either in checkmate or in a stalemate.
     if legal_moves == 0 {
         if board.in_check() {
-            return -30_000 + board.ply as i16;
+            return -Eval::mate_in(board.ply as u8);
         }
 
-        return 0;
+        return Eval::DRAW;
     }
 
     // Store the best move we found in the hashtable.
@@ -346,16 +358,16 @@ pub fn alpha_beta(
 }
 
 pub fn quiescence(
-    mut alpha: i16,
-    beta: i16,
+    mut alpha: Eval,
+    beta: Eval,
     board: &mut Board,
     stats: &mut SearchStats,
     tables: &mut SearchTables,
-) -> i16 {
+) -> Eval {
     stats.nodes += 1;
 
     if board.is_repetition() || board.fifty_move >= 100 {
-        return 0;
+        return Eval::DRAW;
     }
 
     let standing_pat = evaluation(board);
@@ -390,7 +402,7 @@ pub fn quiescence(
         board.take_move();
 
         if stats.stop {
-            return 0;
+            return Eval::DRAW;
         }
 
         if score >= beta {
@@ -403,7 +415,7 @@ pub fn quiescence(
     }
 
     if legal_moves == 0 && in_check {
-        return -30_000;
+        return -Eval::mate_in(board.ply as u8);
     }
 
     alpha

@@ -118,7 +118,7 @@ fn run_go(print_output: bool, board: &mut Board, go: uci::Go, search_tables: &mu
             depth: Some(stats.depth as u32),
             nodes: Some(stats.nodes as u32),
             pv: stats.pv.into_iter().map(|m| format!("{m}")).collect(),
-            score: Some(uci::Score::Cp(stats.score as i32)),
+            score: Some(uci::Score(stats.score)),
             ..Default::default()
         });
 

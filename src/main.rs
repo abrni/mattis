@@ -132,19 +132,23 @@ fn run_go(print_output: bool, board: &mut Board, go: uci::Go, search_tables: &mu
     };
 
     let mut bestmove = ChessMove::default();
+
     for stats in iterative_deepening(board, params, search_tables) {
         bestmove = stats.bestmove;
+
         let info = EngineMessage::Info(uci::Info {
             depth: Some(stats.depth as u32),
             nodes: Some(stats.nodes as u32),
             pv: stats.pv.into_iter().map(|m| format!("{m}")).collect(),
-            score: Some(uci::Score::Cp(stats.score as i32)),
+            // FIXME: Mate score can be off by 1 at low depths,
+            // because the score comes straight from the hashtable which stored the entry one move ago.
+            score: Some(uci::Score(stats.score)),
             ..Default::default()
         });
 
         if print_output {
             println!("{info}");
-            println!("Ordering: {:.2}", stats.fhf as f64 / stats.fh as f64);
+            // println!("Ordering: {:.2}", stats.fhf as f64 / stats.fh as f64);
         }
     }
 

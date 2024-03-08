@@ -1,4 +1,4 @@
-use crate::{board::Board, chess_move::ChessMove};
+use crate::{board::Board, chess_move::ChessMove, eval::Eval};
 use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -10,9 +10,9 @@ pub enum HEKind {
 }
 
 pub enum Probe {
-    NoHit,                  // We have no hit in the table
-    PV(ChessMove, i16),     // We do have a hit in the table, but it is not exact and does not cause a branch cutoff
-    CutOff(ChessMove, i16), // We have a successful hit, that was exact or causes a branch cutoff
+    NoHit,                   // We have no hit in the table
+    PV(ChessMove, Eval),     // We do have a hit in the table, but it is not exact and does not cause a branch cutoff
+    CutOff(ChessMove, Eval), // We have a successful hit, that was exact or causes a branch cutoff
 }
 
 #[derive(Debug, Default)]
@@ -22,12 +22,12 @@ struct Entry {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-struct Data {
-    score: i16,
-    m16: ChessMove,
-    depth: u16,
-    kind: HEKind,
-    age: u8,
+pub struct Data {
+    pub score: Eval,
+    pub cmove: ChessMove,
+    pub depth: u16,
+    pub kind: HEKind,
+    pub age: u8,
 }
 
 impl Entry {
@@ -94,7 +94,7 @@ impl TranspositionTable {
         (key >> self.shift) as usize
     }
 
-    pub fn store(&self, position_key: u64, score: i16, m: ChessMove, depth: u16, kind: HEKind) {
+    pub fn store(&self, position_key: u64, score: Eval, m: ChessMove, depth: u16, kind: HEKind) {
         let current_table_age = self.current_age.load(Ordering::Relaxed);
         let index = self.index(position_key);
         debug_assert!(index < self.capacity);
@@ -122,7 +122,7 @@ impl TranspositionTable {
 
         let new_data = Data {
             score,
-            m16: m,
+            cmove: m,
             depth,
             kind,
             age: current_table_age,
@@ -131,33 +131,33 @@ impl TranspositionTable {
         table_entry.store(position_key, new_data);
     }
 
-    fn load(&self, key: u64) -> Option<Data> {
+    pub fn load(&self, key: u64) -> Option<Data> {
         let index = self.index(key);
         let entry = unsafe { self.data.get_unchecked(index) };
         entry.load(key)
     }
 
     pub fn get(&self, key: u64) -> Option<ChessMove> {
-        self.load(key).map(|data| data.m16)
+        self.load(key).map(|data| data.cmove)
     }
 
-    pub fn probe(&self, board: &Board, alpha: i16, beta: i16, depth: u16) -> Probe {
+    pub fn probe(&self, board: &Board, alpha: Eval, beta: Eval, depth: u16) -> Probe {
         let Some(data) = self.load(board.position_key) else { return Probe::NoHit };
 
-        let m16 = data.m16;
+        let cmove = data.cmove;
         let score = data.score;
 
         if data.depth < depth {
-            return Probe::PV(m16, score);
+            return Probe::PV(cmove, score);
         }
 
         debug_assert!(data.depth >= 1);
 
         match data.kind {
-            HEKind::Alpha if score <= alpha => Probe::CutOff(m16, alpha),
-            HEKind::Beta if score >= beta => Probe::CutOff(m16, beta),
-            HEKind::Exact => Probe::CutOff(m16, score),
-            _ => Probe::PV(m16, score),
+            HEKind::Alpha if score <= alpha => Probe::CutOff(cmove, alpha),
+            HEKind::Beta if score >= beta => Probe::CutOff(cmove, beta),
+            HEKind::Exact => Probe::CutOff(cmove, score),
+            _ => Probe::PV(cmove, score),
         }
     }
 
@@ -171,6 +171,7 @@ mod test {
     use super::HEKind;
     use crate::{
         chess_move::ChessMove,
+        eval::Eval,
         hashtable::{Data, Entry, TranspositionTable},
     };
 
@@ -210,7 +211,7 @@ mod test {
             for _ in 0..table.capacity {
                 table.store(
                     rand::random(),
-                    i16::default(),
+                    Eval::default(),
                     ChessMove::default(),
                     u16::default(),
                     HEKind::default(),
@@ -224,7 +225,7 @@ mod test {
         let key: u64 = rand::random();
         let data = Data {
             score: rand::random(),
-            m16: ChessMove::default(),
+            cmove: ChessMove::default(),
             depth: rand::random(),
             kind: HEKind::Alpha,
             age: rand::random(),
@@ -243,7 +244,7 @@ mod test {
 
         let data = Data {
             score: rand::random(),
-            m16: ChessMove::default(),
+            cmove: ChessMove::default(),
             depth: rand::random(),
             kind: HEKind::Alpha,
             age: rand::random(),
