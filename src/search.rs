@@ -158,29 +158,49 @@ pub fn iterative_deepening<'a>(
     params: SearchParams,
     tables: &'a mut SearchTables,
 ) -> impl Iterator<Item = SearchStats> + 'a {
-    let mut stats = SearchStats::default();
+    let mut stats = SearchStats {
+        depth: 1,
+        ..Default::default()
+    };
+
+    let mut score = alpha_beta(-Eval::MAX, Eval::MAX, 1, board, &params, &mut stats, tables, false);
 
     std::iter::from_fn(move || {
-        stats.depth += 1;
-
         if should_search_stop(&params, &stats) {
             return None;
         };
 
-        let score = alpha_beta(
-            -Eval::MAX,
-            Eval::MAX,
-            stats.depth,
-            board,
-            &params,
-            &mut stats,
-            tables,
-            true,
-        );
+        stats.depth += 1;
 
-        if stats.stop {
-            return None;
-        }
+        let mut alpha = score - 50_i16;
+        let mut beta = score + 50_i16;
+        let mut loop_count = 0;
+
+        score = loop {
+            let score = alpha_beta(alpha, beta, stats.depth, board, &params, &mut stats, tables, true);
+
+            if stats.stop {
+                return None;
+            }
+
+            if score <= alpha {
+                loop_count += 1;
+                alpha = alpha
+                    .inner()
+                    .checked_sub(10_i16 * 4_i16.pow(loop_count) + 50)
+                    .map(Into::into)
+                    .unwrap_or(-Eval::MAX);
+            } else if score >= beta {
+                loop_count += 1;
+                beta = beta
+                    .inner()
+                    .checked_add(10_i16 * 4_i16.pow(loop_count) + 50)
+                    .map(Into::into)
+                    .unwrap_or(Eval::MAX);
+            } else {
+                break score;
+            }
+        };
 
         stats.score = score;
         stats.pv = pv_line(&tables.transposition_table, board);
