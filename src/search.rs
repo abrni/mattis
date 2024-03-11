@@ -185,10 +185,7 @@ struct IterativeDeepening {
 
 impl IterativeDeepening {
     fn init(board: &mut Board, params: SearchParams, tables: &mut SearchTables) -> Self {
-        let mut stats = SearchStats {
-            depth: 1,
-            ..Default::default()
-        };
+        let mut stats = SearchStats::default();
 
         let root_eval = alpha_beta(
             -Eval::MAX,
@@ -209,11 +206,11 @@ impl IterativeDeepening {
     }
 
     fn next_depth(&mut self, board: &mut Board, tables: &mut SearchTables) -> Option<SearchStats> {
+        self.stats.depth += 1;
+
         if should_search_stop(&self.params, &self.stats) {
             return None;
         };
-
-        self.stats.depth += 1;
 
         let mut alpha = self.root_eval - 50_i16;
         let mut beta = self.root_eval + 50_i16;
