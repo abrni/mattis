@@ -84,6 +84,7 @@ impl TranspositionTable {
     }
 
     pub fn reset(&self) {
+        self.current_age.store(0, Ordering::Relaxed);
         for entry in self.data.iter() {
             entry.key.store(0, Ordering::Relaxed);
             entry.data.store(0, Ordering::Relaxed);
@@ -113,8 +114,7 @@ impl TranspositionTable {
         // - TODO: the old entry is corrupted by a data race
         // - the old entry is not from the current age
         // - the old entry has a lower depth than we are trying to write
-        let replace = entry_key == 0 || entry_data.age < current_table_age || entry_data.depth <= depth;
-        // TODO: What happens if current_age rolls over?
+        let replace = entry_key == 0 || entry_data.age != current_table_age || entry_data.depth <= depth;
 
         if !replace {
             return;
