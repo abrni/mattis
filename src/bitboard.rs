@@ -85,7 +85,6 @@ impl BitBoard {
     }
 
     /// Clears the least significant 1-bit and returns its index
-
     pub fn pop(&mut self) -> Square {
         #[rustfmt::skip]
         const POP_MAGIC_TABLE: [usize ; 64] = [
