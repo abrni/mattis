@@ -3,7 +3,8 @@ use crate::{
     chess_move::ChessMove,
     eval::{evaluation, Eval},
     hashtable::{HEKind, Probe, TranspositionTable},
-    types::{Piece, PieceType},
+    types::{Color, Piece, PieceType},
+    uci::{self, EngineMessage},
 };
 use std::{
     collections::HashMap,
@@ -11,13 +12,126 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
+    thread::JoinHandle,
     time::{Duration, Instant},
 };
+
+#[derive(Debug, Default)]
+pub struct KillSwitch {
+    switch: Arc<AtomicBool>,
+    join_handles: Vec<JoinHandle<()>>,
+}
+
+impl KillSwitch {
+    pub fn kill(self) {
+        self.switch.store(true, Ordering::Relaxed);
+
+        for h in self.join_handles {
+            h.join().unwrap();
+        }
+    }
+
+    pub fn is_alive(&self) -> bool {
+        self.switch.load(Ordering::Relaxed)
+    }
+}
+
+#[derive(Clone)]
+pub struct SearchConfig<'a> {
+    pub allow_null_pruning: bool,
+    pub thread_count: u32,
+    pub go: uci::Go,
+    pub board: &'a Board,
+    pub tp_table: Arc<TranspositionTable>,
+}
+
+pub fn run_search(config: SearchConfig) -> KillSwitch {
+    let go = config.go;
+
+    let switch = Arc::new(AtomicBool::new(false));
+
+    let (time, inc) = match config.board.color {
+        Color::White => (go.wtime, go.winc),
+        Color::Black => (go.btime, go.binc),
+    };
+
+    let movestogo = go.movestogo.unwrap_or(30) as f64;
+    let (time, inc) = (time.or(go.movetime), inc.unwrap_or(0) as f64);
+
+    let max_time = time
+        .map(|t| t as f64)
+        .map(|t| (t + (movestogo * inc)) / (movestogo / 3.0 * 2.0) - inc)
+        .map(|t| Duration::from_micros((t * 1000.0) as u64));
+
+    let join_handles: Vec<JoinHandle<()>> = (0..config.thread_count)
+        .map(|i| {
+            let thread_config = ThreadConfig {
+                tp_table: Arc::clone(&config.tp_table),
+                thread_num: i,
+                params: SearchParams {
+                    max_time,
+                    max_nodes: go.nodes.map(|n| n as u64),
+                    max_depth: go.depth.map(|d| d as u16),
+                    stop: Arc::clone(&switch),
+                },
+            };
+
+            let board = config.board.clone();
+            std::thread::spawn(move || search_thread(thread_config, board))
+        })
+        .collect();
+
+    KillSwitch { switch, join_handles }
+}
+
+struct ThreadConfig {
+    tp_table: Arc<TranspositionTable>,
+    thread_num: u32,
+    params: SearchParams,
+}
+
+fn search_thread(config: ThreadConfig, mut board: Board) {
+    let mut search_tables = SearchTables {
+        transposition_table: config.tp_table,
+        search_killers: vec![[ChessMove::default(); 2]; 1024],
+        search_history: [[0; 64]; 12],
+    };
+
+    let mut bestmove = ChessMove::default();
+
+    for stats in iterative_deepening(&mut board, config.params, &mut search_tables) {
+        bestmove = stats.bestmove;
+
+        let info = EngineMessage::Info(uci::Info {
+            depth: Some(stats.depth as u32),
+            nodes: Some(stats.nodes as u32),
+            pv: stats.pv.into_iter().map(|m| format!("{m}")).collect(),
+            // FIXME: Mate score can be off by 1 at low depths,
+            // because the score comes straight from the hashtable which stored the entry one move ago.
+            score: Some(uci::Score(stats.score)),
+            ..Default::default()
+        });
+
+        if config.thread_num == 0 {
+            println!("{info}");
+            // println!("Ordering: {:.2}", stats.fhf as f64 / stats.fh as f64);
+        }
+    }
+
+    if config.thread_num == 0 {
+        let bestmove = EngineMessage::Bestmove {
+            move_: format!("{bestmove}"),
+            ponder: None,
+        };
+
+        println!("{bestmove}");
+    }
+}
 
 pub struct SearchTables {
     pub transposition_table: Arc<TranspositionTable>,
     pub search_killers: Vec<[ChessMove; 2]>,
-    pub search_history: [[u32; 64]; 12],
+    pub search_history: [[u64; 64]; 12],
 }
 
 pub struct SearchParams {
@@ -346,7 +460,7 @@ pub fn alpha_beta(
             // different added value.
             if !m.is_capture() {
                 let piece = board.pieces[m.start()].unwrap();
-                tables.search_history[piece][m.end()] += depth as u32; // TODO: is this better: += depth * depth or 2^depth?
+                tables.search_history[piece][m.end()] += depth as u64; // TODO: is this better: += depth * depth or 2^depth?
             }
         }
 
