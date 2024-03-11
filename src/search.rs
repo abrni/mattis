@@ -190,7 +190,16 @@ impl IterativeDeepening {
             ..Default::default()
         };
 
-        let root_eval = alpha_beta(-Eval::MAX, Eval::MAX, 1, board, &params, &mut stats, tables, false);
+        let root_eval = alpha_beta(
+            -Eval::MAX,
+            Eval::MAX,
+            1,
+            board,
+            &params,
+            &mut stats,
+            tables,
+            params.allow_null_pruning,
+        );
 
         Self {
             root_eval,
