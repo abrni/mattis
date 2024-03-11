@@ -145,8 +145,9 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
     };
 
     let mut bestmove = ChessMove::default();
+    let mut iterative_deepening = IterativeDeepening::init(&mut board, config.params.clone(), &mut search_tables);
 
-    for stats in iterative_deepening(&mut board, config.params.clone(), &mut search_tables) {
+    while let Some(stats) = iterative_deepening.next_depth(&mut board, &mut search_tables) {
         bestmove = stats.bestmove;
 
         let info = EngineMessage::Info(uci::Info {
@@ -173,6 +174,82 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
 
         println!("{bestmove}");
         config.params.stop.store(true, Ordering::Relaxed);
+    }
+}
+
+struct IterativeDeepening {
+    root_eval: Eval,
+    stats: SearchStats,
+    params: SearchParams,
+}
+
+impl IterativeDeepening {
+    fn init(board: &mut Board, params: SearchParams, tables: &mut SearchTables) -> Self {
+        let mut stats = SearchStats {
+            depth: 1,
+            ..Default::default()
+        };
+
+        let root_eval = alpha_beta(-Eval::MAX, Eval::MAX, 1, board, &params, &mut stats, tables, false);
+
+        Self {
+            root_eval,
+            stats,
+            params,
+        }
+    }
+
+    fn next_depth(&mut self, board: &mut Board, tables: &mut SearchTables) -> Option<SearchStats> {
+        if should_search_stop(&self.params, &self.stats) {
+            return None;
+        };
+
+        self.stats.depth += 1;
+
+        let mut alpha = self.root_eval - 50_i16;
+        let mut beta = self.root_eval + 50_i16;
+        let mut loop_count = 0;
+
+        let score = loop {
+            let score = alpha_beta(
+                alpha,
+                beta,
+                self.stats.depth,
+                board,
+                &self.params,
+                &mut self.stats,
+                tables,
+                true,
+            );
+
+            if self.stats.stop {
+                return None;
+            }
+
+            if score <= alpha {
+                loop_count += 1;
+                alpha = alpha
+                    .inner()
+                    .checked_sub(10_i16 * 4_i16.pow(loop_count) + 50)
+                    .map(Into::into)
+                    .unwrap_or(-Eval::MAX);
+            } else if score >= beta {
+                loop_count += 1;
+                beta = beta
+                    .inner()
+                    .checked_add(10_i16 * 4_i16.pow(loop_count) + 50)
+                    .map(Into::into)
+                    .unwrap_or(Eval::MAX);
+            } else {
+                break score;
+            }
+        };
+
+        self.stats.score = score;
+        self.stats.pv = pv_line(&tables.transposition_table, board);
+        self.stats.bestmove = self.stats.pv.get(0).copied().unwrap_or_default();
+
+        Some(self.stats.clone())
     }
 }
 
@@ -271,65 +348,8 @@ fn should_search_stop(params: &SearchParams, stats: &SearchStats) -> bool {
     false
 }
 
-pub fn iterative_deepening<'a>(
-    board: &'a mut Board,
-    params: SearchParams,
-    tables: &'a mut SearchTables,
-) -> impl Iterator<Item = SearchStats> + 'a {
-    let mut stats = SearchStats {
-        depth: 1,
-        ..Default::default()
-    };
-
-    let mut score = alpha_beta(-Eval::MAX, Eval::MAX, 1, board, &params, &mut stats, tables, false);
-
-    std::iter::from_fn(move || {
-        if should_search_stop(&params, &stats) {
-            return None;
-        };
-
-        stats.depth += 1;
-
-        let mut alpha = score - 50_i16;
-        let mut beta = score + 50_i16;
-        let mut loop_count = 0;
-
-        score = loop {
-            let score = alpha_beta(alpha, beta, stats.depth, board, &params, &mut stats, tables, true);
-
-            if stats.stop {
-                return None;
-            }
-
-            if score <= alpha {
-                loop_count += 1;
-                alpha = alpha
-                    .inner()
-                    .checked_sub(10_i16 * 4_i16.pow(loop_count) + 50)
-                    .map(Into::into)
-                    .unwrap_or(-Eval::MAX);
-            } else if score >= beta {
-                loop_count += 1;
-                beta = beta
-                    .inner()
-                    .checked_add(10_i16 * 4_i16.pow(loop_count) + 50)
-                    .map(Into::into)
-                    .unwrap_or(Eval::MAX);
-            } else {
-                break score;
-            }
-        };
-
-        stats.score = score;
-        stats.pv = pv_line(&tables.transposition_table, board);
-        stats.bestmove = stats.pv.get(0).copied().unwrap_or_default();
-
-        Some(stats.clone())
-    })
-}
-
 #[allow(clippy::too_many_arguments)] // TODO: reduce the number of arguments into an args struct or something
-pub fn alpha_beta(
+fn alpha_beta(
     mut alpha: Eval,
     beta: Eval,
     mut depth: u16,
@@ -495,7 +515,7 @@ pub fn alpha_beta(
     alpha
 }
 
-pub fn quiescence(
+fn quiescence(
     mut alpha: Eval,
     beta: Eval,
     board: &mut Board,
