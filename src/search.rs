@@ -16,6 +16,52 @@ use std::{
     time::{Duration, Instant},
 };
 
+pub struct SearchTables {
+    pub transposition_table: Arc<TranspositionTable>,
+    pub search_killers: Vec<[ChessMove; 2]>,
+    pub search_history: [[u64; 64]; 12],
+}
+
+#[derive(Debug, Clone)]
+pub struct SearchParams {
+    max_time: Option<Duration>,
+    max_nodes: Option<u64>,
+    max_depth: Option<u16>,
+    stop: Arc<AtomicBool>, // TODO: Support for Mate Search
+    allow_null_pruning: bool,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct SearchStats {
+    pub start_time: Instant, // When we started the search
+    pub depth: u16,          // Search depth
+    pub score: Eval,         // Score in centipawns
+    pub nodes: u64,          // Total count of visited nodes
+    pub leaves: u64,         // Total count of visited leaf nodes
+    pub fh: u64,             // Count of fail-highs (beta cut off)
+    pub fhf: u64,            // Count of fail-highs at the first move
+    pub bestmove: ChessMove, // The best move
+    pub pv: Vec<ChessMove>,  // Principle Variation Line
+    pub stop: bool,          // Should the search stop ASAP
+}
+
+impl Default for SearchStats {
+    fn default() -> Self {
+        Self {
+            start_time: Instant::now(),
+            depth: 0,
+            score: Eval::DRAW,
+            nodes: 0,
+            leaves: 0,
+            fh: 0,
+            fhf: 0,
+            bestmove: ChessMove::default(),
+            pv: vec![],
+            stop: false,
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct KillSwitch {
     switch: Arc<AtomicBool>,
@@ -32,7 +78,7 @@ impl KillSwitch {
     }
 
     pub fn is_alive(&self) -> bool {
-        self.switch.load(Ordering::Relaxed)
+        !self.switch.load(Ordering::Relaxed)
     }
 }
 
@@ -73,6 +119,7 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
                     max_nodes: go.nodes.map(|n| n as u64),
                     max_depth: go.depth.map(|d| d as u16),
                     stop: Arc::clone(&switch),
+                    allow_null_pruning: config.allow_null_pruning,
                 },
             };
 
@@ -99,7 +146,7 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
 
     let mut bestmove = ChessMove::default();
 
-    for stats in iterative_deepening(&mut board, config.params, &mut search_tables) {
+    for stats in iterative_deepening(&mut board, config.params.clone(), &mut search_tables) {
         bestmove = stats.bestmove;
 
         let info = EngineMessage::Info(uci::Info {
@@ -125,50 +172,7 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
         };
 
         println!("{bestmove}");
-    }
-}
-
-pub struct SearchTables {
-    pub transposition_table: Arc<TranspositionTable>,
-    pub search_killers: Vec<[ChessMove; 2]>,
-    pub search_history: [[u64; 64]; 12],
-}
-
-pub struct SearchParams {
-    pub max_time: Option<Duration>,
-    pub max_nodes: Option<u64>,
-    pub max_depth: Option<u16>,
-    pub stop: Arc<AtomicBool>, // TODO: Support for Mate Search
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct SearchStats {
-    pub start_time: Instant, // When we started the search
-    pub depth: u16,          // Search depth
-    pub score: Eval,         // Score in centipawns
-    pub nodes: u64,          // Total count of visited nodes
-    pub leaves: u64,         // Total count of visited leaf nodes
-    pub fh: u64,             // Count of fail-highs (beta cut off)
-    pub fhf: u64,            // Count of fail-highs at the first move
-    pub bestmove: ChessMove, // The best move
-    pub pv: Vec<ChessMove>,  // Principle Variation Line
-    pub stop: bool,          // Should the search stop ASAP
-}
-
-impl Default for SearchStats {
-    fn default() -> Self {
-        Self {
-            start_time: Instant::now(),
-            depth: 0,
-            score: Eval::DRAW,
-            nodes: 0,
-            leaves: 0,
-            fh: 0,
-            fhf: 0,
-            bestmove: ChessMove::default(),
-            pv: vec![],
-            stop: false,
-        }
+        config.params.stop.store(true, Ordering::Relaxed);
     }
 }
 
