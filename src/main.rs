@@ -83,18 +83,18 @@ fn setup_position(board: &mut Board, pos: uci::Position, moves: &[String]) {
 
     *board = Board::from_fen(fen).unwrap();
 
-    'outer: for m in moves {
+    for move_str in moves {
         let mut movelist = MoveList::new();
         board.generate_all_moves(&mut movelist);
+        let chess_move = movelist.into_iter().find(|cm| format!("{cm}") == *move_str);
 
-        for bm in movelist {
-            if (format!("{bm}")) == *m {
-                board.make_move(bm);
-                continue 'outer;
-            }
+        if let Some(cm) = chess_move {
+            board.make_move(cm);
+        } else {
+            *board = Board::from_fen(FEN_STARTPOS).unwrap();
+            println!("Invalid move `{move_str}`. Setting up `startpos` instead.");
+            break;
         }
-
-        panic!("Invalid move");
     }
 
     board.ply = 0;
