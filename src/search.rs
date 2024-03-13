@@ -178,7 +178,7 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
 }
 
 struct IterativeDeepening {
-    root_eval: Eval,
+    last_eval: Eval,
     stats: SearchStats,
     params: SearchParams,
 }
@@ -187,7 +187,7 @@ impl IterativeDeepening {
     fn init(board: &mut Board, params: SearchParams, tables: &mut SearchTables) -> Self {
         let mut stats = SearchStats::default();
 
-        let root_eval = alpha_beta(
+        let last_eval = alpha_beta(
             -Eval::MAX,
             Eval::MAX,
             1,
@@ -199,7 +199,7 @@ impl IterativeDeepening {
         );
 
         Self {
-            root_eval,
+            last_eval,
             stats,
             params,
         }
@@ -212,8 +212,8 @@ impl IterativeDeepening {
             return None;
         };
 
-        let mut alpha = self.root_eval - 50_i16;
-        let mut beta = self.root_eval + 50_i16;
+        let mut alpha = self.last_eval - PieceType::Pawn.value();
+        let mut beta = self.last_eval + PieceType::Pawn.value();
         let mut loop_count = 0;
 
         let score = loop {
@@ -236,14 +236,14 @@ impl IterativeDeepening {
                 loop_count += 1;
                 alpha = alpha
                     .inner()
-                    .checked_sub(10_i16 * 4_i16.pow(loop_count) + 50)
+                    .checked_sub(10_i16 * 4_i16.pow(loop_count) + PieceType::Pawn.value())
                     .map(Into::into)
                     .unwrap_or(-Eval::MAX);
             } else if score >= beta {
                 loop_count += 1;
                 beta = beta
                     .inner()
-                    .checked_add(10_i16 * 4_i16.pow(loop_count) + 50)
+                    .checked_add(10_i16 * 4_i16.pow(loop_count) + PieceType::Pawn.value())
                     .map(Into::into)
                     .unwrap_or(Eval::MAX);
             } else {
@@ -251,6 +251,7 @@ impl IterativeDeepening {
             }
         };
 
+        self.last_eval = score;
         self.stats.score = score;
         self.stats.pv = pv_line(&tables.transposition_table, board);
         self.stats.bestmove = self.stats.pv.get(0).copied().unwrap_or_default();
