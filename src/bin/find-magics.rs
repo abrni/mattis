@@ -5,13 +5,13 @@ use mattis::{
     board::movegen::{BISHOP_MAGIC_BIT_COUNT, BISHOP_MAGIC_MASKS, ROOK_MAGIC_BIT_COUNT, ROOK_MAGIC_MASKS},
     types::Square,
 };
-use num_enum::FromPrimitive;
+use num_enum::TryFromPrimitive;
 use rand::{thread_rng, Rng};
 
 fn main() {
     let mut rook_file = std::fs::File::create("./rook_magics").unwrap();
     for square in 0..64 {
-        let square = Square::from_primitive(square);
+        let square = Square::try_from_primitive(square).unwrap();
 
         let rmagic = loop {
             if let Some(m) = find_magic(square, ROOK_MAGIC_BIT_COUNT[square as usize], false) {
@@ -25,7 +25,7 @@ fn main() {
 
     let mut bishop_file = std::fs::File::create("./bishop_magics").unwrap();
     for square in 0..64 {
-        let square = Square::from_primitive(square);
+        let square = Square::try_from_primitive(square).unwrap();
 
         let bmagic = loop {
             if let Some(m) = find_magic(square, BISHOP_MAGIC_BIT_COUNT[square as usize], true) {
@@ -101,7 +101,7 @@ fn index_to_bb(index: usize, bits: u32, mut mask: BitBoard) -> BitBoard {
     let mut result = 0;
 
     for i in 0..bits {
-        let j: usize = mask.pop().into();
+        let j: usize = mask.pop().unwrap().into();
 
         if (index & (1 << i)) > 0 {
             result |= 1 << j;
@@ -114,8 +114,8 @@ fn index_to_bb(index: usize, bits: u32, mut mask: BitBoard) -> BitBoard {
 fn ratt(square: Square, block: BitBoard) -> BitBoard {
     let mut result = 0;
     let block = block.to_u64();
-    let rank: u8 = square.rank().unwrap().into();
-    let file: u8 = square.file().unwrap().into();
+    let rank: u8 = square.rank().into();
+    let file: u8 = square.file().into();
 
     for r in rank + 1..=7 {
         result |= 1 << (file + r * 8);
@@ -151,8 +151,8 @@ fn ratt(square: Square, block: BitBoard) -> BitBoard {
 fn batt(square: Square, block: BitBoard) -> BitBoard {
     let mut result = 0;
     let block = block.to_u64();
-    let rank: u8 = square.rank().unwrap().into();
-    let file: u8 = square.file().unwrap().into();
+    let rank: u8 = square.rank().into();
+    let file: u8 = square.file().into();
 
     for (r, f) in (rank + 1..=7).zip(file + 1..=7) {
         result |= 1 << (f + r * 8);

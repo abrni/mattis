@@ -8,7 +8,7 @@ use crate::{
     types::{CastlePerm, CastlePerms, Color, File, Piece, PieceType, Rank, Square},
 };
 use lazy_static::lazy_static;
-use num_enum::{FromPrimitive, TryFromPrimitive};
+use num_enum::TryFromPrimitive;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::{fmt::Display, sync::Mutex};
 use thiserror::Error;
@@ -96,7 +96,7 @@ impl Board {
     pub fn new() -> Self {
         let mut this = Self {
             pieces: [None; 64],
-            king_square: [Square::Invalid; 2],
+            king_square: [Square::A1; 2],
             color: Color::White,
             en_passant: None,
             fifty_move: 0,
@@ -224,7 +224,7 @@ impl Board {
         self.material = [0; 2];
 
         for i in 0..64 {
-            let square = Square::from_primitive(i);
+            let square = Square::try_from_primitive(i).unwrap();
             let piece = self.pieces[square];
 
             if piece.is_none() {
@@ -302,8 +302,8 @@ impl Board {
         fen.push(' ');
 
         if let Some(sq) = self.en_passant {
-            fen.push(sq.file().unwrap().to_char()); // safe, because en passant square is never an invalid square
-            fen.push(sq.rank().unwrap().to_char());
+            fen.push(sq.file().to_char());
+            fen.push(sq.rank().to_char());
         } else {
             fen.push('-');
         }
@@ -324,10 +324,6 @@ impl Board {
     }
 
     pub fn is_square_attacked(&self, square: Square, color: Color) -> bool {
-        if square == Square::Invalid {
-            return false;
-        }
-
         // attacked by white pawns?
         if color == Color::White {
             let east = self.bitboards[Piece::WhitePawn].shifted_northeast().get(square);
@@ -412,7 +408,7 @@ impl Board {
         let mut check_material = [0; 2];
 
         for i in 0..64 {
-            let square = Square::from_primitive(i);
+            let square = Square::try_from_primitive(i).unwrap();
             let piece = self.pieces[square];
 
             if let Some(piece) = piece {
@@ -444,8 +440,8 @@ impl Board {
 
         if let Some(sq) = self.en_passant {
             assert!(
-                (sq.rank().unwrap() == Rank::R6 && self.color == Color::White)
-                    || (sq.rank().unwrap() == Rank::R3 && self.color == Color::Black)
+                (sq.rank() == Rank::R6 && self.color == Color::White)
+                    || (sq.rank() == Rank::R3 && self.color == Color::Black)
             );
         }
 
@@ -494,12 +490,7 @@ impl Display for Board {
                 6 => write!(f, " * active color: {}", self.color.to_char())?,
                 5 => {
                     if let Some(sq) = self.en_passant {
-                        write!(
-                            f,
-                            " * en passant: {}{}",
-                            sq.file().unwrap().to_char(),
-                            sq.rank().unwrap().to_char()
-                        )?;
+                        write!(f, " * en passant: {}", sq)?;
                     } else {
                         write!(f, " * en passant: -")?;
                     }

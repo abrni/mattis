@@ -1,5 +1,3 @@
-use num_enum::FromPrimitive;
-
 use crate::{
     bitboard::{BitBoard, BISHOP_MOVE_PATTERNS, BORDER, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS, RANK_BITBOARDS},
     chess_move::{ChessMove, ChessMoveBuilder},
@@ -7,6 +5,7 @@ use crate::{
 };
 
 use super::Board;
+use num_enum::TryFromPrimitive;
 
 pub type MoveList = smallvec::SmallVec<[ChessMove; 128]>;
 
@@ -48,9 +47,10 @@ impl Board {
             .intersection(RANK_BITBOARDS[Rank::R4]);
 
         for end in target_squares_single.iter_bit_indices() {
-            let m16 = ChessMove::build().start(end - 8usize).end(end);
+            let start = unsafe { end.add_unchecked(-8) };
+            let m16 = ChessMove::build().start(start).end(end);
 
-            if end.rank().unwrap() == Rank::R8 {
+            if end.rank() == Rank::R8 {
                 insert_promotions(list, m16, Color::White);
             } else {
                 list.push(m16.finish());
@@ -58,13 +58,8 @@ impl Board {
         }
 
         for end in target_squares_double.iter_bit_indices() {
-            list.push(
-                ChessMove::build()
-                    .start(end - 16usize)
-                    .end(end)
-                    .double_pawn_push()
-                    .finish(),
-            );
+            let start = unsafe { end.add_unchecked(-16) };
+            list.push(ChessMove::build().start(start).end(end).double_pawn_push().finish());
         }
     }
 
@@ -77,9 +72,10 @@ impl Board {
             .intersection(RANK_BITBOARDS[Rank::R5]);
 
         for end in target_squares_single.iter_bit_indices() {
-            let m16 = ChessMove::build().start(end + 8usize).end(end);
+            let start = unsafe { end.add_unchecked(8) };
+            let m16 = ChessMove::build().start(start).end(end);
 
-            if end.rank().unwrap() == Rank::R1 {
+            if end.rank() == Rank::R1 {
                 insert_promotions(list, m16, Color::Black);
             } else {
                 list.push(m16.finish());
@@ -87,13 +83,8 @@ impl Board {
         }
 
         for end in target_squares_double.iter_bit_indices() {
-            list.push(
-                ChessMove::build()
-                    .start(end + 16usize)
-                    .end(end)
-                    .double_pawn_push()
-                    .finish(),
-            );
+            let start = unsafe { end.add_unchecked(16) };
+            list.push(ChessMove::build().start(start).end(end).double_pawn_push().finish());
         }
     }
 
@@ -110,9 +101,10 @@ impl Board {
             .intersection(self.bb_all_per_color[Color::Black]);
 
         for end in targets_east.iter_bit_indices() {
-            let m16 = ChessMove::build().start(end - 9usize).end(end).capture();
+            let start = unsafe { end.add_unchecked(-9) };
+            let m16 = ChessMove::build().start(start).end(end).capture();
 
-            if end.rank().unwrap() == Rank::R8 {
+            if end.rank() == Rank::R8 {
                 insert_promotions(list, m16, Color::White);
             } else {
                 list.push(m16.finish());
@@ -124,9 +116,10 @@ impl Board {
             .intersection(self.bb_all_per_color[Color::Black]);
 
         for end in targets_west.iter_bit_indices() {
-            let m16 = ChessMove::build().start(end - 7usize).end(end).capture();
+            let start = unsafe { end.add_unchecked(-7) };
+            let m16 = ChessMove::build().start(start).end(end).capture();
 
-            if end.rank().unwrap() == Rank::R8 {
+            if end.rank() == Rank::R8 {
                 insert_promotions(list, m16, Color::White);
             } else {
                 list.push(m16.finish());
@@ -140,9 +133,10 @@ impl Board {
             .intersection(self.bb_all_per_color[Color::White]);
 
         for end in targets_east.iter_bit_indices() {
-            let m16 = ChessMove::build().start(end + 7usize).end(end).capture();
+            let start = unsafe { end.add_unchecked(7) };
+            let m16 = ChessMove::build().start(start).end(end).capture();
 
-            if end.rank().unwrap() == Rank::R1 {
+            if end.rank() == Rank::R1 {
                 insert_promotions(list, m16, Color::Black);
             } else {
                 list.push(m16.finish());
@@ -154,9 +148,10 @@ impl Board {
             .intersection(self.bb_all_per_color[Color::White]);
 
         for end in targets_west.iter_bit_indices() {
-            let m16 = ChessMove::build().start(end + 9usize).end(end).capture();
+            let start = unsafe { end.add_unchecked(9) };
+            let m16 = ChessMove::build().start(start).end(end).capture();
 
-            if end.rank().unwrap() == Rank::R1 {
+            if end.rank() == Rank::R1 {
                 insert_promotions(list, m16, Color::Black);
             } else {
                 list.push(m16.finish());
@@ -172,34 +167,22 @@ impl Board {
         let mut bb_en_pas = BitBoard::EMPTY;
         bb_en_pas.set(en_pas_sq);
 
-        let mut attacker_east = match self.color {
+        let attacker_east = match self.color {
             Color::White => bb_en_pas.shifted_southeast(),
             Color::Black => bb_en_pas.shifted_northeast(),
         };
 
-        let mut attacker_west = match self.color {
+        let attacker_west = match self.color {
             Color::White => bb_en_pas.shifted_southwest(),
             Color::Black => bb_en_pas.shifted_northwest(),
         };
 
-        if !attacker_west.intersection(self.bitboards[attacker]).is_empty() {
-            list.push(
-                ChessMove::build()
-                    .start(attacker_west.pop())
-                    .end(en_pas_sq)
-                    .en_passant()
-                    .finish(),
-            );
+        if let Some(start) = attacker_west.intersection(self.bitboards[attacker]).pop() {
+            list.push(ChessMove::build().start(start).end(en_pas_sq).en_passant().finish());
         }
 
-        if !attacker_east.intersection(self.bitboards[attacker]).is_empty() {
-            list.push(
-                ChessMove::build()
-                    .start(attacker_east.pop())
-                    .end(en_pas_sq)
-                    .en_passant()
-                    .finish(),
-            );
+        if let Some(start) = attacker_east.intersection(self.bitboards[attacker]).pop() {
+            list.push(ChessMove::build().start(start).end(en_pas_sq).en_passant().finish());
         }
     }
 
@@ -415,9 +398,9 @@ lazy_static::lazy_static! {
 
         for (i, m) in boards.iter_mut().enumerate() {
             let mut result = BitBoard::EMPTY;
-            let square = Square::from_primitive(i);
-            let rank = square.rank().unwrap();
-            let file = square.file().unwrap();
+            let square = Square::try_from_primitive(i as u8).unwrap();
+            let rank = square.rank();
+            let file = square.file();
 
             if let Some(r) = rank.up() {
                 for r in Rank::range_inclusive(r, Rank::R7) {
@@ -459,15 +442,15 @@ lazy_static::lazy_static! {
         masks
     };
 
-   pub  static ref ROOK_ATTACK_TABLE: Vec<Vec<BitBoard>> = {
+   pub static ref ROOK_ATTACK_TABLE: Vec<Vec<BitBoard>> = {
         let mut table = vec![vec![]; 64];
 
         for square_num in 0..64 {
-            let square = Square::from_primitive(square_num);
+            let square = Square::try_from_primitive(square_num as u8).unwrap();
             let mask = ROOK_MAGIC_MASKS[square_num];
             let permutations = 1 << mask.bit_count();
-            let file = square.file().unwrap();
-            let rank = square.rank().unwrap();
+            let file = square.file();
+            let rank = square.rank();
             table[square].resize(1 << ROOK_MAGIC_BIT_COUNT[square] as usize, BitBoard::EMPTY);
 
             for i in 0..permutations {
@@ -515,11 +498,11 @@ lazy_static::lazy_static! {
         let mut table = vec![vec![]; 64];
 
         for square_num in 0..64 {
-            let square = Square::from_primitive(square_num);
+            let square = Square::try_from_primitive(square_num as u8).unwrap();
             let mask = BISHOP_MAGIC_MASKS[square_num];
             let permutations = 1 << mask.bit_count();
-            let file = square.file().unwrap();
-            let rank = square.rank().unwrap();
+            let file = square.file();
+            let rank = square.rank();
             table[square].resize(1 << BISHOP_MAGIC_BIT_COUNT[square] as usize, BitBoard::EMPTY);
 
             for i in 0..permutations {
@@ -575,7 +558,7 @@ fn blocker_permutation(mut i: usize, mut mask: BitBoard) -> BitBoard {
 
     while i != 0 {
         if (i & 1) != 0 {
-            let idx = Square::from_primitive(mask.to_u64().trailing_zeros() as usize);
+            let idx = Square::try_from_primitive(mask.to_u64().trailing_zeros() as u8).unwrap();
             blockers.set(idx);
         }
 

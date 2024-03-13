@@ -1,24 +1,35 @@
-use num_enum::{FromPrimitive, IntoPrimitive, TryFromPrimitive, UnsafeFromPrimitive};
+use num_enum::{IntoPrimitive, TryFromPrimitive, UnsafeFromPrimitive};
 use std::{
     fmt::Display,
-    ops::{Add, AddAssign, Index, IndexMut, Sub, SubAssign},
+    ops::{Add, Index, IndexMut, Sub},
 };
 
+macro_rules! impl_to_usize {
+    ($type:ty, $repr:ty) => {
+        impl From<$type> for usize {
+            fn from(value: $type) -> usize {
+                let value = <$repr>::from(value);
+                value as usize
+            }
+        }
+    };
+}
+
 macro_rules! impl_array_indexing {
-    ($type:ty, $repr:ty, $len:expr) => {
+    ($type:ty,  $len:expr) => {
         impl<T> Index<$type> for [T; $len] {
             type Output = T;
 
             fn index(&self, index: $type) -> &Self::Output {
-                let index: $repr = index.into();
-                &self[index as usize]
+                let index = usize::from(index);
+                &self[index]
             }
         }
 
         impl<T> IndexMut<$type> for [T; $len] {
             fn index_mut(&mut self, index: $type) -> &mut Self::Output {
-                let index: $repr = index.into();
-                &mut self[index as usize]
+                let index = usize::from(index);
+                &mut self[index]
             }
         }
     };
@@ -27,7 +38,7 @@ macro_rules! impl_array_indexing {
 macro_rules! impl_iterators {
     ($type:ty, $itertype:ident, $repr:ty) => {
         pub struct $itertype {
-            range: std::ops::RangeInclusive<u8>,
+            range: std::ops::RangeInclusive<$repr>,
         }
 
         impl Iterator for $itertype {
@@ -56,8 +67,8 @@ macro_rules! impl_iterators {
 
         impl $type {
             pub fn range_inclusive(a: Self, b: Self) -> $itertype {
-                let a: u8 = a.into();
-                let b: u8 = b.into();
+                let a = <$repr>::from(a);
+                let b = <$repr>::from(b);
 
                 $itertype { range: a..=b }
             }
@@ -127,7 +138,8 @@ impl PieceType {
     }
 }
 
-impl_array_indexing!(PieceType, u8, 6);
+impl_to_usize!(PieceType, u8);
+impl_array_indexing!(PieceType, 6);
 impl_iterators!(PieceType, PieceTypeIter, u8);
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive, Hash)]
@@ -269,7 +281,8 @@ impl Piece {
     }
 }
 
-impl_array_indexing!(Piece, u8, 12);
+impl_to_usize!(Piece, u8);
+impl_array_indexing!(Piece, 12);
 impl_iterators!(Piece, PieceIter, u8);
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive, Hash)]
@@ -307,8 +320,9 @@ impl Color {
     }
 }
 
-impl_array_indexing!(Color, u8, 2);
-impl_array_indexing!(Color, u8, 3);
+impl_to_usize!(Color, u8);
+impl_array_indexing!(Color, 2);
+impl_array_indexing!(Color, 3);
 impl_iterators!(Color, ColorIter, u8);
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive)]
@@ -384,7 +398,14 @@ impl File {
     }
 }
 
-impl_array_indexing!(File, u8, 8);
+impl Display for File {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.to_char().fmt(f)
+    }
+}
+
+impl_to_usize!(File, u8);
+impl_array_indexing!(File, 8);
 impl_iterators!(File, FileIter, u8);
 
 #[derive(
@@ -476,7 +497,14 @@ impl Rank {
     }
 }
 
-impl_array_indexing!(Rank, u8, 8);
+impl Display for Rank {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.to_char().fmt(f)
+    }
+}
+
+impl_to_usize!(Rank, u8);
+impl_array_indexing!(Rank, 8);
 impl_iterators!(Rank, RankIter, u8);
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive, IntoPrimitive, UnsafeFromPrimitive, Hash)]
@@ -540,8 +568,8 @@ impl CastlePerms {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, IntoPrimitive, Hash)]
-#[repr(usize)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, IntoPrimitive, Hash, UnsafeFromPrimitive, TryFromPrimitive)]
+#[repr(u8)]
 #[rustfmt::skip]
 pub enum Square {
     A1, B1, C1, D1, E1, F1, G1, H1,
@@ -552,154 +580,120 @@ pub enum Square {
     A6, B6, C6, D6, E6, F6, G6, H6,
     A7, B7, C7, D7, E7, F7, G7, H7,
     A8, B8, C8, D8, E8, F8, G8, H8,
-    #[num_enum(default)]
-    Invalid
 }
 
-impl_array_indexing!(Square, usize, 64);
-
-impl FromPrimitive for Square {
-    type Primitive = usize;
-
-    fn from_primitive(number: Self::Primitive) -> Self {
-        if number <= Self::Invalid as usize {
-            unsafe { std::mem::transmute(number) }
-        } else {
-            Self::Invalid
-        }
-    }
-}
+impl_to_usize!(Square, u8);
+impl_array_indexing!(Square, 64);
 
 impl<T> Index<Square> for Vec<T> {
     type Output = T;
 
     fn index(&self, index: Square) -> &Self::Output {
-        let index: usize = index.into();
+        let index = usize::from(index);
         &self[index]
     }
 }
 
 impl<T> IndexMut<Square> for Vec<T> {
     fn index_mut(&mut self, index: Square) -> &mut Self::Output {
-        let index: usize = index.into();
+        let index = usize::from(index);
         &mut self[index]
     }
 }
 
 impl Square {
+    pub const MIN: Self = Self::A1;
+    pub const MAX: Self = Self::H8;
+
     pub fn from_file_rank(file: File, rank: Rank) -> Self {
         let file: u8 = file.into();
         let rank: u8 = rank.into();
         let square = file + rank * 8;
-        Square::from_primitive(square as usize)
+        unsafe { Self::unchecked_transmute_from(square) }
     }
 
-    pub fn file(self) -> Option<File> {
-        if Self::Invalid == self {
-            return None;
-        };
-
-        let sq: usize = self.into();
+    pub fn file(self) -> File {
+        let sq = u8::from(self);
         let file = sq % 8;
-        unsafe { Some(File::unchecked_transmute_from(file as u8)) }
+        unsafe { File::unchecked_transmute_from(file) }
     }
 
-    pub fn rank(self) -> Option<Rank> {
-        if Self::Invalid == self {
-            return None;
-        };
-
-        let sq: usize = self.into();
+    pub fn rank(self) -> Rank {
+        let sq = u8::from(self);
         let rank = sq / 8;
-        unsafe { Some(Rank::unchecked_transmute_from(rank as u8)) }
+        unsafe { Rank::unchecked_transmute_from(rank) }
+    }
+
+    /// # Safety
+    /// Leads to UB, if the result is not in range (0..=64).
+    #[must_use]
+    pub unsafe fn add_unchecked<T>(self, rhs: T) -> Self
+    where
+        T: Into<i8>,
+    {
+        let this = u8::from(self) as i8;
+        let rhs = rhs.into();
+        Self::unchecked_transmute_from((this + rhs) as u8)
+    }
+
+    /// # Safety
+    /// Leads to UB, if the result is not in range (0..=64).
+    #[must_use]
+    pub unsafe fn sub_unchecked<T>(self, rhs: T) -> Self
+    where
+        T: Into<i8>,
+    {
+        let this = u8::from(self) as i8;
+        let rhs = rhs.into();
+        Self::unchecked_transmute_from((this - rhs) as u8)
     }
 }
 
-impl Add<usize> for Square {
-    type Output = Square;
+impl Add<u8> for Square {
+    type Output = Option<Square>;
 
-    fn add(self, rhs: usize) -> Self::Output {
-        let this: usize = self.into();
-        Self::from_primitive(this + rhs)
+    fn add(self, rhs: u8) -> Self::Output {
+        let this = u8::from(self);
+        Self::try_from_primitive(this + rhs).ok()
     }
 }
 
-impl AddAssign<usize> for Square {
-    fn add_assign(&mut self, rhs: usize) {
-        *self = *self + rhs;
+impl Sub<u8> for Square {
+    type Output = Option<Square>;
+
+    fn sub(self, rhs: u8) -> Self::Output {
+        let this = u8::from(self);
+        Self::try_from_primitive(this - rhs).ok()
     }
 }
 
-impl Sub<usize> for Square {
-    type Output = Square;
+impl Add<i8> for Square {
+    type Output = Option<Square>;
 
-    fn sub(self, rhs: usize) -> Self::Output {
-        let this: usize = self.into();
-        Self::from_primitive(this - rhs)
+    fn add(self, rhs: i8) -> Self::Output {
+        let this = u8::from(self) as i8;
+        Self::try_from_primitive((this + rhs) as u8).ok()
     }
 }
 
-impl SubAssign<usize> for Square {
-    fn sub_assign(&mut self, rhs: usize) {
-        *self = *self - rhs;
-    }
-}
+impl Sub<i8> for Square {
+    type Output = Option<Square>;
 
-impl Add<isize> for Square {
-    type Output = Square;
-
-    fn add(self, rhs: isize) -> Self::Output {
-        let this: usize = self.into();
-        Self::from_primitive((this as isize + rhs) as usize)
-    }
-}
-
-impl AddAssign<isize> for Square {
-    fn add_assign(&mut self, rhs: isize) {
-        *self = *self + rhs;
-    }
-}
-
-impl Sub<isize> for Square {
-    type Output = Square;
-
-    fn sub(self, rhs: isize) -> Self::Output {
-        let this: usize = self.into();
-        Self::from_primitive((this as isize - rhs) as usize)
-    }
-}
-
-impl SubAssign<isize> for Square {
-    fn sub_assign(&mut self, rhs: isize) {
-        *self = *self - rhs;
+    fn sub(self, rhs: i8) -> Self::Output {
+        let this = u8::from(self) as i8;
+        Self::try_from_primitive((this - rhs) as u8).ok()
     }
 }
 
 impl Display for Square {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if *self == Self::Invalid {
-            write!(f, "!!")
-        } else {
-            write!(
-                f,
-                "{}{}",
-                self.file().unwrap().to_char(),
-                self.rank().unwrap().to_char()
-            )
-        }
+        write!(f, "{}{}", self.file(), self.rank())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Color, Piece, PieceType, Square};
-
-    #[test]
-    fn square_invalid() {
-        let sq = Square::Invalid;
-        assert_eq!(None, sq.file());
-        assert_eq!(None, sq.rank());
-    }
+    use super::{Color, Piece, PieceType};
 
     #[test]
     fn convert_piece_types() {

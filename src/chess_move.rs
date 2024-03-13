@@ -1,5 +1,5 @@
 use crate::types::{Piece, PieceType, Square};
-use num_enum::FromPrimitive;
+use num_enum::UnsafeFromPrimitive;
 use std::fmt::{Debug, Display};
 
 /// `ChessMove` contains the start and end field of a move and information about castling, piece promotion and captures.
@@ -68,11 +68,11 @@ impl ChessMove {
     }
 
     pub fn start(self) -> Square {
-        Square::from_primitive((self.0 & 0x3F) as usize)
+        unsafe { Square::unchecked_transmute_from((self.0 & 0x3F) as u8) }
     }
 
     pub fn end(self) -> Square {
-        Square::from_primitive(((self.0 & 0xFC0) >> 6) as usize)
+        unsafe { Square::unchecked_transmute_from(((self.0 & 0xFC0) >> 6) as u8) }
     }
 
     pub fn promoted(self) -> Option<PieceType> {
@@ -92,7 +92,7 @@ pub struct ChessMoveBuilder(u16);
 impl ChessMoveBuilder {
     #[must_use]
     pub fn start(mut self, square: Square) -> Self {
-        let square: usize = square.into();
+        let square = u8::from(square);
         self.0 &= !0x3f; // Clear the bits first
         self.0 |= square as u16 & 0x3f; // Set the square
         self
@@ -100,7 +100,7 @@ impl ChessMoveBuilder {
 
     #[must_use]
     pub fn end(mut self, square: Square) -> Self {
-        let square: usize = square.into();
+        let square = u8::from(square);
         self.0 &= !0xFC0; // Clear the bits first
         self.0 |= (square as u16 & 0x3F) << 6; // Set the square
         self
@@ -228,7 +228,7 @@ impl Display for ChessMove {
 mod tests {
     use super::ChessMove;
     use crate::types::*;
-    use num_enum::FromPrimitive;
+    use num_enum::TryFromPrimitive;
 
     #[test]
     fn type_size() {
@@ -260,8 +260,8 @@ mod tests {
                     continue;
                 }
 
-                let start = Square::from_primitive(start);
-                let end = Square::from_primitive(end);
+                let start = Square::try_from_primitive(start).unwrap();
+                let end = Square::try_from_primitive(end).unwrap();
                 let m = ChessMove::build().start(start).end(end).finish();
 
                 assert!(!m.is_nomove());

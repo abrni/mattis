@@ -14,22 +14,20 @@ impl Board {
     ///
     /// Returns `true` if the move was successful and `false` otherwise.
     pub fn make_move(&mut self, m: ChessMove) -> bool {
-        let from = m.start();
-        let to = m.end();
+        let start_square = m.start();
+        let end_square = m.end();
         let color = self.color;
 
         #[cfg(debug_assertions)]
         {
             self.check_board_integrity();
-            assert_ne!(from, Square::Invalid);
-            assert_ne!(to, Square::Invalid);
-            assert!(self.pieces[from].is_some());
+            assert!(self.pieces[start_square].is_some());
         }
 
         let captured = if m.is_en_passant() {
             Some(PieceType::Pawn)
         } else {
-            self.pieces[to].map(Piece::piece_type)
+            self.pieces[end_square].map(Piece::piece_type)
         };
 
         // store old board data in the history table
@@ -43,13 +41,17 @@ impl Board {
         });
 
         if m.is_en_passant() {
-            let dir: isize = if color == Color::White { -8 } else { 8 };
-            let enemy_pawn_square = to + dir;
+            let dir: i8 = if color == Color::White { -8 } else { 8 };
+            let enemy_pawn_square = unsafe { end_square.add_unchecked(dir) };
             self.clear_piece(enemy_pawn_square); // remove the captured pawn
         } else if m.is_queenside_castle() {
-            self.move_piece(from - 4usize, from - 1usize); // move the rook
+            let rook_from = unsafe { start_square.add_unchecked(-4) };
+            let rook_to = unsafe { start_square.add_unchecked(-1) };
+            self.move_piece(rook_from, rook_to); // Move the rook
         } else if m.is_kingside_castle() {
-            self.move_piece(from + 3usize, from + 1usize); // move the rook
+            let rook_from = unsafe { start_square.add_unchecked(3) };
+            let rook_to = unsafe { start_square.add_unchecked(1) };
+            self.move_piece(rook_from, rook_to); // Move the rook
         }
 
         // remove the en passant square and hash it out if necessary
@@ -59,7 +61,8 @@ impl Board {
 
         // update castling permitions and update hash accordingly
         self.position_key ^= CASTLE_KEYS[self.castle_perms.as_u8() as usize];
-        let castle_perms = self.castle_perms.as_u8() & CASTLE_PERM_MODIFIERS[from] & CASTLE_PERM_MODIFIERS[to];
+        let castle_perms =
+            self.castle_perms.as_u8() & CASTLE_PERM_MODIFIERS[start_square] & CASTLE_PERM_MODIFIERS[end_square];
         self.castle_perms = CastlePerms::from_u8(castle_perms);
         self.position_key ^= CASTLE_KEYS[self.castle_perms.as_u8() as usize];
 
@@ -69,34 +72,35 @@ impl Board {
 
         // remove any captured pieces and update fifty move counter accordingly
         if m.is_capture() && !m.is_en_passant() {
-            self.clear_piece(to);
+            self.clear_piece(end_square);
             self.fifty_move = 0;
         }
 
         // a pawn move resets the fifty move counter
-        if let Some(Piece::WhitePawn | Piece::BlackPawn) = self.pieces[from] {
+        if let Some(Piece::WhitePawn | Piece::BlackPawn) = self.pieces[start_square] {
             self.fifty_move = 0;
         }
 
         // set en passant square and update hash, if the move is a double pawn push
         if m.is_doube_pawn_push() {
-            let dir: isize = if color == Color::White { 8 } else { -8 };
-            self.en_passant = Some(from + dir);
-            self.position_key ^= EN_PASSANT_KEYS[from + dir];
+            let dir: i8 = if color == Color::White { 8 } else { -8 };
+            let en_pas = unsafe { start_square.add_unchecked(dir) };
+            self.en_passant = Some(en_pas);
+            self.position_key ^= EN_PASSANT_KEYS[en_pas];
         }
 
         // do the actual move
-        self.move_piece(from, to);
+        self.move_piece(start_square, end_square);
 
         // if the move is a promotion, switch the piece
         if let Some(promoted) = m.promoted() {
-            self.clear_piece(to);
-            self.add_piece(to, Piece::new(promoted, color));
+            self.clear_piece(end_square);
+            self.add_piece(end_square, Piece::new(promoted, color));
         }
 
         // update the king square, if the move was a king move
-        if let Some(Piece::WhiteKing | Piece::BlackKing) = self.pieces[to] {
-            self.king_square[color] = to;
+        if let Some(Piece::WhiteKing | Piece::BlackKing) = self.pieces[end_square] {
+            self.king_square[color] = end_square;
         }
 
         self.color = self.color.flipped();
@@ -147,14 +151,18 @@ impl Board {
 
         if his.move16.is_en_passant() {
             let enemy_pawn = Piece::new(PieceType::Pawn, self.color.flipped());
-            let dir: isize = if self.color == Color::White { -8 } else { 8 };
+            let dir: i8 = if self.color == Color::White { -8 } else { 8 };
 
-            let enemy_pawn_square = to + dir;
+            let enemy_pawn_square = unsafe { to.add_unchecked(dir) };
             self.add_piece(enemy_pawn_square, enemy_pawn); // add the captured pawn back in
         } else if his.move16.is_queenside_castle() {
-            self.move_piece(from - 1usize, from - 4usize); // move the rook back
+            let rook_from = unsafe { from.add_unchecked(-1) };
+            let rook_to = unsafe { from.add_unchecked(-4) };
+            self.move_piece(rook_from, rook_to); // move the rook back
         } else if his.move16.is_kingside_castle() {
-            self.move_piece(from + 1usize, from + 3usize); // move the rook back
+            let rook_from = unsafe { from.add_unchecked(1) };
+            let rook_to = unsafe { from.add_unchecked(3) };
+            self.move_piece(rook_from, rook_to); // move the rook back
         }
 
         // move the piece back
@@ -242,7 +250,6 @@ impl Board {
     }
 
     fn clear_piece(&mut self, square: Square) {
-        debug_assert_ne!(square, Square::Invalid);
         let piece = self.pieces[square].take().unwrap();
         let color = piece.color();
 
@@ -263,7 +270,6 @@ impl Board {
     }
 
     fn add_piece(&mut self, square: Square, piece: Piece) {
-        debug_assert_ne!(square, Square::Invalid);
         debug_assert_eq!(self.pieces[square], None);
         let color = piece.color();
 
@@ -285,9 +291,6 @@ impl Board {
     }
 
     fn move_piece(&mut self, from: Square, to: Square) {
-        debug_assert_ne!(from, Square::Invalid);
-        debug_assert_ne!(to, Square::Invalid);
-
         let piece = self.pieces[from].take().unwrap();
         let color = piece.color();
         self.pieces[to] = Some(piece);
