@@ -31,6 +31,31 @@ pub struct SearchParams {
     allow_null_pruning: bool,
 }
 
+impl SearchParams {
+    fn new(go: uci::Go, color: Color, allow_null_pruning: bool, stop: Arc<AtomicBool>) -> Self {
+        let (time, inc) = match color {
+            Color::White => (go.wtime, go.winc),
+            Color::Black => (go.btime, go.binc),
+        };
+
+        let movestogo = go.movestogo.unwrap_or(30) as f64;
+        let (time, inc) = (time.or(go.movetime), inc.unwrap_or(0) as f64);
+
+        let max_time = time
+            .map(|t| t as f64)
+            .map(|t| (t + (movestogo * inc)) / (movestogo / 3.0 * 2.0) - inc)
+            .map(|t| Duration::from_micros((t * 1000.0) as u64));
+
+        SearchParams {
+            max_time,
+            max_nodes: go.nodes.map(|n| n as u64),
+            max_depth: go.depth.map(|d| d as u16),
+            stop,
+            allow_null_pruning,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SearchStats {
     pub start_time: Instant, // When we started the search
@@ -92,35 +117,15 @@ pub struct SearchConfig<'a> {
 }
 
 pub fn run_search(config: SearchConfig) -> KillSwitch {
-    let go = config.go;
-
     let switch = Arc::new(AtomicBool::new(false));
-
-    let (time, inc) = match config.board.color {
-        Color::White => (go.wtime, go.winc),
-        Color::Black => (go.btime, go.binc),
-    };
-
-    let movestogo = go.movestogo.unwrap_or(30) as f64;
-    let (time, inc) = (time.or(go.movetime), inc.unwrap_or(0) as f64);
-
-    let max_time = time
-        .map(|t| t as f64)
-        .map(|t| (t + (movestogo * inc)) / (movestogo / 3.0 * 2.0) - inc)
-        .map(|t| Duration::from_micros((t * 1000.0) as u64));
+    let params = SearchParams::new(config.go, config.board.color, config.allow_null_pruning, switch.clone());
 
     let join_handles: Vec<JoinHandle<()>> = (0..config.thread_count)
         .map(|i| {
             let thread_config = ThreadConfig {
                 tp_table: Arc::clone(&config.tp_table),
                 thread_num: i,
-                params: SearchParams {
-                    max_time,
-                    max_nodes: go.nodes.map(|n| n as u64),
-                    max_depth: go.depth.map(|d| d as u16),
-                    stop: Arc::clone(&switch),
-                    allow_null_pruning: config.allow_null_pruning,
-                },
+                params: params.clone(),
             };
 
             let board = config.board.clone();
