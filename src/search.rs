@@ -169,31 +169,26 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
         search_history: [[0; 64]; 12],
     };
 
-    let start_depth = u16::min(config.thread_num as u16, config.params.max_depth.unwrap_or(u16::MAX));
+    if config.thread_num == 0 {
+        let mut bestmove = ChessMove::default();
+        let mut iterative_deepening = IterativeDeepening::new(config.params.clone(), config.expected_eval, 1);
 
-    let mut bestmove = ChessMove::default();
-    // let mut iterative_deepening = IterativeDeepening::init(&mut board, config.params.clone(), &mut search_tables);
-    let mut iterative_deepening = IterativeDeepening::new(config.params.clone(), config.expected_eval, start_depth);
+        while let Some(stats) = iterative_deepening.next_depth(&mut board, &mut search_tables) {
+            bestmove = stats.bestmove;
 
-    while let Some(stats) = iterative_deepening.next_depth(&mut board, &mut search_tables) {
-        bestmove = stats.bestmove;
+            let info = EngineMessage::Info(uci::Info {
+                depth: Some(stats.depth as u32),
+                nodes: Some(stats.nodes as u32),
+                pv: stats.pv.into_iter().map(|m| format!("{m}")).collect(),
+                // FIXME: Mate score can be off by 1 at low depths,
+                // because the score comes straight from the hashtable which stored the entry one move ago.
+                score: Some(uci::Score(stats.score)),
+                ..Default::default()
+            });
 
-        let info = EngineMessage::Info(uci::Info {
-            depth: Some(stats.depth as u32),
-            nodes: Some(stats.nodes as u32),
-            pv: stats.pv.into_iter().map(|m| format!("{m}")).collect(),
-            // FIXME: Mate score can be off by 1 at low depths,
-            // because the score comes straight from the hashtable which stored the entry one move ago.
-            score: Some(uci::Score(stats.score)),
-            ..Default::default()
-        });
-
-        if config.thread_num == 0 {
             println!("{info}");
         }
-    }
 
-    if config.thread_num == 0 {
         let bestmove = EngineMessage::Bestmove {
             move_: format!("{bestmove}"),
             ponder: None,
@@ -201,6 +196,16 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
 
         println!("{bestmove}");
         config.params.stop.store(true, Ordering::Relaxed);
+    } else {
+        let start_depth = u16::min(config.thread_num as u16, config.params.max_depth.unwrap_or(u16::MAX));
+        loop {
+            let mut iterative_deepening =
+                IterativeDeepening::new(config.params.clone(), config.expected_eval, start_depth);
+            while iterative_deepening.next_depth(&mut board, &mut search_tables).is_some() {}
+            if config.params.stop.load(Ordering::Relaxed) {
+                break;
+            }
+        }
     }
 }
 
