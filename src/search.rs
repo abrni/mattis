@@ -120,12 +120,31 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
     let switch = Arc::new(AtomicBool::new(false));
     let params = SearchParams::new(config.go, config.board.color, config.allow_null_pruning, switch.clone());
 
+    let mut search_tables = SearchTables {
+        transposition_table: Arc::clone(&config.tp_table),
+        search_killers: vec![[ChessMove::default(); 2]; 1024],
+        search_history: [[0; 64]; 12],
+    };
+
+    let mut stats = SearchStats::default();
+    let expected_eval = alpha_beta(
+        -Eval::MAX,
+        Eval::MAX,
+        1,
+        &mut config.board.clone(),
+        &params,
+        &mut stats,
+        &mut search_tables,
+        false,
+    );
+
     let join_handles: Vec<JoinHandle<()>> = (0..config.thread_count)
         .map(|i| {
             let thread_config = ThreadConfig {
                 tp_table: Arc::clone(&config.tp_table),
                 thread_num: i,
                 params: params.clone(),
+                expected_eval,
             };
 
             let board = config.board.clone();
@@ -140,6 +159,7 @@ struct ThreadConfig {
     tp_table: Arc<TranspositionTable>,
     thread_num: u32,
     params: SearchParams,
+    expected_eval: Eval,
 }
 
 fn search_thread(config: ThreadConfig, mut board: Board) {
@@ -149,8 +169,11 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
         search_history: [[0; 64]; 12],
     };
 
+    let start_depth = u16::min(config.thread_num as u16, config.params.max_depth.unwrap_or(u16::MAX));
+
     let mut bestmove = ChessMove::default();
-    let mut iterative_deepening = IterativeDeepening::init(&mut board, config.params.clone(), &mut search_tables);
+    // let mut iterative_deepening = IterativeDeepening::init(&mut board, config.params.clone(), &mut search_tables);
+    let mut iterative_deepening = IterativeDeepening::new(config.params.clone(), config.expected_eval, start_depth);
 
     while let Some(stats) = iterative_deepening.next_depth(&mut board, &mut search_tables) {
         bestmove = stats.bestmove;
@@ -167,7 +190,6 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
 
         if config.thread_num == 0 {
             println!("{info}");
-            // println!("Ordering: {:.2}", stats.fhf as f64 / stats.fh as f64);
         }
     }
 
@@ -189,22 +211,14 @@ struct IterativeDeepening {
 }
 
 impl IterativeDeepening {
-    fn init(board: &mut Board, params: SearchParams, tables: &mut SearchTables) -> Self {
-        let mut stats = SearchStats::default();
-
-        let last_eval = alpha_beta(
-            -Eval::MAX,
-            Eval::MAX,
-            1,
-            board,
-            &params,
-            &mut stats,
-            tables,
-            params.allow_null_pruning,
-        );
+    fn new(params: SearchParams, expected_eval: Eval, start_depth: u16) -> Self {
+        let stats = SearchStats {
+            depth: start_depth.saturating_sub(1),
+            ..Default::default()
+        };
 
         Self {
-            last_eval,
+            last_eval: expected_eval,
             stats,
             params,
         }
@@ -230,7 +244,7 @@ impl IterativeDeepening {
                 &self.params,
                 &mut self.stats,
                 tables,
-                true,
+                self.params.allow_null_pruning,
             );
 
             if self.stats.stop {
