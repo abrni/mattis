@@ -3,7 +3,7 @@ use crate::{
     chess_move::ChessMove,
     eval::{evaluation, Eval},
     hashtable::{HEKind, Probe, TranspositionTable},
-    time_man::Limits,
+    time_man::TimeMan,
     types::{Piece, PieceType},
     uci::{self, EngineMessage},
 };
@@ -18,7 +18,7 @@ use std::{
 };
 
 struct ABContext {
-    limits: Limits,
+    time_man: TimeMan,
     stats: SearchStats,
     transposition_table: Arc<TranspositionTable>,
     search_killers: Vec<[ChessMove; 2]>,
@@ -87,11 +87,10 @@ pub struct SearchConfig<'a> {
 }
 
 pub fn run_search(config: SearchConfig) -> KillSwitch {
-    let stop = Arc::new(AtomicBool::new(false));
-    let params = Limits::new(config.go, config.board.color, stop.clone());
+    let time_man = TimeMan::new(config.go, config.board.color);
 
     let mut ctx = ABContext {
-        limits: params.clone(),
+        time_man: time_man.clone(),
         stats: SearchStats::default(),
         transposition_table: Arc::clone(&config.tp_table),
         search_killers: vec![[ChessMove::default(); 2]; 1024],
@@ -113,7 +112,7 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
             let thread_config = ThreadConfig {
                 tp_table: Arc::clone(&config.tp_table),
                 thread_num: i,
-                params: params.clone(),
+                time_man: time_man.clone(),
                 expected_eval,
                 allow_null_pruning: config.allow_null_pruning,
             };
@@ -124,7 +123,7 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
         .collect();
 
     KillSwitch {
-        switch: stop,
+        switch: time_man.get_stop(),
         join_handles,
     }
 }
@@ -132,14 +131,14 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
 struct ThreadConfig {
     tp_table: Arc<TranspositionTable>,
     thread_num: u32,
-    params: Limits,
+    time_man: TimeMan,
     expected_eval: Eval,
     allow_null_pruning: bool,
 }
 
 fn search_thread(config: ThreadConfig, mut board: Board) {
     let mut ctx = ABContext {
-        limits: config.params,
+        time_man: config.time_man,
         stats: SearchStats::default(),
         transposition_table: config.tp_table,
         search_killers: vec![[ChessMove::default(); 2]; 1024],
@@ -173,13 +172,13 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
         };
 
         println!("{bestmove}");
-        ctx.limits.force_stop();
+        ctx.time_man.force_stop();
     } else {
-        let start_depth = u16::min(config.thread_num as u16, ctx.limits.depth().unwrap_or(u16::MAX));
+        let start_depth = u16::min(config.thread_num as u16, ctx.time_man.depth().unwrap_or(u16::MAX));
         loop {
             let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, start_depth);
             while iterative_deepening.next_depth(&mut board, &mut ctx).is_some() {}
-            if ctx.limits.check_stop(&ctx.stats, false) {
+            if ctx.time_man.check_stop(&ctx.stats, false) {
                 break;
             }
         }
@@ -202,7 +201,7 @@ impl IterativeDeepening {
     fn next_depth(&mut self, board: &mut Board, ctx: &mut ABContext) -> Option<SearchStats> {
         ctx.stats.depth = self.next_depth;
 
-        if ctx.limits.check_stop(&ctx.stats, false) {
+        if ctx.time_man.check_stop(&ctx.stats, false) {
             return None;
         };
 
@@ -330,7 +329,7 @@ fn alpha_beta(
 ) -> Eval {
     // We frequently check, if the search should stop
     // (e.g. because of time running out or a gui command).
-    if ctx.limits.check_stop(&ctx.stats, true) {
+    if ctx.time_man.check_stop(&ctx.stats, true) {
         return Eval::DRAW;
     }
 
@@ -516,7 +515,7 @@ fn quiescence(mut alpha: Eval, beta: Eval, board: &mut Board, ctx: &mut ABContex
         let score = -quiescence(-beta, -alpha, board, ctx);
         board.take_move();
 
-        if ctx.limits.check_stop(&ctx.stats, true) {
+        if ctx.time_man.check_stop(&ctx.stats, true) {
             return Eval::DRAW;
         }
 

@@ -8,7 +8,7 @@ use std::{
 };
 
 #[derive(Debug, Clone)]
-pub struct Limits {
+pub struct TimeMan {
     time: Option<Duration>,
     nodes: Option<u64>,
     depth: Option<u16>,
@@ -16,8 +16,8 @@ pub struct Limits {
     cached_stop: bool,
 }
 
-impl Limits {
-    pub fn new(go: uci::Go, color: Color, stop: Arc<AtomicBool>) -> Self {
+impl TimeMan {
+    pub fn new(go: uci::Go, color: Color) -> Self {
         let (time, inc) = match color {
             Color::White => (go.wtime, go.winc),
             Color::Black => (go.btime, go.binc),
@@ -31,15 +31,29 @@ impl Limits {
             .map(|t| (t + (movestogo * inc)) / (movestogo / 3.0 * 2.0) - inc)
             .map(|t| Duration::from_micros((t * 1000.0) as u64));
 
-        let cached_stop = stop.load(Ordering::Relaxed);
-
-        Limits {
+        TimeMan {
             time: max_time,
             nodes: go.nodes.map(|n| n as u64),
             depth: go.depth.map(|d| d as u16),
-            stop,
-            cached_stop,
+            stop: Arc::new(AtomicBool::new(false)),
+            cached_stop: false,
         }
+    }
+
+    pub fn nodes(&self) -> Option<u64> {
+        self.nodes
+    }
+
+    pub fn time(&self) -> Option<Duration> {
+        self.time
+    }
+
+    pub fn depth(&self) -> Option<u16> {
+        self.depth
+    }
+
+    pub fn get_stop(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.stop)
     }
 
     pub fn check_stop(&mut self, stats: &SearchStats, use_cached: bool) -> bool {
@@ -63,17 +77,5 @@ impl Limits {
     pub fn force_stop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
         self.cached_stop = true;
-    }
-
-    pub fn nodes(&self) -> Option<u64> {
-        self.nodes
-    }
-
-    pub fn time(&self) -> Option<Duration> {
-        self.time
-    }
-
-    pub fn depth(&self) -> Option<u16> {
-        self.depth
     }
 }
