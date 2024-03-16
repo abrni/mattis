@@ -21,12 +21,11 @@ pub struct SearchParams {
     max_time: Option<Duration>,
     max_nodes: Option<u64>,
     max_depth: Option<u16>,
-    stop: Arc<AtomicBool>, // TODO: Support for Mate Search
     allow_null_pruning: bool,
 }
 
 impl SearchParams {
-    fn new(go: uci::Go, color: Color, allow_null_pruning: bool, stop: Arc<AtomicBool>) -> Self {
+    fn new(go: uci::Go, color: Color, allow_null_pruning: bool) -> Self {
         let (time, inc) = match color {
             Color::White => (go.wtime, go.winc),
             Color::Black => (go.btime, go.binc),
@@ -44,7 +43,6 @@ impl SearchParams {
             max_time,
             max_nodes: go.nodes.map(|n| n as u64),
             max_depth: go.depth.map(|d| d as u16),
-            stop,
             allow_null_pruning,
         }
     }
@@ -111,8 +109,8 @@ pub struct SearchConfig<'a> {
 }
 
 pub fn run_search(config: SearchConfig) -> KillSwitch {
-    let switch = Arc::new(AtomicBool::new(false));
-    let params = SearchParams::new(config.go, config.board.color, config.allow_null_pruning, switch.clone());
+    let stop = Arc::new(AtomicBool::new(false));
+    let params = SearchParams::new(config.go, config.board.color, config.allow_null_pruning);
 
     let mut ctx = ABContext {
         params: params.clone(),
@@ -120,6 +118,7 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
         transposition_table: Arc::clone(&config.tp_table),
         search_killers: vec![[ChessMove::default(); 2]; 1024],
         search_history: [[0; 64]; 12],
+        stop: Arc::clone(&stop),
     };
 
     let allow_null_pruning = ctx.params.allow_null_pruning;
@@ -140,6 +139,7 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
                 thread_num: i,
                 params: params.clone(),
                 expected_eval,
+                stop: Arc::clone(&stop),
             };
 
             let board = config.board.clone();
@@ -147,7 +147,10 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
         })
         .collect();
 
-    KillSwitch { switch, join_handles }
+    KillSwitch {
+        switch: stop,
+        join_handles,
+    }
 }
 
 struct ThreadConfig {
@@ -155,15 +158,17 @@ struct ThreadConfig {
     thread_num: u32,
     params: SearchParams,
     expected_eval: Eval,
+    stop: Arc<AtomicBool>,
 }
 
 fn search_thread(config: ThreadConfig, mut board: Board) {
     let mut ctx = ABContext {
-        params: config.params.clone(),
+        params: config.params,
         stats: SearchStats::default(),
         transposition_table: config.tp_table,
         search_killers: vec![[ChessMove::default(); 2]; 1024],
         search_history: [[0; 64]; 12],
+        stop: config.stop,
     };
 
     if config.thread_num == 0 {
@@ -192,13 +197,13 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
         };
 
         println!("{bestmove}");
-        config.params.stop.store(true, Ordering::Relaxed);
+        ctx.stop.store(true, Ordering::Relaxed);
     } else {
-        let start_depth = u16::min(config.thread_num as u16, config.params.max_depth.unwrap_or(u16::MAX));
+        let start_depth = u16::min(config.thread_num as u16, ctx.params.max_depth.unwrap_or(u16::MAX));
         loop {
             let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, start_depth);
             while iterative_deepening.next_depth(&mut board, &mut ctx).is_some() {}
-            if config.params.stop.load(Ordering::Relaxed) {
+            if ctx.stop.load(Ordering::Relaxed) {
                 break;
             }
         }
@@ -211,6 +216,7 @@ struct ABContext {
     transposition_table: Arc<TranspositionTable>,
     search_killers: Vec<[ChessMove; 2]>,
     search_history: [[u64; 64]; 12],
+    stop: Arc<AtomicBool>,
 }
 
 struct IterativeDeepening {
@@ -227,7 +233,7 @@ impl IterativeDeepening {
     }
 
     fn next_depth(&mut self, board: &mut Board, ctx: &mut ABContext) -> Option<SearchStats> {
-        if should_search_stop(&ctx.params, &ctx.stats) {
+        if should_search_stop(ctx) {
             return None;
         };
 
@@ -345,23 +351,23 @@ fn mvv_lva(attacker: PieceType, victim: PieceType) -> i32 {
     (SCORES[victim] << 3) - SCORES[attacker]
 }
 
-fn should_search_stop(params: &SearchParams, stats: &SearchStats) -> bool {
-    let max_nodes = params.max_nodes.unwrap_or(u64::MAX);
-    if stats.nodes > max_nodes {
+fn should_search_stop(ctx: &ABContext) -> bool {
+    let max_nodes = ctx.params.max_nodes.unwrap_or(u64::MAX);
+    if ctx.stats.nodes > max_nodes {
         return true;
     }
 
-    let max_time = params.max_time.unwrap_or(Duration::MAX);
-    if stats.start_time.elapsed() >= max_time {
+    let max_time = ctx.params.max_time.unwrap_or(Duration::MAX);
+    if ctx.stats.start_time.elapsed() >= max_time {
         return true;
     };
 
-    let max_depth = params.max_depth.unwrap_or(u16::MAX);
-    if stats.depth > max_depth {
+    let max_depth = ctx.params.max_depth.unwrap_or(u16::MAX);
+    if ctx.stats.depth > max_depth {
         return true;
     }
 
-    if params.stop.load(Ordering::Acquire) {
+    if ctx.stop.load(Ordering::Acquire) {
         return true;
     }
 
@@ -384,7 +390,7 @@ fn alpha_beta(
     // We frequently check, if the search should stop
     // (e.g. because of time running out or a gui command).
     if ctx.stats.nodes.trailing_zeros() == 10 {
-        ctx.stats.stop = should_search_stop(&ctx.params, &ctx.stats);
+        ctx.stats.stop = should_search_stop(ctx);
     }
 
     if depth == 0 {
