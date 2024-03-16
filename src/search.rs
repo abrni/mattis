@@ -17,13 +17,13 @@ use std::{
 };
 
 #[derive(Debug, Clone)]
-pub struct SearchParams {
+pub struct Limits {
     max_time: Option<Duration>,
     max_nodes: Option<u64>,
     max_depth: Option<u16>,
 }
 
-impl SearchParams {
+impl Limits {
     fn new(go: uci::Go, color: Color) -> Self {
         let (time, inc) = match color {
             Color::White => (go.wtime, go.winc),
@@ -38,7 +38,7 @@ impl SearchParams {
             .map(|t| (t + (movestogo * inc)) / (movestogo / 3.0 * 2.0) - inc)
             .map(|t| Duration::from_micros((t * 1000.0) as u64));
 
-        SearchParams {
+        Limits {
             max_time,
             max_nodes: go.nodes.map(|n| n as u64),
             max_depth: go.depth.map(|d| d as u16),
@@ -108,7 +108,7 @@ pub struct SearchConfig<'a> {
 
 pub fn run_search(config: SearchConfig) -> KillSwitch {
     let stop = Arc::new(AtomicBool::new(false));
-    let params = SearchParams::new(config.go, config.board.color);
+    let params = Limits::new(config.go, config.board.color);
 
     let mut ctx = ABContext {
         params: params.clone(),
@@ -154,7 +154,7 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
 struct ThreadConfig {
     tp_table: Arc<TranspositionTable>,
     thread_num: u32,
-    params: SearchParams,
+    params: Limits,
     expected_eval: Eval,
     stop: Arc<AtomicBool>,
     allow_null_pruning: bool,
@@ -211,7 +211,7 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
 }
 
 struct ABContext {
-    params: SearchParams,
+    params: Limits,
     stats: SearchStats,
     transposition_table: Arc<TranspositionTable>,
     search_killers: Vec<[ChessMove; 2]>,
