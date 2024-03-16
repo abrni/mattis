@@ -251,14 +251,18 @@ impl IterativeDeepening {
             }
         };
 
-        ctx.stats.score = score;
-        ctx.stats.pv = pv_line(&ctx.transposition_table, board);
-        ctx.stats.bestmove = ctx.stats.pv.get(0).copied().unwrap_or_default();
-
         self.last_eval = score;
         self.next_depth += 1;
 
+        if ctx.time_man.stop(&ctx.stats, false) {
+            None
+        } else {
+            ctx.stats.score = score;
+            ctx.stats.pv = pv_line(&ctx.transposition_table, board);
+            ctx.stats.bestmove = ctx.stats.pv.get(0).copied().unwrap_or_default();
+
         Some(ctx.stats.clone())
+        }
     }
 }
 
