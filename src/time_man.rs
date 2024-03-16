@@ -17,15 +17,24 @@ pub struct TimeMan {
     cached_stop: bool,
 }
 
-pub struct TimeManBuilder {
+pub struct Limits {
     time_limit: Duration,
     node_limit: u64,
     depth_limit: u16,
     stop: Arc<AtomicBool>,
 }
 
-impl TimeManBuilder {
-    pub fn time_limit(&mut self, limit: Option<Duration>) -> &mut Self {
+impl Limits {
+    pub fn new() -> Limits {
+        Limits {
+            time_limit: Duration::MAX,
+            node_limit: u64::MAX,
+            depth_limit: u16::MAX,
+            stop: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn time(&mut self, limit: Option<Duration>) -> &mut Self {
         if let Some(limit) = limit {
             self.time_limit = limit;
         }
@@ -33,7 +42,7 @@ impl TimeManBuilder {
         self
     }
 
-    pub fn node_limit(&mut self, limit: Option<u64>) -> &mut Self {
+    pub fn nodes(&mut self, limit: Option<u64>) -> &mut Self {
         if let Some(limit) = limit {
             self.node_limit = limit;
         }
@@ -41,7 +50,7 @@ impl TimeManBuilder {
         self
     }
 
-    pub fn depth_limit(&mut self, limit: Option<u16>) -> &mut Self {
+    pub fn depth(&mut self, limit: Option<u16>) -> &mut Self {
         if let Some(limit) = limit {
             self.depth_limit = limit;
         }
@@ -61,16 +70,13 @@ impl TimeManBuilder {
     }
 }
 
-impl TimeMan {
-    pub fn build() -> TimeManBuilder {
-        TimeManBuilder {
-            time_limit: Duration::MAX,
-            node_limit: u64::MAX,
-            depth_limit: u16::MAX,
-            stop: Arc::new(AtomicBool::new(false)),
-        }
+impl Default for Limits {
+    fn default() -> Self {
+        Self::new()
     }
+}
 
+impl TimeMan {
     pub fn node_limit(&self) -> u64 {
         self.node_limit
     }

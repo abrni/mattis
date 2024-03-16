@@ -3,7 +3,7 @@ use crate::{
     chess_move::ChessMove,
     eval::{evaluation, Eval},
     hashtable::{HEKind, Probe, TranspositionTable},
-    time_man::TimeMan,
+    time_man::{Limits, TimeMan},
     types::{Color, Piece, PieceType},
     uci::{self, EngineMessage},
 };
@@ -99,10 +99,10 @@ pub fn calculate_time_limit(go: uci::Go, color: Color) -> Option<Duration> {
 }
 
 pub fn run_search(config: SearchConfig) -> KillSwitch {
-    let time_man = TimeMan::build()
-        .depth_limit(config.go.depth.map(|d| d as u16))
-        .node_limit(config.go.nodes.map(|n| n as u64))
-        .time_limit(calculate_time_limit(config.go, config.board.color))
+    let time_man = Limits::new()
+        .depth(config.go.depth.map(|d| d as u16))
+        .nodes(config.go.nodes.map(|n| n as u64))
+        .time(calculate_time_limit(config.go, config.board.color))
         .start_now();
 
     let mut ctx = ABContext {
