@@ -21,11 +21,10 @@ pub struct SearchParams {
     max_time: Option<Duration>,
     max_nodes: Option<u64>,
     max_depth: Option<u16>,
-    allow_null_pruning: bool,
 }
 
 impl SearchParams {
-    fn new(go: uci::Go, color: Color, allow_null_pruning: bool) -> Self {
+    fn new(go: uci::Go, color: Color) -> Self {
         let (time, inc) = match color {
             Color::White => (go.wtime, go.winc),
             Color::Black => (go.btime, go.binc),
@@ -43,7 +42,6 @@ impl SearchParams {
             max_time,
             max_nodes: go.nodes.map(|n| n as u64),
             max_depth: go.depth.map(|d| d as u16),
-            allow_null_pruning,
         }
     }
 }
@@ -110,7 +108,7 @@ pub struct SearchConfig<'a> {
 
 pub fn run_search(config: SearchConfig) -> KillSwitch {
     let stop = Arc::new(AtomicBool::new(false));
-    let params = SearchParams::new(config.go, config.board.color, config.allow_null_pruning);
+    let params = SearchParams::new(config.go, config.board.color);
 
     let mut ctx = ABContext {
         params: params.clone(),
@@ -119,9 +117,8 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
         search_killers: vec![[ChessMove::default(); 2]; 1024],
         search_history: [[0; 64]; 12],
         stop: Arc::clone(&stop),
+        allow_null_pruning: config.allow_null_pruning,
     };
-
-    let allow_null_pruning = ctx.params.allow_null_pruning;
 
     let expected_eval = alpha_beta(
         -Eval::MAX,
@@ -129,7 +126,7 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
         1,
         &mut config.board.clone(),
         &mut ctx,
-        allow_null_pruning,
+        config.allow_null_pruning,
     );
 
     let join_handles: Vec<JoinHandle<()>> = (0..config.thread_count)
@@ -140,6 +137,7 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
                 params: params.clone(),
                 expected_eval,
                 stop: Arc::clone(&stop),
+                allow_null_pruning: config.allow_null_pruning,
             };
 
             let board = config.board.clone();
@@ -159,6 +157,7 @@ struct ThreadConfig {
     params: SearchParams,
     expected_eval: Eval,
     stop: Arc<AtomicBool>,
+    allow_null_pruning: bool,
 }
 
 fn search_thread(config: ThreadConfig, mut board: Board) {
@@ -169,6 +168,7 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
         search_killers: vec![[ChessMove::default(); 2]; 1024],
         search_history: [[0; 64]; 12],
         stop: config.stop,
+        allow_null_pruning: config.allow_null_pruning,
     };
 
     if config.thread_num == 0 {
@@ -217,6 +217,7 @@ struct ABContext {
     search_killers: Vec<[ChessMove; 2]>,
     search_history: [[u64; 64]; 12],
     stop: Arc<AtomicBool>,
+    allow_null_pruning: bool,
 }
 
 struct IterativeDeepening {
@@ -242,7 +243,7 @@ impl IterativeDeepening {
         let mut loop_count = 0;
 
         let score = loop {
-            let score = alpha_beta(alpha, beta, self.next_depth, board, ctx, ctx.params.allow_null_pruning);
+            let score = alpha_beta(alpha, beta, self.next_depth, board, ctx, ctx.allow_null_pruning);
 
             if ctx.stats.stop {
                 return None;
@@ -464,7 +465,7 @@ fn alpha_beta(
         }
 
         legal_moves += 1;
-        let score = -alpha_beta(-beta, -alpha, depth - 1, board, ctx, ctx.params.allow_null_pruning);
+        let score = -alpha_beta(-beta, -alpha, depth - 1, board, ctx, ctx.allow_null_pruning);
         board.take_move();
 
         // Don't use the result of alpha-beta if we entered stop-mode in the meantime. The result is probably nonsense.
