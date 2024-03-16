@@ -3,7 +3,8 @@ use crate::{
     chess_move::ChessMove,
     eval::{evaluation, Eval},
     hashtable::{HEKind, Probe, TranspositionTable},
-    types::{Color, Piece, PieceType},
+    time_man::Limits,
+    types::{Piece, PieceType},
     uci::{self, EngineMessage},
 };
 use std::{
@@ -13,66 +14,16 @@ use std::{
         Arc,
     },
     thread::JoinHandle,
-    time::{Duration, Instant},
+    time::Instant,
 };
 
-#[derive(Debug, Clone)]
-pub struct Limits {
-    max_time: Option<Duration>,
-    max_nodes: Option<u64>,
-    max_depth: Option<u16>,
-    stop: Arc<AtomicBool>,
-    cached_stop: bool,
-}
-
-impl Limits {
-    fn new(go: uci::Go, color: Color, stop: Arc<AtomicBool>) -> Self {
-        let (time, inc) = match color {
-            Color::White => (go.wtime, go.winc),
-            Color::Black => (go.btime, go.binc),
-        };
-
-        let movestogo = go.movestogo.unwrap_or(30) as f64;
-        let (time, inc) = (time.or(go.movetime), inc.unwrap_or(0) as f64);
-
-        let max_time = time
-            .map(|t| t as f64)
-            .map(|t| (t + (movestogo * inc)) / (movestogo / 3.0 * 2.0) - inc)
-            .map(|t| Duration::from_micros((t * 1000.0) as u64));
-
-        let cached_stop = stop.load(Ordering::Relaxed);
-
-        Limits {
-            max_time,
-            max_nodes: go.nodes.map(|n| n as u64),
-            max_depth: go.depth.map(|d| d as u16),
-            stop,
-            cached_stop,
-        }
-    }
-
-    fn check_stop(&mut self, stats: &SearchStats, use_cached: bool) -> bool {
-        if use_cached && stats.nodes.trailing_zeros() < 10 {
-            return self.cached_stop;
-        }
-
-        let max_nodes = self.max_nodes.unwrap_or(u64::MAX);
-        let max_time = self.max_time.unwrap_or(Duration::MAX);
-        let max_depth = self.max_depth.unwrap_or(u16::MAX);
-
-        let should_stop = stats.nodes > max_nodes
-            || stats.start_time.elapsed() >= max_time
-            || stats.depth > max_depth
-            || self.stop.load(Ordering::Relaxed);
-
-        self.cached_stop = should_stop;
-        should_stop
-    }
-
-    fn force_stop(&mut self) {
-        self.stop.store(true, Ordering::Relaxed);
-        self.cached_stop = true;
-    }
+struct ABContext {
+    limits: Limits,
+    stats: SearchStats,
+    transposition_table: Arc<TranspositionTable>,
+    search_killers: Vec<[ChessMove; 2]>,
+    search_history: [[u64; 64]; 12],
+    allow_null_pruning: bool,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -224,7 +175,7 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
         println!("{bestmove}");
         ctx.limits.force_stop();
     } else {
-        let start_depth = u16::min(config.thread_num as u16, ctx.limits.max_depth.unwrap_or(u16::MAX));
+        let start_depth = u16::min(config.thread_num as u16, ctx.limits.depth().unwrap_or(u16::MAX));
         loop {
             let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, start_depth);
             while iterative_deepening.next_depth(&mut board, &mut ctx).is_some() {}
@@ -233,15 +184,6 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
             }
         }
     }
-}
-
-struct ABContext {
-    limits: Limits,
-    stats: SearchStats,
-    transposition_table: Arc<TranspositionTable>,
-    search_killers: Vec<[ChessMove; 2]>,
-    search_history: [[u64; 64]; 12],
-    allow_null_pruning: bool,
 }
 
 struct IterativeDeepening {

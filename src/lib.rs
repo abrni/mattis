@@ -6,5 +6,6 @@ pub mod chess_move;
 pub mod eval;
 pub mod hashtable;
 pub mod search;
+pub mod time_man;
 pub mod types;
 pub mod uci;
