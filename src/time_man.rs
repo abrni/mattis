@@ -1,4 +1,4 @@
-use crate::{search::SearchStats, types::Color, uci};
+use crate::search::SearchStats;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -10,47 +10,76 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct TimeMan {
     start_time: Instant,
-    time_limit: Option<Duration>,
-    node_limit: Option<u64>,
-    depth_limit: Option<u16>,
+    time_limit: Duration,
+    node_limit: u64,
+    depth_limit: u16,
     stop: Arc<AtomicBool>,
     cached_stop: bool,
 }
 
-impl TimeMan {
-    pub fn new(go: uci::Go, color: Color) -> Self {
-        let (time, inc) = match color {
-            Color::White => (go.wtime, go.winc),
-            Color::Black => (go.btime, go.binc),
-        };
+pub struct TimeManBuilder {
+    time_limit: Duration,
+    node_limit: u64,
+    depth_limit: u16,
+    stop: Arc<AtomicBool>,
+}
 
-        let movestogo = go.movestogo.unwrap_or(30) as f64;
-        let (time, inc) = (time.or(go.movetime), inc.unwrap_or(0) as f64);
+impl TimeManBuilder {
+    pub fn time_limit(&mut self, limit: Option<Duration>) -> &mut Self {
+        if let Some(limit) = limit {
+            self.time_limit = limit;
+        }
 
-        let max_time = time
-            .map(|t| t as f64)
-            .map(|t| (t + (movestogo * inc)) / (movestogo / 3.0 * 2.0) - inc)
-            .map(|t| Duration::from_micros((t * 1000.0) as u64));
+        self
+    }
 
+    pub fn node_limit(&mut self, limit: Option<u64>) -> &mut Self {
+        if let Some(limit) = limit {
+            self.node_limit = limit;
+        }
+
+        self
+    }
+
+    pub fn depth_limit(&mut self, limit: Option<u16>) -> &mut Self {
+        if let Some(limit) = limit {
+            self.depth_limit = limit;
+        }
+
+        self
+    }
+
+    pub fn start_now(&self) -> TimeMan {
         TimeMan {
             start_time: Instant::now(),
-            time_limit: max_time,
-            node_limit: go.nodes.map(|n| n as u64),
-            depth_limit: go.depth.map(|d| d as u16),
+            time_limit: self.time_limit,
+            node_limit: self.node_limit,
+            depth_limit: self.depth_limit,
+            stop: Arc::clone(&self.stop),
+            cached_stop: self.stop.load(Ordering::Relaxed),
+        }
+    }
+}
+
+impl TimeMan {
+    pub fn build() -> TimeManBuilder {
+        TimeManBuilder {
+            time_limit: Duration::MAX,
+            node_limit: u64::MAX,
+            depth_limit: u16::MAX,
             stop: Arc::new(AtomicBool::new(false)),
-            cached_stop: false,
         }
     }
 
-    pub fn node_limit(&self) -> Option<u64> {
+    pub fn node_limit(&self) -> u64 {
         self.node_limit
     }
 
-    pub fn time_limit(&self) -> Option<Duration> {
+    pub fn time_limit(&self) -> Duration {
         self.time_limit
     }
 
-    pub fn depth_limit(&self) -> Option<u16> {
+    pub fn depth_limit(&self) -> u16 {
         self.depth_limit
     }
 
@@ -63,13 +92,9 @@ impl TimeMan {
             return self.cached_stop;
         }
 
-        let max_nodes = self.node_limit.unwrap_or(u64::MAX);
-        let max_time = self.time_limit.unwrap_or(Duration::MAX);
-        let max_depth = self.depth_limit.unwrap_or(u16::MAX);
-
-        let should_stop = stats.nodes > max_nodes
-            || self.start_time.elapsed() >= max_time
-            || stats.depth > max_depth
+        let should_stop = stats.nodes > self.node_limit
+            || stats.depth > self.depth_limit
+            || self.start_time.elapsed() >= self.time_limit
             || self.stop.load(Ordering::Relaxed);
 
         self.cached_stop = should_stop;

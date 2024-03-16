@@ -4,7 +4,7 @@ use crate::{
     eval::{evaluation, Eval},
     hashtable::{HEKind, Probe, TranspositionTable},
     time_man::TimeMan,
-    types::{Piece, PieceType},
+    types::{Color, Piece, PieceType},
     uci::{self, EngineMessage},
 };
 use std::{
@@ -14,6 +14,7 @@ use std::{
         Arc,
     },
     thread::JoinHandle,
+    time::Duration,
 };
 
 struct ABContext {
@@ -83,8 +84,26 @@ pub struct SearchConfig<'a> {
     pub tp_table: Arc<TranspositionTable>,
 }
 
+pub fn calculate_time_limit(go: uci::Go, color: Color) -> Option<Duration> {
+    let (time, inc) = match color {
+        Color::White => (go.wtime, go.winc),
+        Color::Black => (go.btime, go.binc),
+    };
+
+    let movestogo = go.movestogo.unwrap_or(30) as f64;
+    let (time, inc) = (time.or(go.movetime), inc.unwrap_or(0) as f64);
+
+    time.map(|t| t as f64)
+        .map(|t| (t + (movestogo * inc)) / (movestogo / 3.0 * 2.0) - inc)
+        .map(|t| Duration::from_micros((t * 1000.0) as u64))
+}
+
 pub fn run_search(config: SearchConfig) -> KillSwitch {
-    let time_man = TimeMan::new(config.go, config.board.color);
+    let time_man = TimeMan::build()
+        .depth_limit(config.go.depth.map(|d| d as u16))
+        .node_limit(config.go.nodes.map(|n| n as u64))
+        .time_limit(calculate_time_limit(config.go, config.board.color))
+        .start_now();
 
     let mut ctx = ABContext {
         time_man: time_man.clone(),
@@ -171,7 +190,7 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
         println!("{bestmove}");
         ctx.time_man.force_stop();
     } else {
-        let start_depth = u16::min(config.thread_num as u16, ctx.time_man.depth_limit().unwrap_or(u16::MAX));
+        let start_depth = u16::min(config.thread_num as u16, ctx.time_man.depth_limit());
         loop {
             let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, start_depth);
             while iterative_deepening.next_depth(&mut board, &mut ctx).is_some() {}
