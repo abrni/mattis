@@ -5,7 +5,6 @@ use mattis::{
     chess_move::ChessMove,
     hashtable::TranspositionTable,
     search::{self, SearchConfig},
-    types::Square,
     uci,
 };
 
@@ -15,7 +14,7 @@ const HASHTABLE_SIZE_MB: usize = 256;
 fn main() {
     let thread_count = std::env::args().nth(1).unwrap_or("1".to_string());
     let thread_count: u32 = thread_count.parse().unwrap();
-    let mut board = Board::from_fen(FEN_STARTPOS).unwrap();
+    let board = Board::from_fen(FEN_STARTPOS).unwrap();
     let ttable = Arc::new(TranspositionTable::new(HASHTABLE_SIZE_MB));
     let search_killers = Arc::new(Mutex::new(vec![[ChessMove::default(); 2]; 1024].into_boxed_slice()));
     let search_history = Arc::new(Mutex::new([[0; 64]; 12]));

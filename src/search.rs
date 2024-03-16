@@ -194,9 +194,9 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
         };
 
         println!("{bestmove}");
-        ctx.time_man.force_stop();
         *config.search_killers.lock().unwrap() = ctx.search_killers;
         *config.search_history.lock().unwrap() = ctx.search_history;
+        ctx.time_man.force_stop();
     } else {
         let start_depth = u16::min(config.thread_num as u16, ctx.time_man.depth_limit());
         loop {
@@ -228,6 +228,10 @@ impl IterativeDeepening {
         if ctx.time_man.stop(&ctx.stats, false) {
             return None;
         };
+
+        if !ctx.time_man.enough_time_for_next_depth() {
+            return None;
+        }
 
         let mut alpha = self.last_eval - PieceType::Pawn.value();
         let mut beta = self.last_eval + PieceType::Pawn.value();
@@ -268,6 +272,7 @@ impl IterativeDeepening {
             ctx.stats.score = score;
             ctx.stats.pv = pv_line(&ctx.transposition_table, board);
             ctx.stats.bestmove = ctx.stats.pv.get(0).copied().unwrap_or_default();
+            ctx.time_man.finished_depth();
 
             Some(ctx.stats.clone())
         }

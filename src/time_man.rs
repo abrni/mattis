@@ -56,6 +56,7 @@ impl Limits {
             depth_limit: self.depth_limit,
             stop: Arc::clone(&self.stop),
             cached_stop: self.stop.load(Ordering::Relaxed),
+            last_depth_reached: Instant::now(),
         }
     }
 }
@@ -74,6 +75,7 @@ pub struct TimeMan {
     depth_limit: u16,
     stop: Arc<AtomicBool>,
     cached_stop: bool,
+    last_depth_reached: Instant,
 }
 
 impl TimeMan {
@@ -105,6 +107,21 @@ impl TimeMan {
 
         self.cached_stop = should_stop;
         should_stop
+    }
+
+    pub fn finished_depth(&mut self) {
+        self.last_depth_reached = Instant::now();
+    }
+
+    pub fn enough_time_for_next_depth(&self) -> bool {
+        if self.time_limit == Duration::MAX {
+            return true;
+        }
+
+        let time_used = self.last_depth_reached.duration_since(self.start_time);
+        let time_left = (self.start_time + self.time_limit).duration_since(self.last_depth_reached);
+        let expected_next_time = time_used * 10;
+        expected_next_time < time_left
     }
 
     pub fn force_stop(&mut self) {
