@@ -139,7 +139,7 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
         .collect();
 
     KillSwitch {
-        switch: time_man.get_stop(),
+        switch: time_man.raw_stop_flag(),
         join_handles,
     }
 }
@@ -194,7 +194,7 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
         loop {
             let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, start_depth);
             while iterative_deepening.next_depth(&mut board, &mut ctx).is_some() {}
-            if ctx.time_man.check_stop(&ctx.stats, false) {
+            if ctx.time_man.stop(&ctx.stats, false) {
                 break;
             }
         }
@@ -217,7 +217,7 @@ impl IterativeDeepening {
     fn next_depth(&mut self, board: &mut Board, ctx: &mut ABContext) -> Option<SearchStats> {
         ctx.stats.depth = self.next_depth;
 
-        if ctx.time_man.check_stop(&ctx.stats, false) {
+        if ctx.time_man.stop(&ctx.stats, false) {
             return None;
         };
 
@@ -345,7 +345,7 @@ fn alpha_beta(
 ) -> Eval {
     // We frequently check, if the search should stop
     // (e.g. because of time running out or a gui command).
-    if ctx.time_man.check_stop(&ctx.stats, true) {
+    if ctx.time_man.stop(&ctx.stats, true) {
         return Eval::DRAW;
     }
 
@@ -531,7 +531,7 @@ fn quiescence(mut alpha: Eval, beta: Eval, board: &mut Board, ctx: &mut ABContex
         let score = -quiescence(-beta, -alpha, board, ctx);
         board.take_move();
 
-        if ctx.time_man.check_stop(&ctx.stats, true) {
+        if ctx.time_man.stop(&ctx.stats, true) {
             return Eval::DRAW;
         }
 

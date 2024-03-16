@@ -89,11 +89,11 @@ impl TimeMan {
         self.depth_limit
     }
 
-    pub fn get_stop(&self) -> Arc<AtomicBool> {
+    pub fn raw_stop_flag(&self) -> Arc<AtomicBool> {
         Arc::clone(&self.stop)
     }
 
-    pub fn check_stop(&mut self, stats: &SearchStats, use_cached: bool) -> bool {
+    pub fn stop(&mut self, stats: &SearchStats, use_cached: bool) -> bool {
         if use_cached && stats.nodes.trailing_zeros() < 10 {
             return self.cached_stop;
         }
