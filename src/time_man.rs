@@ -7,16 +7,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[derive(Debug, Clone)]
-pub struct TimeMan {
-    start_time: Instant,
-    time_limit: Duration,
-    node_limit: u64,
-    depth_limit: u16,
-    stop: Arc<AtomicBool>,
-    cached_stop: bool,
-}
-
 pub struct Limits {
     time_limit: Duration,
     node_limit: u64,
@@ -74,6 +64,16 @@ impl Default for Limits {
     fn default() -> Self {
         Self::new()
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct TimeMan {
+    start_time: Instant,
+    time_limit: Duration,
+    node_limit: u64,
+    depth_limit: u16,
+    stop: Arc<AtomicBool>,
+    cached_stop: bool,
 }
 
 impl TimeMan {
