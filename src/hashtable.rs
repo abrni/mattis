@@ -69,10 +69,8 @@ impl TranspositionTable {
         let capacity = byte_size / entry_size;
         let shift = 64 - capacity.trailing_zeros();
 
-        let mut data = Vec::new();
-        data.reserve_exact(capacity);
+        let mut data = Vec::with_capacity(capacity);
         data.resize_with(capacity, Default::default);
-
         let data = data.into_boxed_slice();
 
         Self {
