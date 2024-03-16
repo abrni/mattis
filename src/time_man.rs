@@ -4,11 +4,12 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 #[derive(Debug, Clone)]
 pub struct TimeMan {
+    start_time: Instant,
     time_limit: Option<Duration>,
     node_limit: Option<u64>,
     depth_limit: Option<u16>,
@@ -32,6 +33,7 @@ impl TimeMan {
             .map(|t| Duration::from_micros((t * 1000.0) as u64));
 
         TimeMan {
+            start_time: Instant::now(),
             time_limit: max_time,
             node_limit: go.nodes.map(|n| n as u64),
             depth_limit: go.depth.map(|d| d as u16),
@@ -66,7 +68,7 @@ impl TimeMan {
         let max_depth = self.depth_limit.unwrap_or(u16::MAX);
 
         let should_stop = stats.nodes > max_nodes
-            || stats.start_time.elapsed() >= max_time
+            || self.start_time.elapsed() >= max_time
             || stats.depth > max_depth
             || self.stop.load(Ordering::Relaxed);
 

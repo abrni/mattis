@@ -14,7 +14,6 @@ use std::{
         Arc,
     },
     thread::JoinHandle,
-    time::Instant,
 };
 
 struct ABContext {
@@ -28,7 +27,6 @@ struct ABContext {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SearchStats {
-    pub start_time: Instant, // When we started the search
     pub depth: u16,          // Search depth
     pub score: Eval,         // Score in centipawns
     pub nodes: u64,          // Total count of visited nodes
@@ -43,7 +41,6 @@ pub struct SearchStats {
 impl Default for SearchStats {
     fn default() -> Self {
         Self {
-            start_time: Instant::now(),
             depth: 0,
             score: Eval::DRAW,
             nodes: 0,
