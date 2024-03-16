@@ -9,9 +9,9 @@ use std::{
 
 #[derive(Debug, Clone)]
 pub struct TimeMan {
-    time: Option<Duration>,
-    nodes: Option<u64>,
-    depth: Option<u16>,
+    time_limit: Option<Duration>,
+    node_limit: Option<u64>,
+    depth_limit: Option<u16>,
     stop: Arc<AtomicBool>,
     cached_stop: bool,
 }
@@ -32,24 +32,24 @@ impl TimeMan {
             .map(|t| Duration::from_micros((t * 1000.0) as u64));
 
         TimeMan {
-            time: max_time,
-            nodes: go.nodes.map(|n| n as u64),
-            depth: go.depth.map(|d| d as u16),
+            time_limit: max_time,
+            node_limit: go.nodes.map(|n| n as u64),
+            depth_limit: go.depth.map(|d| d as u16),
             stop: Arc::new(AtomicBool::new(false)),
             cached_stop: false,
         }
     }
 
-    pub fn nodes(&self) -> Option<u64> {
-        self.nodes
+    pub fn node_limit(&self) -> Option<u64> {
+        self.node_limit
     }
 
-    pub fn time(&self) -> Option<Duration> {
-        self.time
+    pub fn time_limit(&self) -> Option<Duration> {
+        self.time_limit
     }
 
-    pub fn depth(&self) -> Option<u16> {
-        self.depth
+    pub fn depth_limit(&self) -> Option<u16> {
+        self.depth_limit
     }
 
     pub fn get_stop(&self) -> Arc<AtomicBool> {
@@ -61,9 +61,9 @@ impl TimeMan {
             return self.cached_stop;
         }
 
-        let max_nodes = self.nodes.unwrap_or(u64::MAX);
-        let max_time = self.time.unwrap_or(Duration::MAX);
-        let max_depth = self.depth.unwrap_or(u16::MAX);
+        let max_nodes = self.node_limit.unwrap_or(u64::MAX);
+        let max_time = self.time_limit.unwrap_or(Duration::MAX);
+        let max_depth = self.depth_limit.unwrap_or(u16::MAX);
 
         let should_stop = stats.nodes > max_nodes
             || stats.start_time.elapsed() >= max_time

@@ -174,7 +174,7 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
         println!("{bestmove}");
         ctx.time_man.force_stop();
     } else {
-        let start_depth = u16::min(config.thread_num as u16, ctx.time_man.depth().unwrap_or(u16::MAX));
+        let start_depth = u16::min(config.thread_num as u16, ctx.time_man.depth_limit().unwrap_or(u16::MAX));
         loop {
             let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, start_depth);
             while iterative_deepening.next_depth(&mut board, &mut ctx).is_some() {}
