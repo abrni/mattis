@@ -21,10 +21,12 @@ pub struct Limits {
     max_time: Option<Duration>,
     max_nodes: Option<u64>,
     max_depth: Option<u16>,
+    stop: Arc<AtomicBool>,
+    cached_stop: bool,
 }
 
 impl Limits {
-    fn new(go: uci::Go, color: Color) -> Self {
+    fn new(go: uci::Go, color: Color, stop: Arc<AtomicBool>) -> Self {
         let (time, inc) = match color {
             Color::White => (go.wtime, go.winc),
             Color::Black => (go.btime, go.binc),
@@ -38,11 +40,38 @@ impl Limits {
             .map(|t| (t + (movestogo * inc)) / (movestogo / 3.0 * 2.0) - inc)
             .map(|t| Duration::from_micros((t * 1000.0) as u64));
 
+        let cached_stop = stop.load(Ordering::Relaxed);
+
         Limits {
             max_time,
             max_nodes: go.nodes.map(|n| n as u64),
             max_depth: go.depth.map(|d| d as u16),
+            stop,
+            cached_stop,
         }
+    }
+
+    fn check_stop(&mut self, stats: &SearchStats, use_cached: bool) -> bool {
+        if use_cached && stats.nodes.trailing_zeros() < 10 {
+            return self.cached_stop;
+        }
+
+        let max_nodes = self.max_nodes.unwrap_or(u64::MAX);
+        let max_time = self.max_time.unwrap_or(Duration::MAX);
+        let max_depth = self.max_depth.unwrap_or(u16::MAX);
+
+        let should_stop = stats.nodes > max_nodes
+            || stats.start_time.elapsed() >= max_time
+            || stats.depth > max_depth
+            || self.stop.load(Ordering::Relaxed);
+
+        self.cached_stop = should_stop;
+        should_stop
+    }
+
+    fn force_stop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        self.cached_stop = true;
     }
 }
 
@@ -108,15 +137,14 @@ pub struct SearchConfig<'a> {
 
 pub fn run_search(config: SearchConfig) -> KillSwitch {
     let stop = Arc::new(AtomicBool::new(false));
-    let params = Limits::new(config.go, config.board.color);
+    let params = Limits::new(config.go, config.board.color, stop.clone());
 
     let mut ctx = ABContext {
-        params: params.clone(),
+        limits: params.clone(),
         stats: SearchStats::default(),
         transposition_table: Arc::clone(&config.tp_table),
         search_killers: vec![[ChessMove::default(); 2]; 1024],
         search_history: [[0; 64]; 12],
-        stop: Arc::clone(&stop),
         allow_null_pruning: config.allow_null_pruning,
     };
 
@@ -136,7 +164,6 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
                 thread_num: i,
                 params: params.clone(),
                 expected_eval,
-                stop: Arc::clone(&stop),
                 allow_null_pruning: config.allow_null_pruning,
             };
 
@@ -156,18 +183,16 @@ struct ThreadConfig {
     thread_num: u32,
     params: Limits,
     expected_eval: Eval,
-    stop: Arc<AtomicBool>,
     allow_null_pruning: bool,
 }
 
 fn search_thread(config: ThreadConfig, mut board: Board) {
     let mut ctx = ABContext {
-        params: config.params,
+        limits: config.params,
         stats: SearchStats::default(),
         transposition_table: config.tp_table,
         search_killers: vec![[ChessMove::default(); 2]; 1024],
         search_history: [[0; 64]; 12],
-        stop: config.stop,
         allow_null_pruning: config.allow_null_pruning,
     };
 
@@ -197,13 +222,13 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
         };
 
         println!("{bestmove}");
-        ctx.stop.store(true, Ordering::Relaxed);
+        ctx.limits.force_stop();
     } else {
-        let start_depth = u16::min(config.thread_num as u16, ctx.params.max_depth.unwrap_or(u16::MAX));
+        let start_depth = u16::min(config.thread_num as u16, ctx.limits.max_depth.unwrap_or(u16::MAX));
         loop {
             let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, start_depth);
             while iterative_deepening.next_depth(&mut board, &mut ctx).is_some() {}
-            if ctx.stop.load(Ordering::Relaxed) {
+            if ctx.limits.check_stop(&ctx.stats, false) {
                 break;
             }
         }
@@ -211,12 +236,11 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
 }
 
 struct ABContext {
-    params: Limits,
+    limits: Limits,
     stats: SearchStats,
     transposition_table: Arc<TranspositionTable>,
     search_killers: Vec<[ChessMove; 2]>,
     search_history: [[u64; 64]; 12],
-    stop: Arc<AtomicBool>,
     allow_null_pruning: bool,
 }
 
@@ -234,7 +258,9 @@ impl IterativeDeepening {
     }
 
     fn next_depth(&mut self, board: &mut Board, ctx: &mut ABContext) -> Option<SearchStats> {
-        if should_search_stop(ctx) {
+        ctx.stats.depth = self.next_depth;
+
+        if ctx.limits.check_stop(&ctx.stats, false) {
             return None;
         };
 
@@ -271,7 +297,6 @@ impl IterativeDeepening {
         ctx.stats.score = score;
         ctx.stats.pv = pv_line(&ctx.transposition_table, board);
         ctx.stats.bestmove = ctx.stats.pv.get(0).copied().unwrap_or_default();
-        ctx.stats.depth = self.next_depth;
 
         self.last_eval = score;
         self.next_depth += 1;
@@ -352,29 +377,6 @@ fn mvv_lva(attacker: PieceType, victim: PieceType) -> i32 {
     (SCORES[victim] << 3) - SCORES[attacker]
 }
 
-fn should_search_stop(ctx: &ABContext) -> bool {
-    let max_nodes = ctx.params.max_nodes.unwrap_or(u64::MAX);
-    if ctx.stats.nodes > max_nodes {
-        return true;
-    }
-
-    let max_time = ctx.params.max_time.unwrap_or(Duration::MAX);
-    if ctx.stats.start_time.elapsed() >= max_time {
-        return true;
-    };
-
-    let max_depth = ctx.params.max_depth.unwrap_or(u16::MAX);
-    if ctx.stats.depth > max_depth {
-        return true;
-    }
-
-    if ctx.stop.load(Ordering::Acquire) {
-        return true;
-    }
-
-    false
-}
-
 #[allow(clippy::too_many_arguments)] // TODO: reduce the number of arguments into an args struct or something
 fn alpha_beta(
     mut alpha: Eval,
@@ -384,14 +386,10 @@ fn alpha_beta(
     ctx: &mut ABContext,
     allow_null_move: bool,
 ) -> Eval {
-    if ctx.stats.stop {
-        return Eval::DRAW;
-    }
-
     // We frequently check, if the search should stop
     // (e.g. because of time running out or a gui command).
-    if ctx.stats.nodes.trailing_zeros() == 10 {
-        ctx.stats.stop = should_search_stop(ctx);
+    if ctx.limits.check_stop(&ctx.stats, true) {
+        return Eval::DRAW;
     }
 
     if depth == 0 {
@@ -576,7 +574,7 @@ fn quiescence(mut alpha: Eval, beta: Eval, board: &mut Board, ctx: &mut ABContex
         let score = -quiescence(-beta, -alpha, board, ctx);
         board.take_move();
 
-        if ctx.stats.stop {
+        if ctx.limits.check_stop(&ctx.stats, true) {
             return Eval::DRAW;
         }
 
