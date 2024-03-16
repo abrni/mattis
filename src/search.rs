@@ -11,7 +11,7 @@ use std::{
     collections::HashMap,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, Mutex,
     },
     thread::JoinHandle,
     time::Duration,
@@ -21,7 +21,7 @@ struct ABContext {
     time_man: TimeMan,
     stats: SearchStats,
     transposition_table: Arc<TranspositionTable>,
-    search_killers: Vec<[ChessMove; 2]>,
+    search_killers: Box<[[ChessMove; 2]]>,
     search_history: [[u64; 64]; 12],
     allow_null_pruning: bool,
 }
@@ -82,6 +82,8 @@ pub struct SearchConfig<'a> {
     pub go: uci::Go,
     pub board: &'a Board,
     pub tp_table: Arc<TranspositionTable>,
+    pub search_killers: Arc<Mutex<Box<[[ChessMove; 2]]>>>,
+    pub search_history: Arc<Mutex<[[u64; 64]; 12]>>,
 }
 
 pub fn calculate_time_limit(go: uci::Go, color: Color) -> Option<Duration> {
@@ -109,8 +111,8 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
         time_man: time_man.clone(),
         stats: SearchStats::default(),
         transposition_table: Arc::clone(&config.tp_table),
-        search_killers: vec![[ChessMove::default(); 2]; 1024],
-        search_history: [[0; 64]; 12],
+        search_killers: config.search_killers.lock().unwrap().clone(),
+        search_history: *config.search_history.lock().unwrap(),
         allow_null_pruning: config.allow_null_pruning,
     };
 
@@ -127,6 +129,8 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
         .map(|i| {
             let thread_config = ThreadConfig {
                 tp_table: Arc::clone(&config.tp_table),
+                search_killers: Arc::clone(&config.search_killers),
+                search_history: Arc::clone(&config.search_history),
                 thread_num: i,
                 time_man: time_man.clone(),
                 expected_eval,
@@ -146,6 +150,8 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
 
 struct ThreadConfig {
     tp_table: Arc<TranspositionTable>,
+    search_killers: Arc<Mutex<Box<[[ChessMove; 2]]>>>,
+    search_history: Arc<Mutex<[[u64; 64]; 12]>>,
     thread_num: u32,
     time_man: TimeMan,
     expected_eval: Eval,
@@ -157,8 +163,8 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
         time_man: config.time_man,
         stats: SearchStats::default(),
         transposition_table: config.tp_table,
-        search_killers: vec![[ChessMove::default(); 2]; 1024],
-        search_history: [[0; 64]; 12],
+        search_killers: config.search_killers.lock().unwrap().clone(),
+        search_history: *config.search_history.lock().unwrap(),
         allow_null_pruning: config.allow_null_pruning,
     };
 
@@ -189,6 +195,8 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
 
         println!("{bestmove}");
         ctx.time_man.force_stop();
+        *config.search_killers.lock().unwrap() = ctx.search_killers;
+        *config.search_history.lock().unwrap() = ctx.search_history;
     } else {
         let start_depth = u16::min(config.thread_num as u16, ctx.time_man.depth_limit());
         loop {
@@ -261,7 +269,7 @@ impl IterativeDeepening {
             ctx.stats.pv = pv_line(&ctx.transposition_table, board);
             ctx.stats.bestmove = ctx.stats.pv.get(0).copied().unwrap_or_default();
 
-        Some(ctx.stats.clone())
+            Some(ctx.stats.clone())
         }
     }
 }
