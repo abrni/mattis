@@ -16,12 +16,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub struct SearchTables {
-    pub transposition_table: Arc<TranspositionTable>,
-    pub search_killers: Vec<[ChessMove; 2]>,
-    pub search_history: [[u64; 64]; 12],
-}
-
 #[derive(Debug, Clone)]
 pub struct SearchParams {
     max_time: Option<Duration>,
@@ -120,16 +114,12 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
     let switch = Arc::new(AtomicBool::new(false));
     let params = SearchParams::new(config.go, config.board.color, config.allow_null_pruning, switch.clone());
 
-    let search_tables = SearchTables {
-        transposition_table: Arc::clone(&config.tp_table),
-        search_killers: vec![[ChessMove::default(); 2]; 1024],
-        search_history: [[0; 64]; 12],
-    };
-
     let mut ctx = ABContext {
         params: params.clone(),
         stats: SearchStats::default(),
-        tables: search_tables,
+        transposition_table: Arc::clone(&config.tp_table),
+        search_killers: vec![[ChessMove::default(); 2]; 1024],
+        search_history: [[0; 64]; 12],
     };
 
     let allow_null_pruning = ctx.params.allow_null_pruning;
@@ -168,16 +158,12 @@ struct ThreadConfig {
 }
 
 fn search_thread(config: ThreadConfig, mut board: Board) {
-    let search_tables = SearchTables {
-        transposition_table: config.tp_table,
-        search_killers: vec![[ChessMove::default(); 2]; 1024],
-        search_history: [[0; 64]; 12],
-    };
-
     let mut ctx = ABContext {
         params: config.params.clone(),
         stats: SearchStats::default(),
-        tables: search_tables,
+        transposition_table: config.tp_table,
+        search_killers: vec![[ChessMove::default(); 2]; 1024],
+        search_history: [[0; 64]; 12],
     };
 
     if config.thread_num == 0 {
@@ -222,7 +208,9 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
 struct ABContext {
     params: SearchParams,
     stats: SearchStats,
-    tables: SearchTables,
+    transposition_table: Arc<TranspositionTable>,
+    search_killers: Vec<[ChessMove; 2]>,
+    search_history: [[u64; 64]; 12],
 }
 
 struct IterativeDeepening {
@@ -274,7 +262,7 @@ impl IterativeDeepening {
         };
 
         ctx.stats.score = score;
-        ctx.stats.pv = pv_line(&ctx.tables.transposition_table, board);
+        ctx.stats.pv = pv_line(&ctx.transposition_table, board);
         ctx.stats.bestmove = ctx.stats.pv.get(0).copied().unwrap_or_default();
         ctx.stats.depth = self.next_depth;
 
@@ -317,19 +305,19 @@ fn pv_line(tptable: &TranspositionTable, board: &mut Board) -> Vec<ChessMove> {
 fn take_next_move(
     list: &mut MoveList,
     pv_move: Option<ChessMove>,
-    tables: &SearchTables,
+    ctx: &ABContext,
     board: &Board,
 ) -> Option<ChessMove> {
     let (idx, _) = list
         .iter()
         .enumerate()
-        .min_by_key(|(_, m)| -score_move(**m, pv_move, tables, board))?;
+        .min_by_key(|(_, m)| -score_move(**m, pv_move, ctx, board))?;
 
     let m = list.swap_remove(idx);
     Some(m)
 }
 
-fn score_move(m: ChessMove, pv_move: Option<ChessMove>, tables: &SearchTables, board: &Board) -> i32 {
+fn score_move(m: ChessMove, pv_move: Option<ChessMove>, ctx: &ABContext, board: &Board) -> i32 {
     let captured = if m.is_en_passant() {
         Some(PieceType::Pawn)
     } else {
@@ -342,13 +330,13 @@ fn score_move(m: ChessMove, pv_move: Option<ChessMove>, tables: &SearchTables, b
         //SAFETY: A chess move always moves a piece
         let attacker = unsafe { board.pieces[m.start()].unwrap_unchecked().piece_type() };
         1_000_000 + mvv_lva(attacker, victim)
-    } else if tables.search_killers[board.ply][0] == m {
+    } else if ctx.search_killers[board.ply][0] == m {
         900_000
-    } else if tables.search_killers[board.ply][1] == m {
+    } else if ctx.search_killers[board.ply][1] == m {
         800_000
     } else {
         let piece = board.pieces[m.start()].unwrap();
-        tables.search_history[piece][m.end()] as i32
+        ctx.search_history[piece][m.end()] as i32
     }
 }
 
@@ -424,7 +412,7 @@ fn alpha_beta(
     // Probe the transposition table. There a two kinds of hashtable hits:
     // A CutOff-Hit allows us to safely perform a branch cutoff and return early.
     // Otherwise we can still use the table hit for move ordering.
-    let hashtable_probe = ctx.tables.transposition_table.probe(board, alpha, beta, depth);
+    let hashtable_probe = ctx.transposition_table.probe(board, alpha, beta, depth);
     let pv_move = match hashtable_probe {
         Probe::NoHit => None,
         Probe::PV(m32, _) => Some(m32),
@@ -461,7 +449,7 @@ fn alpha_beta(
     let mut legal_moves = 0; // Counts the number of legal moves. Not every generated move is necessarily legal.
     let mut alpha_changed = false; // signals if alpha has changed during the evaluation of each move
 
-    while let Some(m) = take_next_move(&mut moves, pv_move, &ctx.tables, board) {
+    while let Some(m) = take_next_move(&mut moves, pv_move, ctx, board) {
         let is_legal_move = board.make_move(m);
 
         // The move might have been illegal. in that case the move was not made and we can skip to the next one.
@@ -492,13 +480,12 @@ fn alpha_beta(
             // If the same move is encountered at the same ply but in a different position, it will be
             // prefered by move ordering. We use two killer slots, to not forget good moves in some situations.
             if !m.is_capture() {
-                ctx.tables.search_killers[board.ply][1] = ctx.tables.search_killers[board.ply][0];
-                ctx.tables.search_killers[board.ply][0] = m;
+                ctx.search_killers[board.ply][1] = ctx.search_killers[board.ply][0];
+                ctx.search_killers[board.ply][0] = m;
             }
 
             // Store the move in the hashtable and mark it as a beta-cutoff
-            ctx.tables
-                .transposition_table
+            ctx.transposition_table
                 .store(board.position_key, beta, m, depth, HEKind::Beta);
 
             return beta; // fail hard beta-cutoff
@@ -514,7 +501,7 @@ fn alpha_beta(
             // different added value.
             if !m.is_capture() {
                 let piece = board.pieces[m.start()].unwrap();
-                ctx.tables.search_history[piece][m.end()] += depth as u64; // TODO: is this better: += depth * depth or 2^depth?
+                ctx.search_history[piece][m.end()] += depth as u64; // TODO: is this better: += depth * depth or 2^depth?
             }
         }
 
@@ -538,8 +525,7 @@ fn alpha_beta(
     // Otherwise we can return the exact score.
     let hashentry_kind = if alpha_changed { HEKind::Exact } else { HEKind::Alpha };
     let score = if alpha_changed { best_score } else { alpha }; // TODO: I think, weh should be able to always use alpha here?
-    ctx.tables
-        .transposition_table
+    ctx.transposition_table
         .store(board.position_key, score, best_move, depth, hashentry_kind);
 
     alpha
@@ -572,7 +558,7 @@ fn quiescence(mut alpha: Eval, beta: Eval, board: &mut Board, ctx: &mut ABContex
     }
 
     let mut legal_moves = 0;
-    while let Some(m) = take_next_move(&mut moves, None, &ctx.tables, board) {
+    while let Some(m) = take_next_move(&mut moves, None, ctx, board) {
         let is_valid_move = board.make_move(m);
 
         if !is_valid_move {
