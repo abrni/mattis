@@ -120,22 +120,27 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
     let switch = Arc::new(AtomicBool::new(false));
     let params = SearchParams::new(config.go, config.board.color, config.allow_null_pruning, switch.clone());
 
-    let mut search_tables = SearchTables {
+    let search_tables = SearchTables {
         transposition_table: Arc::clone(&config.tp_table),
         search_killers: vec![[ChessMove::default(); 2]; 1024],
         search_history: [[0; 64]; 12],
     };
 
-    let mut stats = SearchStats::default();
+    let mut ctx = ABContext {
+        params: params.clone(),
+        stats: SearchStats::default(),
+        tables: search_tables,
+    };
+
+    let allow_null_pruning = ctx.params.allow_null_pruning;
+
     let expected_eval = alpha_beta(
         -Eval::MAX,
         Eval::MAX,
         1,
         &mut config.board.clone(),
-        &params,
-        &mut stats,
-        &mut search_tables,
-        false,
+        &mut ctx,
+        allow_null_pruning,
     );
 
     let join_handles: Vec<JoinHandle<()>> = (0..config.thread_count)
@@ -163,17 +168,23 @@ struct ThreadConfig {
 }
 
 fn search_thread(config: ThreadConfig, mut board: Board) {
-    let mut search_tables = SearchTables {
+    let search_tables = SearchTables {
         transposition_table: config.tp_table,
         search_killers: vec![[ChessMove::default(); 2]; 1024],
         search_history: [[0; 64]; 12],
     };
 
+    let mut ctx = ABContext {
+        params: config.params.clone(),
+        stats: SearchStats::default(),
+        tables: search_tables,
+    };
+
     if config.thread_num == 0 {
         let mut bestmove = ChessMove::default();
-        let mut iterative_deepening = IterativeDeepening::new(config.params.clone(), config.expected_eval, 1);
+        let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, 1);
 
-        while let Some(stats) = iterative_deepening.next_depth(&mut board, &mut search_tables) {
+        while let Some(stats) = iterative_deepening.next_depth(&mut board, &mut ctx) {
             bestmove = stats.bestmove;
 
             let info = EngineMessage::Info(uci::Info {
@@ -199,9 +210,8 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
     } else {
         let start_depth = u16::min(config.thread_num as u16, config.params.max_depth.unwrap_or(u16::MAX));
         loop {
-            let mut iterative_deepening =
-                IterativeDeepening::new(config.params.clone(), config.expected_eval, start_depth);
-            while iterative_deepening.next_depth(&mut board, &mut search_tables).is_some() {}
+            let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, start_depth);
+            while iterative_deepening.next_depth(&mut board, &mut ctx).is_some() {}
             if config.params.stop.load(Ordering::Relaxed) {
                 break;
             }
@@ -209,30 +219,27 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
     }
 }
 
-struct IterativeDeepening {
-    last_eval: Eval,
-    stats: SearchStats,
+struct ABContext {
     params: SearchParams,
+    stats: SearchStats,
+    tables: SearchTables,
+}
+
+struct IterativeDeepening {
+    next_depth: u16,
+    last_eval: Eval,
 }
 
 impl IterativeDeepening {
-    fn new(params: SearchParams, expected_eval: Eval, start_depth: u16) -> Self {
-        let stats = SearchStats {
-            depth: start_depth.saturating_sub(1),
-            ..Default::default()
-        };
-
+    fn new(expected_eval: Eval, start_depth: u16) -> Self {
         Self {
+            next_depth: start_depth,
             last_eval: expected_eval,
-            stats,
-            params,
         }
     }
 
-    fn next_depth(&mut self, board: &mut Board, tables: &mut SearchTables) -> Option<SearchStats> {
-        self.stats.depth += 1;
-
-        if should_search_stop(&self.params, &self.stats) {
+    fn next_depth(&mut self, board: &mut Board, ctx: &mut ABContext) -> Option<SearchStats> {
+        if should_search_stop(&ctx.params, &ctx.stats) {
             return None;
         };
 
@@ -241,18 +248,9 @@ impl IterativeDeepening {
         let mut loop_count = 0;
 
         let score = loop {
-            let score = alpha_beta(
-                alpha,
-                beta,
-                self.stats.depth,
-                board,
-                &self.params,
-                &mut self.stats,
-                tables,
-                self.params.allow_null_pruning,
-            );
+            let score = alpha_beta(alpha, beta, self.next_depth, board, ctx, ctx.params.allow_null_pruning);
 
-            if self.stats.stop {
+            if ctx.stats.stop {
                 return None;
             }
 
@@ -275,12 +273,15 @@ impl IterativeDeepening {
             }
         };
 
-        self.last_eval = score;
-        self.stats.score = score;
-        self.stats.pv = pv_line(&tables.transposition_table, board);
-        self.stats.bestmove = self.stats.pv.get(0).copied().unwrap_or_default();
+        ctx.stats.score = score;
+        ctx.stats.pv = pv_line(&ctx.tables.transposition_table, board);
+        ctx.stats.bestmove = ctx.stats.pv.get(0).copied().unwrap_or_default();
+        ctx.stats.depth = self.next_depth;
 
-        Some(self.stats.clone())
+        self.last_eval = score;
+        self.next_depth += 1;
+
+        Some(ctx.stats.clone())
     }
 }
 
@@ -385,27 +386,25 @@ fn alpha_beta(
     beta: Eval,
     mut depth: u16,
     board: &mut Board,
-    params: &SearchParams,
-    stats: &mut SearchStats,
-    tables: &mut SearchTables,
+    ctx: &mut ABContext,
     allow_null_move: bool,
 ) -> Eval {
-    if stats.stop {
+    if ctx.stats.stop {
         return Eval::DRAW;
     }
 
     // We frequently check, if the search should stop
     // (e.g. because of time running out or a gui command).
-    if stats.nodes.trailing_zeros() == 10 {
-        stats.stop = should_search_stop(params, stats);
+    if ctx.stats.nodes.trailing_zeros() == 10 {
+        ctx.stats.stop = should_search_stop(&ctx.params, &ctx.stats);
     }
 
     if depth == 0 {
-        stats.leaves += 1;
-        return quiescence(alpha, beta, board, stats, tables);
+        ctx.stats.leaves += 1;
+        return quiescence(alpha, beta, board, ctx);
     }
 
-    stats.nodes += 1;
+    ctx.stats.nodes += 1;
 
     // Check if we reached a draw by fifty move rule or 3-fold-repetition.
     // We actually evaluate a single repetition as a draw, so we can find
@@ -425,7 +424,7 @@ fn alpha_beta(
     // Probe the transposition table. There a two kinds of hashtable hits:
     // A CutOff-Hit allows us to safely perform a branch cutoff and return early.
     // Otherwise we can still use the table hit for move ordering.
-    let hashtable_probe = tables.transposition_table.probe(board, alpha, beta, depth);
+    let hashtable_probe = ctx.tables.transposition_table.probe(board, alpha, beta, depth);
     let pv_move = match hashtable_probe {
         Probe::NoHit => None,
         Probe::PV(m32, _) => Some(m32),
@@ -438,11 +437,11 @@ fn alpha_beta(
     // We don't want null move pruning, if we are in check, because that would cause an illegal position.
     if allow_null_move && !board.in_check() && board.ply != 0 && board.count_big_pieces[board.color] > 1 && depth >= 4 {
         board.make_null_move();
-        let score = -alpha_beta(-beta, -beta + 1i16, depth - 4, board, params, stats, tables, false);
+        let score = -alpha_beta(-beta, -beta + 1i16, depth - 4, board, ctx, false);
         board.take_null_move();
 
         // Don't use the results, if we entered stop-mode in the meantime.
-        if stats.stop {
+        if ctx.stats.stop {
             return Eval::DRAW;
         }
 
@@ -462,7 +461,7 @@ fn alpha_beta(
     let mut legal_moves = 0; // Counts the number of legal moves. Not every generated move is necessarily legal.
     let mut alpha_changed = false; // signals if alpha has changed during the evaluation of each move
 
-    while let Some(m) = take_next_move(&mut moves, pv_move, tables, board) {
+    while let Some(m) = take_next_move(&mut moves, pv_move, &ctx.tables, board) {
         let is_legal_move = board.make_move(m);
 
         // The move might have been illegal. in that case the move was not made and we can skip to the next one.
@@ -471,34 +470,34 @@ fn alpha_beta(
         }
 
         legal_moves += 1;
-        let score = -alpha_beta(-beta, -alpha, depth - 1, board, params, stats, tables, true);
+        let score = -alpha_beta(-beta, -alpha, depth - 1, board, ctx, ctx.params.allow_null_pruning);
         board.take_move();
 
         // Don't use the result of alpha-beta if we entered stop-mode in the meantime. The result is probably nonsense.
         // Instead just return ASAP.
-        if stats.stop {
+        if ctx.stats.stop {
             return Eval::DRAW;
         }
 
         // A score higher than beta allows us to perform a beta cutoff (fail-high)
         if score >= beta {
-            stats.fh += 1; // Track that number of fail-highs
+            ctx.stats.fh += 1; // Track that number of fail-highs
 
             // Track, if we caused the fail-high on the first legal move
             if legal_moves == 1 {
-                stats.fhf += 1;
+                ctx.stats.fhf += 1;
             };
 
             // A quiet move, that caused a beta-cutoff is labeled a 'killer-move'.
             // If the same move is encountered at the same ply but in a different position, it will be
             // prefered by move ordering. We use two killer slots, to not forget good moves in some situations.
             if !m.is_capture() {
-                tables.search_killers[board.ply][1] = tables.search_killers[board.ply][0];
-                tables.search_killers[board.ply][0] = m;
+                ctx.tables.search_killers[board.ply][1] = ctx.tables.search_killers[board.ply][0];
+                ctx.tables.search_killers[board.ply][0] = m;
             }
 
             // Store the move in the hashtable and mark it as a beta-cutoff
-            tables
+            ctx.tables
                 .transposition_table
                 .store(board.position_key, beta, m, depth, HEKind::Beta);
 
@@ -515,7 +514,7 @@ fn alpha_beta(
             // different added value.
             if !m.is_capture() {
                 let piece = board.pieces[m.start()].unwrap();
-                tables.search_history[piece][m.end()] += depth as u64; // TODO: is this better: += depth * depth or 2^depth?
+                ctx.tables.search_history[piece][m.end()] += depth as u64; // TODO: is this better: += depth * depth or 2^depth?
             }
         }
 
@@ -539,21 +538,15 @@ fn alpha_beta(
     // Otherwise we can return the exact score.
     let hashentry_kind = if alpha_changed { HEKind::Exact } else { HEKind::Alpha };
     let score = if alpha_changed { best_score } else { alpha }; // TODO: I think, weh should be able to always use alpha here?
-    tables
+    ctx.tables
         .transposition_table
         .store(board.position_key, score, best_move, depth, hashentry_kind);
 
     alpha
 }
 
-fn quiescence(
-    mut alpha: Eval,
-    beta: Eval,
-    board: &mut Board,
-    stats: &mut SearchStats,
-    tables: &mut SearchTables,
-) -> Eval {
-    stats.nodes += 1;
+fn quiescence(mut alpha: Eval, beta: Eval, board: &mut Board, ctx: &mut ABContext) -> Eval {
+    ctx.stats.nodes += 1;
 
     if board.is_repetition() || board.fifty_move >= 100 {
         return Eval::DRAW;
@@ -579,7 +572,7 @@ fn quiescence(
     }
 
     let mut legal_moves = 0;
-    while let Some(m) = take_next_move(&mut moves, None, tables, board) {
+    while let Some(m) = take_next_move(&mut moves, None, &ctx.tables, board) {
         let is_valid_move = board.make_move(m);
 
         if !is_valid_move {
@@ -587,10 +580,10 @@ fn quiescence(
         }
 
         legal_moves += 1;
-        let score = -quiescence(-beta, -alpha, board, stats, tables);
+        let score = -quiescence(-beta, -alpha, board, ctx);
         board.take_move();
 
-        if stats.stop {
+        if ctx.stats.stop {
             return Eval::DRAW;
         }
 
