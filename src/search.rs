@@ -36,7 +36,6 @@ pub struct SearchStats {
     pub fhf: u64,            // Count of fail-highs at the first move
     pub bestmove: ChessMove, // The best move
     pub pv: Vec<ChessMove>,  // Principle Variation Line
-    pub stop: bool,          // Should the search stop ASAP
 }
 
 impl Default for SearchStats {
@@ -50,7 +49,6 @@ impl Default for SearchStats {
             fhf: 0,
             bestmove: ChessMove::default(),
             pv: vec![],
-            stop: false,
         }
     }
 }
@@ -240,7 +238,7 @@ impl IterativeDeepening {
         let score = loop {
             let score = alpha_beta(alpha, beta, self.next_depth, board, ctx, ctx.allow_null_pruning);
 
-            if ctx.stats.stop {
+            if ctx.time_man.stop(&ctx.stats, true) {
                 return None;
             }
 
@@ -408,7 +406,7 @@ fn alpha_beta(
         board.take_null_move();
 
         // Don't use the results, if we entered stop-mode in the meantime.
-        if ctx.stats.stop {
+        if ctx.time_man.stop(&ctx.stats, true) {
             return Eval::DRAW;
         }
 
@@ -442,7 +440,7 @@ fn alpha_beta(
 
         // Don't use the result of alpha-beta if we entered stop-mode in the meantime. The result is probably nonsense.
         // Instead just return ASAP.
-        if ctx.stats.stop {
+        if ctx.time_man.stop(&ctx.stats, true) {
             return Eval::DRAW;
         }
 
