@@ -8,7 +8,8 @@ use std::{
 };
 
 pub struct Limits {
-    time_limit: Duration,
+    hard_time_limit: Duration,
+    soft_time_limit: Duration,
     node_limit: u64,
     depth_limit: u16,
     stop: Arc<AtomicBool>,
@@ -17,16 +18,25 @@ pub struct Limits {
 impl Limits {
     pub fn new() -> Limits {
         Limits {
-            time_limit: Duration::MAX,
+            hard_time_limit: Duration::MAX,
+            soft_time_limit: Duration::MAX,
             node_limit: u64::MAX,
             depth_limit: u16::MAX,
             stop: Arc::new(AtomicBool::new(false)),
         }
     }
 
-    pub fn time(&mut self, limit: Option<Duration>) -> &mut Self {
+    pub fn hard_time(&mut self, limit: Option<Duration>) -> &mut Self {
         if let Some(limit) = limit {
-            self.time_limit = limit;
+            self.hard_time_limit = limit;
+        }
+
+        self
+    }
+
+    pub fn soft_time(&mut self, limit: Option<Duration>) -> &mut Self {
+        if let Some(limit) = limit {
+            self.soft_time_limit = limit;
         }
 
         self
@@ -51,12 +61,12 @@ impl Limits {
     pub fn start_now(&self) -> TimeMan {
         TimeMan {
             start_time: Instant::now(),
-            time_limit: self.time_limit,
+            hard_time_limit: self.hard_time_limit,
+            soft_time_limit: self.hard_time_limit,
             node_limit: self.node_limit,
             depth_limit: self.depth_limit,
             stop: Arc::clone(&self.stop),
             cached_stop: self.stop.load(Ordering::Relaxed),
-            last_depth_reached: Instant::now(),
         }
     }
 }
@@ -70,12 +80,12 @@ impl Default for Limits {
 #[derive(Debug, Clone)]
 pub struct TimeMan {
     start_time: Instant,
-    time_limit: Duration,
+    hard_time_limit: Duration,
+    soft_time_limit: Duration,
     node_limit: u64,
     depth_limit: u16,
     stop: Arc<AtomicBool>,
     cached_stop: bool,
-    last_depth_reached: Instant,
 }
 
 impl TimeMan {
@@ -83,8 +93,12 @@ impl TimeMan {
         self.node_limit
     }
 
-    pub fn time_limit(&self) -> Duration {
-        self.time_limit
+    pub fn hard_time_limit(&self) -> Duration {
+        self.hard_time_limit
+    }
+
+    pub fn soft_time_limit(&self) -> Duration {
+        self.soft_time_limit
     }
 
     pub fn depth_limit(&self) -> u16 {
@@ -102,25 +116,30 @@ impl TimeMan {
 
         let should_stop = stats.nodes > self.node_limit
             || stats.depth > self.depth_limit
-            || self.start_time.elapsed() >= self.time_limit
+            || self.start_time.elapsed() >= self.hard_time_limit
             || self.stop.load(Ordering::Relaxed);
 
         self.cached_stop = should_stop;
         should_stop
     }
 
-    pub fn finished_depth(&mut self) {
-        self.last_depth_reached = Instant::now();
-    }
+    pub fn enough_time_for_next_depth(&mut self, stats: &SearchStats) -> bool {
+        if self.stop(stats, false) {
+            return false;
+        };
 
-    pub fn enough_time_for_next_depth(&self) -> bool {
-        if self.time_limit == Duration::MAX {
+        if self.hard_time_limit == Duration::MAX {
             return true;
         }
 
-        let time_used = self.last_depth_reached.duration_since(self.start_time);
-        let time_left = (self.start_time + self.time_limit).duration_since(self.last_depth_reached);
+        let time_used = Instant::now().duration_since(self.start_time);
+
+        let time_left = (self.start_time + self.soft_time_limit)
+            .checked_duration_since(Instant::now())
+            .unwrap_or(Duration::ZERO);
+
         let expected_next_time = time_used * 10;
+
         expected_next_time < time_left
     }
 

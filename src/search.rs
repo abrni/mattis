@@ -84,25 +84,35 @@ pub struct SearchConfig<'a> {
     pub search_history: Arc<Mutex<[[u64; 64]; 12]>>,
 }
 
-pub fn calculate_time_limit(go: uci::Go, color: Color) -> Option<Duration> {
+pub fn calculate_time_limit(go: &uci::Go, color: Color) -> Option<(Duration, Duration)> {
     let (time, inc) = match color {
         Color::White => (go.wtime, go.winc),
         Color::Black => (go.btime, go.binc),
     };
 
+    let time = time.or(go.movetime).map(|t| t as f64);
+    let inc = inc.unwrap_or(0) as f64;
     let movestogo = go.movestogo.unwrap_or(30) as f64;
-    let (time, inc) = (time.or(go.movetime), inc.unwrap_or(0) as f64);
 
-    time.map(|t| t as f64)
-        .map(|t| (t + (movestogo * inc)) / (movestogo / 3.0 * 2.0) - inc)
-        .map(|t| Duration::from_micros((t * 1000.0) as u64))
+    time.map(|t| {
+        let hard_limit = t / 2.0;
+        let hard_limit = Duration::from_micros((hard_limit * 1000.0) as u64);
+
+        let soft_limit = (t + (movestogo * inc)) / movestogo;
+        let soft_limit = Duration::from_micros((soft_limit * 1000.0) as u64);
+
+        (hard_limit, soft_limit)
+    })
 }
 
 pub fn run_search(config: SearchConfig) -> KillSwitch {
+    let (hard_time, soft_time) = calculate_time_limit(&config.go, config.board.color).unzip();
+
     let time_man = Limits::new()
         .depth(config.go.depth.map(|d| d as u16))
         .nodes(config.go.nodes.map(|n| n as u64))
-        .time(calculate_time_limit(config.go, config.board.color))
+        .hard_time(hard_time)
+        .soft_time(soft_time)
         .start_now();
 
     let mut ctx = ABContext {
@@ -223,13 +233,9 @@ impl IterativeDeepening {
     fn next_depth(&mut self, board: &mut Board, ctx: &mut ABContext) -> Option<SearchStats> {
         ctx.stats.depth = self.next_depth;
 
-        if ctx.time_man.stop(&ctx.stats, false) {
+        if !ctx.time_man.enough_time_for_next_depth(&ctx.stats) {
             return None;
         };
-
-        if !ctx.time_man.enough_time_for_next_depth() {
-            return None;
-        }
 
         let mut alpha = self.last_eval - PieceType::Pawn.value();
         let mut beta = self.last_eval + PieceType::Pawn.value();
@@ -270,7 +276,6 @@ impl IterativeDeepening {
             ctx.stats.score = score;
             ctx.stats.pv = pv_line(&ctx.transposition_table, board);
             ctx.stats.bestmove = ctx.stats.pv.get(0).copied().unwrap_or_default();
-            ctx.time_man.finished_depth();
 
             Some(ctx.stats.clone())
         }
@@ -501,7 +506,7 @@ fn alpha_beta(
     // If we have not improved alpha, we mark the best move as an alpha-cutoff.
     // Otherwise we can return the exact score.
     let hashentry_kind = if alpha_changed { HEKind::Exact } else { HEKind::Alpha };
-    let score = if alpha_changed { best_score } else { alpha }; // TODO: I think, weh should be able to always use alpha here?
+    let score = if alpha_changed { alpha } else { best_score }; // TODO: I think, weh should be able to always use alpha here?
     ctx.transposition_table
         .store(board.position_key, score, best_move, depth, hashentry_kind);
 
