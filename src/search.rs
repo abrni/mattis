@@ -463,13 +463,10 @@ fn alpha_beta(
             }
 
             // Store the move in the hashtable and mark it as a beta-cutoff
-            ctx.transposition_table
-                .store(board.position_key, beta, m, depth, HEKind::Beta);
+            ctx.transposition_table.store(board, beta, m, depth, HEKind::Beta);
 
             return beta; // fail hard beta-cutoff
-        }
-
-        if score > alpha {
+        } else if score > alpha {
             alpha = score;
             alpha_changed = true;
 
@@ -504,7 +501,7 @@ fn alpha_beta(
     let hashentry_kind = if alpha_changed { HEKind::Exact } else { HEKind::Alpha };
     let score = if alpha_changed { alpha } else { best_score }; // TODO: I think, weh should be able to always use alpha here?
     ctx.transposition_table
-        .store(board.position_key, score, best_move, depth, hashentry_kind);
+        .store(board, score, best_move, depth, hashentry_kind);
 
     alpha
 }

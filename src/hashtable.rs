@@ -89,16 +89,15 @@ impl TranspositionTable {
         }
     }
 
+    #[inline(always)]
     fn index(&self, key: u64) -> usize {
         (key >> self.shift) as usize
     }
 
-    pub fn store(&self, position_key: u64, score: Eval, m: ChessMove, depth: u16, kind: HEKind) {
+    pub fn store(&self, board: &Board, score: Eval, m: ChessMove, depth: u16, kind: HEKind) {
         let current_table_age = self.current_age.load(Ordering::Relaxed);
-        let index = self.index(position_key);
+        let index = self.index(board.position_key);
         debug_assert!(index < self.capacity);
-
-        // TODO: check if mate??? siehe VICE
 
         // SAFETY: Our index is always in range.
         let table_entry = unsafe { self.data.get_unchecked(index) };
@@ -118,6 +117,12 @@ impl TranspositionTable {
             return;
         }
 
+        let score = if score.is_mate() {
+            score + board.ply as i16 * score.inner().signum()
+        } else {
+            score
+        };
+
         let new_data = Data {
             score,
             cmove: m,
@@ -126,7 +131,7 @@ impl TranspositionTable {
             age: current_table_age,
         };
 
-        table_entry.store(position_key, new_data);
+        table_entry.store(board.position_key, new_data);
     }
 
     pub fn load(&self, key: u64) -> Option<Data> {
@@ -141,15 +146,19 @@ impl TranspositionTable {
 
     pub fn probe(&self, board: &Board, alpha: Eval, beta: Eval, depth: u16) -> Probe {
         let Some(data) = self.load(board.position_key) else { return Probe::NoHit };
-
-        let cmove = data.cmove;
-        let score = data.score;
+        let Data { cmove, score, .. } = data;
 
         if data.depth < depth {
             return Probe::PV(cmove, score);
         }
 
         debug_assert!(data.depth >= 1);
+
+        let score = if score.is_mate() {
+            score - board.ply as i16 * score.inner().signum()
+        } else {
+            score
+        };
 
         match data.kind {
             HEKind::Alpha if score <= alpha => Probe::CutOff(cmove, alpha),
@@ -168,6 +177,7 @@ impl TranspositionTable {
 mod test {
     use super::HEKind;
     use crate::{
+        board::Board,
         chess_move::ChessMove,
         eval::Eval,
         hashtable::{Data, Entry, TranspositionTable},
@@ -205,10 +215,11 @@ mod test {
     fn store_any_key() {
         for size_mb in [2, 4, 8, 16, 32] {
             let table = TranspositionTable::new(size_mb);
+            let board = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
 
             for _ in 0..table.capacity {
                 table.store(
-                    rand::random(),
+                    &board,
                     Eval::default(),
                     ChessMove::default(),
                     u16::default(),
