@@ -115,15 +115,29 @@ impl TranspositionTable {
         self.load(key).map(|data| data.cmove)
     }
 
-    pub fn store(&self, board: &Board, score: Eval, m: ChessMove, depth: u16, kind: HEKind) {
+    pub fn store(&self, board: &Board, score: Eval, cmove: ChessMove, depth: u16, kind: HEKind) {
+        // Load currently stored data
         let table_entry = self.entry(board.position_key);
         let entry_data = table_entry.load(board.position_key);
-
         let current_table_age = self.current_age.load(Ordering::Relaxed);
+
+        // Its possible, that we encounter hash collisions. We do not override the existing entry if:
+        // - the existing entry contains valid data (i.e. it is not corrupted)
+        // - and this data is from the current table age
+        // - and this data contains a move from a higher search depth than we are trying to store
+        //   (i.e. the existing move is more acurate)
         if entry_data.is_some_and(|data| data.age == current_table_age && data.depth > depth) {
             return;
         }
 
+        // Adjust the score, if its a mate score.
+        // The mate score is always relative to the root position (i.e. how many moves away from the root).
+        // That also means, the current ply does not necesarily match the mate score
+        // (e.g. we might store a score of 'mate in 6 ply' at depth 4).
+        // When we later access this data, we might
+        //     a) have a different root position or
+        //     b) be at a different position in the search tree (the same position can be reached at different ply).
+        // This means we have to adjust the mate score before storing and after loading it, to ensure accuracy.
         let score = if score.is_mate() {
             score + board.ply as i16 * score.inner().signum()
         } else {
@@ -132,7 +146,7 @@ impl TranspositionTable {
 
         let new_data = Data {
             score,
-            cmove: m,
+            cmove,
             depth,
             kind,
             age: current_table_age,
