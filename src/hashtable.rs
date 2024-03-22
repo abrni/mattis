@@ -10,9 +10,9 @@ pub enum HEKind {
 }
 
 pub enum Probe {
-    NoHit,                   // We have no hit in the table
-    PV(ChessMove, Eval),     // We do have a hit in the table, but it is not exact and does not cause a branch cutoff
-    CutOff(ChessMove, Eval), // We have a successful hit, that was exact or causes a branch cutoff
+    NoHit,         // We have no hit in the table
+    PV(ChessMove), // We do have a hit in the table, but it is not exact and does not cause a branch cutoff
+    CutOff(Eval),  // We have a successful hit, that was exact or causes a branch cutoff
 }
 
 #[derive(Debug, Default)]
@@ -149,7 +149,7 @@ impl TranspositionTable {
         let Data { cmove, score, .. } = data;
 
         if data.depth < depth {
-            return Probe::PV(cmove, score);
+            return Probe::PV(cmove);
         }
 
         debug_assert!(data.depth >= 1);
@@ -161,10 +161,10 @@ impl TranspositionTable {
         };
 
         match data.kind {
-            HEKind::Alpha if score <= alpha => Probe::CutOff(cmove, alpha),
-            HEKind::Beta if score >= beta => Probe::CutOff(cmove, beta),
-            HEKind::Exact => Probe::CutOff(cmove, score),
-            _ => Probe::PV(cmove, score),
+            HEKind::Alpha if score <= alpha => Probe::CutOff(alpha),
+            HEKind::Beta if score >= beta => Probe::CutOff(beta),
+            HEKind::Exact => Probe::CutOff(score),
+            _ => Probe::PV(cmove),
         }
     }
 

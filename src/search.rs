@@ -393,8 +393,8 @@ fn alpha_beta(
     let hashtable_probe = ctx.transposition_table.probe(board, alpha, beta, depth);
     let pv_move = match hashtable_probe {
         Probe::NoHit => None,
-        Probe::PV(m32, _) => Some(m32),
-        Probe::CutOff(_, score) => return score,
+        Probe::PV(cmove) => Some(cmove),
+        Probe::CutOff(score) => return score,
     };
 
     // Null move pruning optimization.
