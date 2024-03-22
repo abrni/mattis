@@ -156,21 +156,28 @@ impl TranspositionTable {
     }
 
     pub fn probe(&self, board: &Board, alpha: Eval, beta: Eval, depth: u16) -> Probe {
+        // Try to load data from the table.
+        // Loading `None` means, there either is no data or the data has been corrupted.
+        // Either way, we just return `NoHit`.
         let Some(data) = self.load(board.position_key) else { return Probe::NoHit };
         let Data { cmove, score, .. } = data;
 
+        // If the stored data is from a lower depth, than we are requesting, it cannot be used for a branch-cutoff.
+        // Just return the move as a pv move for move ordering.
         if data.depth < depth {
             return Probe::PV(cmove);
         }
 
-        debug_assert!(data.depth >= 1);
-
+        // Adjust the score, if its a mate score.
+        // See the corresping comment in the `store`-function for an explanation.
         let score = if score.is_mate() {
             score - board.ply as i16 * score.inner().signum()
         } else {
             score
         };
 
+        // Depending on the entry kind, we return a pv move or a cutoff. Exact entrys can always yield a cutoff.
+        // Alpha and beta entries only yield cutoffs, if the score is outside the corresponding bound.
         match data.kind {
             HEKind::Alpha if score <= alpha => Probe::CutOff(alpha),
             HEKind::Beta if score >= beta => Probe::CutOff(beta),
