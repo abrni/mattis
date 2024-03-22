@@ -1,4 +1,6 @@
 #![warn(clippy::return_self_not_must_use)]
+#![warn(clippy::missing_safety_doc)]
+#![warn(clippy::undocumented_unsafe_blocks)]
 
 pub mod bitboard;
 pub mod board;

@@ -32,6 +32,7 @@ pub struct Data {
 
 impl Entry {
     fn store(&self, key: u64, data: Data) {
+        // Safety: Transmuting to a u64 is fine, because `Data` has a size of exactly 64 bits.
         let data: u64 = unsafe { std::mem::transmute(data) };
         let key = data ^ key;
 
@@ -40,10 +41,14 @@ impl Entry {
     }
 
     fn load(&self, key: u64) -> Option<Data> {
+        // Load both key and data and decode the key.
         let encoded_key = self.key.load(Ordering::Relaxed);
         let data = self.data.load(Ordering::Relaxed);
+        let decoded_key = encoded_key ^ data;
 
-        if encoded_key ^ data == key {
+        if decoded_key == key {
+            // Safety: We only transmute after checking the decoded key.
+            // if the key doesn't match, we do not transmute and return `None` instead.
             let data: Data = unsafe { std::mem::transmute(data) };
             Some(data)
         } else {

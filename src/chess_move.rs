@@ -68,10 +68,12 @@ impl ChessMove {
     }
 
     pub fn start(self) -> Square {
+        // Safety: The first 6 bits of the move data always contain a valid square.
         unsafe { Square::unchecked_transmute_from((self.0 & 0x3F) as u8) }
     }
 
     pub fn end(self) -> Square {
+        // Safety: The second 6 bits of the move data always contain a valid square.
         unsafe { Square::unchecked_transmute_from(((self.0 & 0xFC0) >> 6) as u8) }
     }
 

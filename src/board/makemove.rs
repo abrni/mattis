@@ -42,14 +42,19 @@ impl Board {
 
         if m.is_en_passant() {
             let dir: i8 = if color == Color::White { -8 } else { 8 };
+            // Safety: Always a valid square.
             let enemy_pawn_square = unsafe { end_square.add_unchecked(dir) };
             self.clear_piece(enemy_pawn_square); // remove the captured pawn
         } else if m.is_queenside_castle() {
+            // Safety: Always a valid square.
             let rook_from = unsafe { start_square.add_unchecked(-4) };
+            // Safety: Always a valid square.
             let rook_to = unsafe { start_square.add_unchecked(-1) };
             self.move_piece(rook_from, rook_to); // Move the rook
         } else if m.is_kingside_castle() {
+            // Safety: Always a valid square.
             let rook_from = unsafe { start_square.add_unchecked(3) };
+            // Safety: Always a valid square.
             let rook_to = unsafe { start_square.add_unchecked(1) };
             self.move_piece(rook_from, rook_to); // Move the rook
         }
@@ -84,6 +89,7 @@ impl Board {
         // set en passant square and update hash, if the move is a double pawn push
         if m.is_doube_pawn_push() {
             let dir: i8 = if color == Color::White { 8 } else { -8 };
+            // Safety: Always a valid square.
             let en_pas = unsafe { start_square.add_unchecked(dir) };
             self.en_passant = Some(en_pas);
             self.position_key ^= EN_PASSANT_KEYS[en_pas];
@@ -153,14 +159,19 @@ impl Board {
             let enemy_pawn = Piece::new(PieceType::Pawn, self.color.flipped());
             let dir: i8 = if self.color == Color::White { -8 } else { 8 };
 
+            // Safety: Always a valid square.
             let enemy_pawn_square = unsafe { to.add_unchecked(dir) };
             self.add_piece(enemy_pawn_square, enemy_pawn); // add the captured pawn back in
         } else if his.move16.is_queenside_castle() {
+            // Safety: Always a valid square.
             let rook_from = unsafe { from.add_unchecked(-1) };
+            // Safety: Always a valid square.
             let rook_to = unsafe { from.add_unchecked(-4) };
             self.move_piece(rook_from, rook_to); // move the rook back
         } else if his.move16.is_kingside_castle() {
+            // Safety: Always a valid square.
             let rook_from = unsafe { from.add_unchecked(1) };
+            // Safety: Always a valid square.
             let rook_to = unsafe { from.add_unchecked(3) };
             self.move_piece(rook_from, rook_to); // move the rook back
         }

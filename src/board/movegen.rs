@@ -47,6 +47,7 @@ impl Board {
             .intersection(RANK_BITBOARDS[Rank::R4]);
 
         for end in target_squares_single.iter_bit_indices() {
+            // Safety: Always a valid square.
             let start = unsafe { end.add_unchecked(-8) };
             let m16 = ChessMove::build().start(start).end(end);
 
@@ -58,6 +59,7 @@ impl Board {
         }
 
         for end in target_squares_double.iter_bit_indices() {
+            // Safety: Always a valid square.
             let start = unsafe { end.add_unchecked(-16) };
             list.push(ChessMove::build().start(start).end(end).double_pawn_push().finish());
         }
@@ -72,6 +74,7 @@ impl Board {
             .intersection(RANK_BITBOARDS[Rank::R5]);
 
         for end in target_squares_single.iter_bit_indices() {
+            // Safety: Always a valid square.
             let start = unsafe { end.add_unchecked(8) };
             let m16 = ChessMove::build().start(start).end(end);
 
@@ -83,6 +86,7 @@ impl Board {
         }
 
         for end in target_squares_double.iter_bit_indices() {
+            // Safety: Always a valid square.
             let start = unsafe { end.add_unchecked(16) };
             list.push(ChessMove::build().start(start).end(end).double_pawn_push().finish());
         }
@@ -101,6 +105,7 @@ impl Board {
             .intersection(self.bb_all_per_color[Color::Black]);
 
         for end in targets_east.iter_bit_indices() {
+            // Safety: Always a valid square.
             let start = unsafe { end.add_unchecked(-9) };
             let m16 = ChessMove::build().start(start).end(end).capture();
 
@@ -116,6 +121,7 @@ impl Board {
             .intersection(self.bb_all_per_color[Color::Black]);
 
         for end in targets_west.iter_bit_indices() {
+            // Safety: Always a valid square.
             let start = unsafe { end.add_unchecked(-7) };
             let m16 = ChessMove::build().start(start).end(end).capture();
 
@@ -133,6 +139,7 @@ impl Board {
             .intersection(self.bb_all_per_color[Color::White]);
 
         for end in targets_east.iter_bit_indices() {
+            // Safety: Always a valid square.
             let start = unsafe { end.add_unchecked(7) };
             let m16 = ChessMove::build().start(start).end(end).capture();
 
@@ -148,6 +155,7 @@ impl Board {
             .intersection(self.bb_all_per_color[Color::White]);
 
         for end in targets_west.iter_bit_indices() {
+            // Safety: Always a valid square.
             let start = unsafe { end.add_unchecked(9) };
             let m16 = ChessMove::build().start(start).end(end).capture();
 

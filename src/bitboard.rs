@@ -107,6 +107,7 @@ impl BitBoard {
         self.0 &= self.0 - 1;
 
         let idx = POP_MAGIC_TABLE[(fold.wrapping_mul(0x783a9b23) >> 26) as usize];
+        // Safety: `POP_MAGIC_TABLE` only contains numbers lower than 64.
         unsafe { Some(Square::unchecked_transmute_from(idx)) }
     }
 
@@ -162,12 +163,9 @@ impl BitBoard {
 
 impl Display for BitBoard {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for rank in (0..8).rev() {
-            let rank = unsafe { Rank::unchecked_transmute_from(rank) };
-            for file in 0..8 {
-                let file = unsafe { File::unchecked_transmute_from(file) };
+        for rank in Rank::iter_all().rev() {
+            for file in File::iter_all() {
                 let sq = Square::from_file_rank(file, rank);
-
                 write!(f, "{} ", if self.get(sq) { "X" } else { "." })?;
             }
 

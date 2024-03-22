@@ -45,9 +45,10 @@ macro_rules! impl_iterators {
             type Item = $type;
 
             fn next(&mut self) -> Option<Self::Item> {
-                self.range
-                    .next()
-                    .map(|v| unsafe { <$type>::unchecked_transmute_from(v) })
+                self.range.next().map(|v| {
+                    // Safety: `Self::range` always includes only valid values.
+                    unsafe { <$type>::unchecked_transmute_from(v) }
+                })
             }
 
             fn size_hint(&self) -> (usize, Option<usize>) {
@@ -57,9 +58,10 @@ macro_rules! impl_iterators {
 
         impl DoubleEndedIterator for $itertype {
             fn next_back(&mut self) -> Option<Self::Item> {
-                self.range
-                    .next_back()
-                    .map(|v| unsafe { <$type>::unchecked_transmute_from(v) })
+                self.range.next_back().map(|v| {
+                    // Safety: `Self::range` always includes only valid values.
+                    unsafe { <$type>::unchecked_transmute_from(v) }
+                })
             }
         }
 
@@ -197,6 +199,9 @@ impl Piece {
     ];
 
     pub const fn new(ty: PieceType, color: Color) -> Self {
+        // Safety:
+        // - White pieces have the same bit repr as PieceType.
+        // - For black pieces, we just need to add 6 (because there are 6 piece types).
         unsafe { std::mem::transmute(ty as u8 + 6 * color as u8) }
     }
 
@@ -609,18 +614,21 @@ impl Square {
         let file: u8 = file.into();
         let rank: u8 = rank.into();
         let square = file + rank * 8;
+        // Safety: `square` is always lower than `Square::MAX`.
         unsafe { Self::unchecked_transmute_from(square) }
     }
 
     pub fn file(self) -> File {
         let sq = u8::from(self);
         let file = sq % 8;
+        // Safety: `file` is always lower than `File::MAX`.
         unsafe { File::unchecked_transmute_from(file) }
     }
 
     pub fn rank(self) -> Rank {
         let sq = u8::from(self);
         let rank = sq / 8;
+        // Safety: `rank` is always lower than `Rank::MAX`.
         unsafe { Rank::unchecked_transmute_from(rank) }
     }
 
