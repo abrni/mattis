@@ -54,7 +54,6 @@ impl Entry {
 
 pub struct TranspositionTable {
     data: Box<[Entry]>,
-    capacity: usize,
     shift: u32,
     current_age: AtomicU8,
 }
@@ -75,10 +74,14 @@ impl TranspositionTable {
 
         Self {
             data,
-            capacity,
             shift,
             current_age: AtomicU8::new(0),
         }
+    }
+
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> usize {
+        self.data.len()
     }
 
     pub fn reset(&self) {
@@ -94,26 +97,30 @@ impl TranspositionTable {
         (key >> self.shift) as usize
     }
 
+    #[inline(always)]
+    fn entry(&self, key: u64) -> &Entry {
+        let index = self.index(key);
+
+        // Safety: index is always in range
+        unsafe { self.data.get_unchecked(index) }
+    }
+
+    #[inline(always)]
+    pub fn load(&self, key: u64) -> Option<Data> {
+        self.entry(key).load(key)
+    }
+
+    #[inline(always)]
+    pub fn load_move(&self, key: u64) -> Option<ChessMove> {
+        self.load(key).map(|data| data.cmove)
+    }
+
     pub fn store(&self, board: &Board, score: Eval, m: ChessMove, depth: u16, kind: HEKind) {
+        let table_entry = self.entry(board.position_key);
+        let entry_data = table_entry.load(board.position_key);
+
         let current_table_age = self.current_age.load(Ordering::Relaxed);
-        let index = self.index(board.position_key);
-        debug_assert!(index < self.capacity);
-
-        // SAFETY: Our index is always in range.
-        let table_entry = unsafe { self.data.get_unchecked(index) };
-        let entry_key = table_entry.key.load(Ordering::Relaxed);
-        let entry_data = table_entry.data.load(Ordering::Relaxed);
-        let entry_data: Data = unsafe { std::mem::transmute(entry_data) };
-
-        // Check if it makes sense to store the move.
-        // The old entry can be replaced if any of the following conditions is true:
-        // - the old entry has never been written to
-        // - TODO: the old entry is corrupted by a data race
-        // - the old entry is not from the current age
-        // - the old entry has a lower depth than we are trying to write
-        let replace = entry_key == 0 || entry_data.age != current_table_age || entry_data.depth <= depth;
-
-        if !replace {
+        if entry_data.is_some_and(|data| data.age == current_table_age && data.depth > depth) {
             return;
         }
 
@@ -132,16 +139,6 @@ impl TranspositionTable {
         };
 
         table_entry.store(board.position_key, new_data);
-    }
-
-    pub fn load(&self, key: u64) -> Option<Data> {
-        let index = self.index(key);
-        let entry = unsafe { self.data.get_unchecked(index) };
-        entry.load(key)
-    }
-
-    pub fn get(&self, key: u64) -> Option<ChessMove> {
-        self.load(key).map(|data| data.cmove)
     }
 
     pub fn probe(&self, board: &Board, alpha: Eval, beta: Eval, depth: u16) -> Probe {
@@ -200,8 +197,8 @@ mod test {
             let byte_size = size_mb * 1024 * 1024;
             let data = &*table.data;
             assert_eq!(std::mem::size_of_val(data), byte_size);
-            assert_eq!(table.capacity, table.data.len());
-            assert_eq!(table.capacity * std::mem::size_of::<Entry>(), byte_size);
+            assert_eq!(table.len(), table.data.len());
+            assert_eq!(table.len() * std::mem::size_of::<Entry>(), byte_size);
         }
     }
 
@@ -217,7 +214,7 @@ mod test {
             let table = TranspositionTable::new(size_mb);
             let board = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
 
-            for _ in 0..table.capacity {
+            for _ in 0..table.len() {
                 table.store(
                     &board,
                     Eval::default(),

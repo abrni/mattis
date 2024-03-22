@@ -282,7 +282,7 @@ fn pv_line(tptable: &TranspositionTable, board: &mut Board) -> Vec<ChessMove> {
     let mut pos_key_counts = HashMap::new();
     let mut pvline = Vec::with_capacity(8);
 
-    while let Some(cmove) = tptable.get(board.position_key) {
+    while let Some(cmove) = tptable.load_move(board.position_key) {
         if cmove.is_nomove() {
             break;
         }
