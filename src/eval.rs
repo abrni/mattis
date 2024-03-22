@@ -29,14 +29,15 @@ impl Eval {
 
     #[must_use]
     pub fn is_mate(self) -> bool {
-        self.abs() >= Self::MATE_RANGE_START
+        let abs = self.abs();
+        abs >= Self::MATE_RANGE_START && abs <= Self::MATE_RANGE_END
     }
 
     #[must_use]
     pub fn mate_ply(self) -> Option<u8> {
         if self.is_mate() {
-            let ply = Self::MATE_RANGE_END - self.abs();
-            Some(ply.0 as u8)
+            let ply = i16::abs_diff(Self::MATE_RANGE_END.inner(), self.abs().inner());
+            Some(ply as u8)
         } else {
             None
         }
