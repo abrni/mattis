@@ -271,7 +271,7 @@ impl IterativeDeepening {
         } else {
             ctx.stats.score = score;
             ctx.stats.pv = pv_line(&ctx.transposition_table, board);
-            ctx.stats.bestmove = ctx.stats.pv.get(0).copied().unwrap_or_default();
+            ctx.stats.bestmove = ctx.stats.pv.first().copied().unwrap_or_default();
 
             Some(ctx.stats.clone())
         }
