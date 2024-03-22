@@ -237,8 +237,8 @@ impl IterativeDeepening {
             return None;
         };
 
-        let mut alpha = self.last_eval - PieceType::Pawn.value();
-        let mut beta = self.last_eval + PieceType::Pawn.value();
+        let mut alpha = self.last_eval - PieceType::Pawn.value() / 2;
+        let mut beta = self.last_eval + PieceType::Pawn.value() / 2;
         let mut loop_count = 0;
 
         let score = loop {
@@ -248,20 +248,16 @@ impl IterativeDeepening {
                 return None;
             }
 
+            let inc = 20_i16
+                .saturating_mul(10_i16.saturating_pow(loop_count))
+                .saturating_add(PieceType::Pawn.value() / 2);
+
             if score <= alpha {
                 loop_count += 1;
-                alpha = alpha
-                    .inner()
-                    .checked_sub(10_i16 * 4_i16.pow(loop_count) + PieceType::Pawn.value())
-                    .map(Into::into)
-                    .unwrap_or(-Eval::MAX);
+                alpha = alpha.inner().checked_sub(inc).map(Into::into).unwrap_or(-Eval::MAX);
             } else if score >= beta {
                 loop_count += 1;
-                beta = beta
-                    .inner()
-                    .checked_add(10_i16 * 4_i16.pow(loop_count) + PieceType::Pawn.value())
-                    .map(Into::into)
-                    .unwrap_or(Eval::MAX);
+                beta = beta.inner().checked_add(inc).map(Into::into).unwrap_or(Eval::MAX);
             } else {
                 break score;
             }
