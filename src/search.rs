@@ -457,7 +457,7 @@ fn alpha_beta(
             // A quiet move, that caused a beta-cutoff is labeled a 'killer-move'.
             // If the same move is encountered at the same ply but in a different position, it will be
             // prefered by move ordering. We use two killer slots, to not forget good moves in some situations.
-            if !m.is_capture() {
+            if !m.is_capture() && !m.is_promotion() {
                 ctx.search_killers[board.ply][1] = ctx.search_killers[board.ply][0];
                 ctx.search_killers[board.ply][0] = m;
             }
