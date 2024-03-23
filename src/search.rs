@@ -131,6 +131,7 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
         &mut config.board.clone(),
         &mut ctx,
         config.allow_null_pruning,
+        false,
     );
 
     let join_handles: Vec<JoinHandle<()>> = (0..config.thread_count)
@@ -242,7 +243,7 @@ impl IterativeDeepening {
         let mut loop_count = 0;
 
         let score = loop {
-            let score = alpha_beta(alpha, beta, self.next_depth, board, ctx, ctx.allow_null_pruning);
+            let score = alpha_beta(alpha, beta, self.next_depth, board, ctx, ctx.allow_null_pruning, true);
 
             if ctx.time_man.stop(&ctx.stats, true) {
                 return None;
@@ -358,6 +359,7 @@ fn alpha_beta(
     board: &mut Board,
     ctx: &mut ABContext,
     allow_null_move: bool,
+    is_pv: bool,
 ) -> Eval {
     // We frequently check, if the search should stop
     // (e.g. because of time running out or a gui command).
@@ -401,9 +403,15 @@ fn alpha_beta(
     // We do a nothing move (passing move) and see if we are still much better than the oponent (by causing a beta cutoff).
     // In that case we can be sure to have found a good position and return early.
     // We don't want null move pruning, if we are in check, because that would cause an illegal position.
-    if allow_null_move && !board.in_check() && board.ply != 0 && board.count_big_pieces[board.color] > 1 && depth >= 4 {
+    if allow_null_move
+        && !is_pv
+        && !board.in_check()
+        && board.ply != 0
+        && board.count_big_pieces[board.color] > 1
+        && depth >= 4
+    {
         board.make_null_move();
-        let score = -alpha_beta(-beta, -beta + 1i16, depth - 4, board, ctx, false);
+        let score = -alpha_beta(-beta, -beta + 1i16, depth - 4, board, ctx, false, false);
         board.take_null_move();
 
         // Don't use the results, if we entered stop-mode in the meantime.
@@ -436,7 +444,27 @@ fn alpha_beta(
         }
 
         legal_moves += 1;
-        let score = -alpha_beta(-beta, -alpha, depth - 1, board, ctx, ctx.allow_null_pruning);
+
+        let score = if !alpha_changed {
+            -alpha_beta(-beta, -alpha, depth - 1, board, ctx, ctx.allow_null_pruning, is_pv)
+        } else {
+            let est = -alpha_beta(
+                -alpha - 1_i16,
+                -alpha,
+                depth - 1,
+                board,
+                ctx,
+                ctx.allow_null_pruning,
+                false,
+            );
+            if est > alpha {
+                -alpha_beta(-beta, -alpha, depth - 1, board, ctx, ctx.allow_null_pruning, true)
+            } else {
+                -Eval::MAX
+            }
+        };
+
+        // let score = -alpha_beta(-beta, -alpha, depth - 1, board, ctx, ctx.allow_null_pruning);
         board.take_move();
 
         // Don't use the result of alpha-beta if we entered stop-mode in the meantime. The result is probably nonsense.
