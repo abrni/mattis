@@ -1,4 +1,4 @@
-use mattis::bitboard::BitBoard;
+use mattis_bitboard::BitBoard;
 use mattis_types::{File, Square};
 
 fn main() {

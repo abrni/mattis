@@ -280,10 +280,19 @@ version = "2.0.0"
 dependencies = [
  "criterion",
  "lazy_static",
+ "mattis-bitboard",
  "mattis-types",
  "rand",
  "smallvec",
  "thiserror",
+]
+
+[[package]]
+name = "mattis-bitboard"
+version = "0.1.0"
+dependencies = [
+ "lazy_static",
+ "mattis-types",
 ]
 
 [[package]]

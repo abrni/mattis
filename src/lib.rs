@@ -2,7 +2,6 @@
 #![warn(clippy::missing_safety_doc)]
 #![warn(clippy::undocumented_unsafe_blocks)]
 
-pub mod bitboard;
 pub mod board;
 pub mod chess_move;
 pub mod eval;

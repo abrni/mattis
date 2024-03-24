@@ -1,9 +1,8 @@
-use mattis_types::{CastlePerm, Color, File, Piece, PieceType, Rank, Square, TryFromPrimitive};
-
-use crate::{
-    bitboard::{BitBoard, BISHOP_MOVE_PATTERNS, BORDER, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS, RANK_BITBOARDS},
-    chess_move::{ChessMove, ChessMoveBuilder},
+use crate::chess_move::{ChessMove, ChessMoveBuilder};
+use mattis_bitboard::{
+    BitBoard, BISHOP_MOVE_PATTERNS, BORDER, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS, RANK_BITBOARDS,
 };
+use mattis_types::{CastlePerm, Color, File, Piece, PieceType, Rank, Square, TryFromPrimitive};
 
 use super::Board;
 

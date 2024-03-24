@@ -1,7 +1,5 @@
-use mattis::{
-    bitboard::BitBoard,
-    board::movegen::{BISHOP_MAGIC_BIT_COUNT, BISHOP_MAGIC_MASKS, ROOK_MAGIC_BIT_COUNT, ROOK_MAGIC_MASKS},
-};
+use mattis::board::movegen::{BISHOP_MAGIC_BIT_COUNT, BISHOP_MAGIC_MASKS, ROOK_MAGIC_BIT_COUNT, ROOK_MAGIC_MASKS};
+use mattis_bitboard::BitBoard;
 use mattis_types::{Square, TryFromPrimitive};
 use rand::{thread_rng, Rng};
 use std::{io::Write, ops::BitAnd};
