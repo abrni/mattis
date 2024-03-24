@@ -4,8 +4,8 @@ use std::{
 };
 
 use mattis::{
-    board::{movegen::MoveList, Board},
-    chess_move::ChessMove,
+    board::Board,
+    chess_move::{ChessMove, Notation},
     hashtable::TranspositionTable,
     search::{self, KillSwitch, SearchConfig},
     uci::{self, EngineMessage, GuiMessage, Id},
@@ -94,9 +94,7 @@ fn setup_position(board: &mut Board, pos: uci::Position, moves: &[String]) {
     *board = Board::from_fen(fen).unwrap();
 
     for move_str in moves {
-        let mut movelist = MoveList::new();
-        board.generate_all_moves(&mut movelist);
-        let chess_move = movelist.into_iter().find(|cm| format!("{cm}") == *move_str);
+        let chess_move = board.find_move(move_str, Notation::Smith);
 
         if let Some(cm) = chess_move {
             board.make_move(cm);

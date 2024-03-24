@@ -86,6 +86,10 @@ impl ChessMove {
             _ => None,
         }
     }
+
+    pub fn display(self, notation: Notation) -> MoveDisplay {
+        MoveDisplay { cmove: self, notation }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -214,15 +218,33 @@ impl Debug for ChessMove {
     }
 }
 
-impl Display for ChessMove {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Notation {
+    #[default]
+    Smith,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MoveDisplay {
+    notation: Notation,
+    cmove: ChessMove,
+}
+
+impl Display for MoveDisplay {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", self.start(), self.end())?;
+        let Self { notation, cmove } = self;
 
-        if let Some(pt) = self.promoted() {
-            write!(f, "{}", pt.to_char())?;
+        match notation {
+            Notation::Smith => {
+                write!(f, "{}{}", cmove.start(), cmove.end())?;
+
+                if let Some(pt) = cmove.promoted() {
+                    write!(f, "{}", pt.to_char())?;
+                }
+
+                Ok(())
+            }
         }
-
-        Ok(())
     }
 }
 
