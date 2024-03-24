@@ -51,11 +51,12 @@ pub fn not_rank_bitboards() -> [BitBoard; 8] {
 
 pub fn border() -> BitBoard {
     let file_bitboards = file_bitboards();
+    let rank_bitboards = rank_bitboards();
 
     file_bitboards[File::A]
         .union(file_bitboards[File::H])
-        .union(file_bitboards[Rank::R1])
-        .union(file_bitboards[Rank::R8])
+        .union(rank_bitboards[Rank::R1])
+        .union(rank_bitboards[Rank::R8])
 }
 
 pub fn white_pawn_passed_masks() -> [BitBoard; 64] {
