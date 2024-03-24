@@ -1,3 +1,3 @@
-/target
+**/target
 /_static_tables
 *.svg
