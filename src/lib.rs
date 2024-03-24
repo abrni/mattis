@@ -8,5 +8,6 @@ pub mod eval;
 pub mod hashtable;
 pub mod notation;
 pub mod search;
+pub mod tables;
 pub mod time_man;
 pub mod uci;

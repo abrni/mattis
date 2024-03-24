@@ -1,7 +1,8 @@
-use crate::chess_move::{ChessMove, ChessMoveBuilder};
-use mattis_bitboard::{
-    BitBoard, BISHOP_MOVE_PATTERNS, BORDER, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS, RANK_BITBOARDS,
+use crate::{
+    chess_move::{ChessMove, ChessMoveBuilder},
+    tables::{BISHOP_MOVE_PATTERNS, BORDER, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS, RANK_BITBOARDS},
 };
+use mattis_bitboard::BitBoard;
 use mattis_types::{CastlePerm, Color, File, Piece, PieceType, Rank, Square, TryFromPrimitive};
 
 use super::Board;
@@ -440,10 +441,10 @@ lazy_static::lazy_static! {
     };
 
     pub static ref BISHOP_MAGIC_MASKS: [BitBoard; 64] = {
-        let mut masks = *BISHOP_MOVE_PATTERNS;
+        let mut masks = BISHOP_MOVE_PATTERNS;
 
         for m in &mut masks {
-            *m = m.without(*BORDER);
+            *m = m.without(BORDER);
         }
 
         masks

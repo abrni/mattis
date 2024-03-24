@@ -1,8 +1,8 @@
-use mattis::board::movegen::{BISHOP_MAGIC_BIT_COUNT, BISHOP_MAGIC_MASKS, ROOK_MAGIC_BIT_COUNT, ROOK_MAGIC_MASKS};
 use mattis_bitboard::BitBoard;
-use mattis_types::{Square, TryFromPrimitive};
+use mattis_types::{File, Rank, Square, TryFromPrimitive};
 use rand::{thread_rng, Rng};
 use std::{io::Write, ops::BitAnd};
+use tables_gen::{bishop_move_patterns, border};
 
 fn main() {
     let mut rook_file = std::fs::File::create("./rook_magics").unwrap();
@@ -194,4 +194,79 @@ fn transform(b: BitBoard, magic: u64, bits: u32) -> u32 {
     // ((b as i32) * (magic as i32) ^ ((b >> 32) as i32) * ((magic >> 32) as i32)) as u32 >> (32 - bits)
 
     ((b.to_u64().wrapping_mul(magic)) >> (64 - bits)) as u32
+}
+
+#[rustfmt::skip]
+pub const ROOK_MAGIC_BIT_COUNT: [u32; 64] = [
+    12, 11, 11, 11, 11, 11, 11, 12,
+    11, 10, 10, 10, 10, 10, 10, 11,
+    11, 10, 10, 10, 10, 10, 10, 11,
+    11, 10, 10, 10, 10, 10, 10, 11,
+    11, 10, 10, 10, 10, 10, 10, 11,
+    11, 10, 10, 10, 10, 10, 10, 11,
+    11, 10, 10, 10, 10, 10, 10, 11,
+    12, 11, 11, 11, 11, 11, 11, 12,
+];
+
+#[rustfmt::skip]
+pub const BISHOP_MAGIC_BIT_COUNT: [u32; 64] = [
+    6, 5, 5, 5, 5, 5, 5, 6,
+    5, 5, 5, 5, 5, 5, 5, 5,
+    5, 5, 7, 7, 7, 7, 5, 5,
+    5, 5, 7, 9, 9, 7, 5, 5,
+    5, 5, 7, 9, 9, 7, 5, 5,
+    5, 5, 7, 7, 7, 7, 5, 5,
+    5, 5, 5, 5, 5, 5, 5, 5,
+    6, 5, 5, 5, 5, 5, 5, 6,
+];
+
+lazy_static::lazy_static! {
+    pub static ref ROOK_MAGIC_MASKS: [BitBoard; 64] = {
+        let mut boards = [BitBoard::EMPTY; 64];
+
+        for (i, m) in boards.iter_mut().enumerate() {
+            let mut result = BitBoard::EMPTY;
+            let square = Square::try_from_primitive(i as u8).unwrap();
+            let rank = square.rank();
+            let file = square.file();
+
+            if let Some(r) = rank.up() {
+                for r in Rank::range_inclusive(r, Rank::R7) {
+                    result.set(Square::from_file_rank(file, r));
+                }
+            }
+
+            if let Some(r) = rank.down() {
+                for r in Rank::range_inclusive(Rank::R2, r) {
+                    result.set(Square::from_file_rank(file, r));
+                }
+            }
+
+            if let Some(f) = file.up() {
+                for f in File::range_inclusive(f, File::G) {
+                    result.set(Square::from_file_rank(f, rank));
+                }
+            }
+
+            if let Some(f) = file.down() {
+                for f in File::range_inclusive(File::B, f) {
+                    result.set(Square::from_file_rank(f, rank));
+                }
+            }
+
+            *m = result;
+        }
+
+        boards
+    };
+
+    pub static ref BISHOP_MAGIC_MASKS: [BitBoard; 64] = {
+        let mut masks = bishop_move_patterns();
+
+        for m in &mut masks {
+            *m = m.without(border());
+        }
+
+        masks
+    };
 }

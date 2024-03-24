@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use mattis_types::{File, Rank, Square, TryFromPrimitive, UnsafeFromPrimitive};
+use mattis_types::{File, Rank, Square, UnsafeFromPrimitive};
 use std::fmt::{Debug, Display};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Zeroable, Pod)]
@@ -9,6 +9,8 @@ pub struct BitBoard(u64);
 impl BitBoard {
     pub const EMPTY: Self = Self(0);
     pub const FULL: Self = Self(u64::MAX);
+    const NOT_FILE_A: Self = Self(0xfefefefefefefefe);
+    const NOT_FILE_H: Self = Self(0x7f7f7f7f7f7f7f7f);
 
     pub fn from_u64(v: u64) -> Self {
         Self(v)
@@ -132,32 +134,32 @@ impl BitBoard {
 
     #[must_use]
     pub fn shifted_east(self) -> Self {
-        Self((self.0 << 1) & NOT_FILE_BITBOARDS[File::A].to_u64())
+        Self((self.0 << 1) & Self::NOT_FILE_A.to_u64())
     }
 
     #[must_use]
     pub fn shifted_west(self) -> Self {
-        Self((self.0 >> 1) & NOT_FILE_BITBOARDS[File::H].to_u64())
+        Self((self.0 >> 1) & Self::NOT_FILE_H.to_u64())
     }
 
     #[must_use]
     pub fn shifted_northeast(self) -> Self {
-        Self((self.0 << 9) & NOT_FILE_BITBOARDS[File::A].to_u64())
+        Self((self.0 << 9) & Self::NOT_FILE_A.to_u64())
     }
 
     #[must_use]
     pub fn shifted_southeast(self) -> Self {
-        Self((self.0 >> 7) & NOT_FILE_BITBOARDS[File::A].to_u64())
+        Self((self.0 >> 7) & Self::NOT_FILE_A.to_u64())
     }
 
     #[must_use]
     pub fn shifted_southwest(self) -> Self {
-        Self((self.0 >> 9) & NOT_FILE_BITBOARDS[File::H].to_u64())
+        Self((self.0 >> 9) & Self::NOT_FILE_H.to_u64())
     }
 
     #[must_use]
     pub fn shifted_northwest(self) -> Self {
-        Self((self.0 << 7) & NOT_FILE_BITBOARDS[File::H].to_u64())
+        Self((self.0 << 7) & Self::NOT_FILE_H.to_u64())
     }
 }
 
@@ -174,295 +176,6 @@ impl Display for BitBoard {
 
         Ok(())
     }
-}
-
-// ---------------------------------------------------------------------------------------------------------------------
-// ---------------------------------------------------------------------------------------------------------------------
-// # CONST BITBOARD TABLES ---------------------------------------------------------------------------------------------
-// ---------------------------------------------------------------------------------------------------------------------
-// ---------------------------------------------------------------------------------------------------------------------
-
-lazy_static::lazy_static! {
-    pub static ref FILE_BITBOARDS: [BitBoard; 8] = {
-        let mut boards = [BitBoard::EMPTY; 8];
-
-        for f in File::iter_all() {
-            for r in Rank::iter_all() {
-                boards[f].set(Square::from_file_rank(f, r));
-            }
-        }
-
-        boards
-    };
-
-    pub static ref NOT_FILE_BITBOARDS: [BitBoard; 8] = {
-        let mut boards = *FILE_BITBOARDS;
-
-        for m in &mut boards {
-            *m = m.complement();
-        }
-
-        boards
-    };
-
-    pub static ref RANK_BITBOARDS: [BitBoard; 8] = {
-        let mut boards = [BitBoard::EMPTY; 8];
-
-        for r in Rank::iter_all() {
-            for f in File::iter_all() {
-                boards[r].set(Square::from_file_rank(f, r));
-            }
-        }
-
-        boards
-    };
-
-    pub static ref NOT_RANK_BITBOARDS: [BitBoard; 8] = {
-        let mut boards = *RANK_BITBOARDS;
-
-        for m in &mut boards {
-            *m = m.complement();
-        }
-
-        boards
-    };
-
-
-    pub static ref BORDER: BitBoard = {
-        FILE_BITBOARDS[File::A]
-            .union(FILE_BITBOARDS[File::H])
-            .union(RANK_BITBOARDS[Rank::R1])
-            .union(RANK_BITBOARDS[Rank::R8])
-    };
-
-    pub static ref WHITE_PAWN_PASSED_MASKS: [BitBoard; 64] =  {
-        let mut bitboards = [BitBoard::EMPTY; 64];
-
-        for (i, board) in bitboards.iter_mut().enumerate() {
-            let square = Square::try_from_primitive(i as u8).unwrap();
-            let (file, rank) = (square.file(), square.rank());
-
-            for r in rank.iter_up().skip(1) {
-                let sq = Square::from_file_rank(file, r);
-                board.set(sq);
-            }
-
-            if let Some(file) = file.up() {
-                for r in rank.iter_up().skip(1) {
-                    let sq = Square::from_file_rank(file, r);
-                    board.set(sq);
-                }
-            }
-
-            if let Some(file) = file.down() {
-                for r in rank.iter_up().skip(1) {
-                    let sq = Square::from_file_rank(file, r);
-                    board.set(sq);
-                }
-            }
-        }
-
-        bitboards
-    };
-
-    pub static ref BLACK_PAWN_PASSED_MASKS: [BitBoard; 64] = {
-        let mut bitboards = [BitBoard::EMPTY; 64];
-
-        for (i, board) in bitboards.iter_mut().enumerate() {
-            let square = Square::try_from_primitive(i as u8).unwrap();
-            let (file, rank) = (square.file(), square.rank());
-
-            for r in rank.iter_down().skip(1) {
-                let sq = Square::from_file_rank(file, r);
-                board.set(sq);
-            }
-
-            if let Some(file) = file.up() {
-                for r in rank.iter_down().skip(1) {
-                    let sq = Square::from_file_rank(file, r);
-                    board.set(sq);
-                }
-            }
-
-            if let Some(file) = file.down() {
-                for r in rank.iter_down().skip(1) {
-                    let sq = Square::from_file_rank(file, r);
-                    board.set(sq);
-                }
-            }
-        }
-
-        bitboards
-    };
-
-
-    pub static ref ISOLATED_PAWN_MASKS: [BitBoard; 64] = {
-        let mut bitboards = [BitBoard::EMPTY; 64];
-
-        for (i, board) in bitboards.iter_mut().enumerate() {
-            let square = Square::try_from_primitive(i as u8).unwrap();
-            let file = square.file();
-
-            if let Some(f) = file.up() {
-                *board = board.union(FILE_BITBOARDS[f]);
-            }
-
-            if let Some(f) = file.down() {
-                *board = board.union(FILE_BITBOARDS[f]);
-            }
-        }
-
-        bitboards
-    };
-
-    pub static ref KNIGHT_MOVE_PATTERNS: [BitBoard; 64] = {
-        const DIRS: [(isize, Rank, Rank, File, File); 8] = [
-            (  6, Rank::R1, Rank::R7, File::C, File::H),
-            ( 15, Rank::R1, Rank::R6, File::B, File::H),
-            ( 17, Rank::R1, Rank::R6, File::A, File::G),
-            ( 10, Rank::R1, Rank::R7, File::A, File::F),
-            ( -6, Rank::R2, Rank::R8, File::A, File::F),
-            (-15, Rank::R3, Rank::R8, File::A, File::G),
-            (-17, Rank::R3, Rank::R8, File::B, File::H),
-            (-10, Rank::R2, Rank::R8, File::C, File::H),
-        ];
-
-        let mut boards = [BitBoard::EMPTY; 64];
-
-        for (square_num, m) in boards.iter_mut().enumerate() {
-            let mut result = BitBoard::EMPTY;
-            let square = Square::try_from_primitive(square_num as u8).unwrap();
-            let rank = square.rank();
-            let file = square.file();
-
-            for (dir, min_rank, max_rank, min_file, max_file) in DIRS {
-                if file < min_file || file > max_file || rank <  min_rank || rank > max_rank {
-                    continue;
-                }
-
-                let target = Square::try_from_primitive((square_num as isize + dir) as u8).unwrap();
-                result.set(target);
-            }
-
-            *m = result;
-        }
-
-        boards
-    };
-
-    pub static ref KING_MOVE_PATTERNS: [BitBoard; 64] = {
-        const DIRS: [(isize, Rank, Rank, File, File); 8] = [
-            ( 7, Rank::R1, Rank::R7, File::B, File::H),
-            ( 8, Rank::R1, Rank::R7, File::A, File::H),
-            ( 9, Rank::R1, Rank::R7, File::A, File::G),
-            ( 1, Rank::R1, Rank::R8, File::A, File::G),
-            (-7, Rank::R2, Rank::R8, File::A, File::G),
-            (-8, Rank::R2, Rank::R8, File::A, File::H),
-            (-9, Rank::R2, Rank::R8, File::B, File::H),
-            (-1, Rank::R1, Rank::R8, File::B, File::H)
-        ];
-
-        let mut boards = [BitBoard::EMPTY; 64];
-
-        for (square_num, m) in boards.iter_mut().enumerate() {
-            let mut result = BitBoard::EMPTY;
-            let square = Square::try_from_primitive(square_num as u8).unwrap();
-            let rank = square.rank();
-            let file = square.file();
-
-            for (dir, min_rank, max_rank, min_file, max_file) in DIRS {
-                if file < min_file || file > max_file || rank <  min_rank || rank > max_rank {
-                    continue;
-                }
-
-                let target = Square::try_from_primitive((square_num as isize + dir) as u8).unwrap();
-                result.set(target);
-
-            }
-
-            *m = result;
-        }
-
-        boards
-    };
-
-    pub static ref ROOK_MOVE_PATTERNS: [BitBoard; 64] = {
-        let mut boards = [BitBoard::EMPTY; 64];
-
-        for (i, m) in boards.iter_mut().enumerate() {
-            let mut result = BitBoard::EMPTY;
-            let square = Square::try_from_primitive(i as u8).unwrap();
-            let rank = square.rank();
-            let file = square.file();
-
-            if let Some(r) = rank.up() {
-                for r in Rank::range_inclusive(r, Rank::R8) {
-                    result.set(Square::from_file_rank(file, r));
-                }
-            }
-
-            if let Some(r) = rank.down() {
-                for r in Rank::range_inclusive(Rank::R1, r) {
-                    result.set(Square::from_file_rank(file, r));
-                }
-            }
-
-            if let Some(f) = file.up() {
-                for f in File::range_inclusive(f, File::H) {
-                    result.set(Square::from_file_rank(f, rank));
-                }
-            }
-
-            if let Some(f) = file.down() {
-                for f in File::range_inclusive(File::A, f) {
-                    result.set(Square::from_file_rank(f, rank));
-                }
-            }
-
-            *m = result;
-        }
-
-        boards
-    };
-
-    pub static ref BISHOP_MOVE_PATTERNS: [BitBoard; 64] = {
-        let mut boards = [BitBoard::EMPTY; 64];
-
-        for (i, m) in boards.iter_mut().enumerate() {
-            let mut result = BitBoard::EMPTY;
-            let square = Square::try_from_primitive(i as u8).unwrap();
-            let rank = square.rank();
-            let file = square.file();
-
-            if let Some((r, f)) = rank.up().zip(file.up()) {
-                for (r, f) in std::iter::zip(Rank::range_inclusive(r, Rank::R8), File::range_inclusive(f, File::H)) {
-                    result.set(Square::from_file_rank(f, r));
-                }
-            }
-
-            if let Some((r, f)) = rank.up().zip(file.down()) {
-                for (r, f) in std::iter::zip(Rank::range_inclusive(r, Rank::R8), File::range_inclusive(File::A, f).rev()) {
-                    result.set(Square::from_file_rank(f, r));
-                }
-            }
-
-            if let Some((r, f)) = rank.down().zip(file.up()) {
-                for (r, f) in std::iter::zip(Rank::range_inclusive(Rank::R1, r).rev(), File::range_inclusive(f, File::H)) {
-                    result.set(Square::from_file_rank(f, r));
-                }
-            }
-
-            if let Some((r, f)) = rank.down().zip(file.down()) {
-                for (r, f) in std::iter::zip(Rank::range_inclusive(Rank::R1, r).rev(), File::range_inclusive(File::A, f).rev()) {
-                    result.set(Square::from_file_rank(f, r));
-                }
-            }
-
-            *m = result;
-        }
-
-        boards
-    };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

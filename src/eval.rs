@@ -1,5 +1,7 @@
-use crate::board::Board;
-use mattis_bitboard::{BLACK_PAWN_PASSED_MASKS, FILE_BITBOARDS, ISOLATED_PAWN_MASKS, WHITE_PAWN_PASSED_MASKS};
+use crate::{
+    board::Board,
+    tables::{BLACK_PAWN_PASSED_MASKS, FILE_BITBOARDS, ISOLATED_PAWN_MASKS, WHITE_PAWN_PASSED_MASKS},
+};
 use mattis_types::{Color, Piece, PieceType, Square};
 use std::ops::{Add, AddAssign, Neg, Sub, SubAssign};
 
@@ -193,8 +195,8 @@ pub fn evaluation(board: &Board) -> Eval {
     // STEP 3: Apply penalties for isolated pawns & passed pawns
 
     let (my_passed_masks, op_passed_masks) = match my_color {
-        Color::White => (&*WHITE_PAWN_PASSED_MASKS, &*BLACK_PAWN_PASSED_MASKS),
-        Color::Black => (&*BLACK_PAWN_PASSED_MASKS, &*WHITE_PAWN_PASSED_MASKS),
+        Color::White => (WHITE_PAWN_PASSED_MASKS, BLACK_PAWN_PASSED_MASKS),
+        Color::Black => (BLACK_PAWN_PASSED_MASKS, WHITE_PAWN_PASSED_MASKS),
     };
 
     let bb_my_pawns = board.bitboards[Piece::new(PieceType::Pawn, my_color)];

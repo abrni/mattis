@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "mattis-bitboard", "mattis-types"]
+members = [".", "mattis-bitboard", "mattis-types", "tables_gen"]
 
 [package]
 name = "mattis"

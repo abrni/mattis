@@ -2,9 +2,13 @@ pub mod makemove;
 pub mod movegen;
 
 use self::movegen::{magic_bishop_moves, magic_rook_moves, MoveList};
-use crate::{chess_move::ChessMove, notation::Notation};
+use crate::{
+    chess_move::ChessMove,
+    notation::Notation,
+    tables::{KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS},
+};
 use lazy_static::lazy_static;
-use mattis_bitboard::{BitBoard, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS};
+use mattis_bitboard::BitBoard;
 use mattis_types::{CastlePerm, CastlePerms, Color, File, Piece, PieceType, Rank, Square, TryFromPrimitive};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::{fmt::Display, sync::Mutex};
