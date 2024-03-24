@@ -147,7 +147,7 @@ impl Board {
 
         let parts: Vec<&str> = fen.split_ascii_whitespace().collect();
 
-        if parts.len() != 6 {
+        if parts.len() < 4 || parts.len() > 6 {
             return Err(FenError::WrongFieldCount);
         }
 
