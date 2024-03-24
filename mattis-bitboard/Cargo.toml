@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 mattis-types = { path = "../mattis-types" }
 lazy_static = "1.4.0"
+bytemuck = { version = "1.15.0", features = ["derive"] }

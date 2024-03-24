@@ -1,8 +1,9 @@
+use bytemuck::{Pod, Zeroable};
+use mattis_types::{File, Rank, Square, TryFromPrimitive, UnsafeFromPrimitive};
 use std::fmt::{Debug, Display};
 
-use mattis_types::{File, Rank, Square, TryFromPrimitive, UnsafeFromPrimitive};
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Zeroable, Pod)]
+#[repr(C)]
 pub struct BitBoard(u64);
 
 impl BitBoard {
