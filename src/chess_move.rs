@@ -1,4 +1,7 @@
-use crate::types::{Piece, PieceType, Square};
+use crate::{
+    notation::SmithNotation,
+    types::{Piece, PieceType, Square},
+};
 use num_enum::UnsafeFromPrimitive;
 use std::fmt::{Debug, Display};
 
@@ -87,8 +90,18 @@ impl ChessMove {
         }
     }
 
-    pub fn display(self, notation: Notation) -> MoveDisplay {
-        MoveDisplay { cmove: self, notation }
+    pub fn display_smith(self) -> MoveDisplaySmith {
+        MoveDisplaySmith { cmove: self }
+    }
+}
+
+pub struct MoveDisplaySmith {
+    cmove: ChessMove,
+}
+
+impl Display for MoveDisplaySmith {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        SmithNotation::write(f, self.cmove)
     }
 }
 
@@ -215,36 +228,6 @@ impl Debug for ChessMove {
             .field("queenside_castle", &self.is_queenside_castle())
             .field("nomove", &self.is_nomove())
             .finish()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum Notation {
-    #[default]
-    Smith,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct MoveDisplay {
-    notation: Notation,
-    cmove: ChessMove,
-}
-
-impl Display for MoveDisplay {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self { notation, cmove } = self;
-
-        match notation {
-            Notation::Smith => {
-                write!(f, "{}{}", cmove.start(), cmove.end())?;
-
-                if let Some(pt) = cmove.promoted() {
-                    write!(f, "{}", pt.to_char())?;
-                }
-
-                Ok(())
-            }
-        }
     }
 }
 

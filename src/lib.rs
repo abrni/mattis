@@ -7,6 +7,7 @@ pub mod board;
 pub mod chess_move;
 pub mod eval;
 pub mod hashtable;
+pub mod notation;
 pub mod search;
 pub mod time_man;
 pub mod types;

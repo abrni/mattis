@@ -5,8 +5,9 @@ use std::{
 
 use mattis::{
     board::Board,
-    chess_move::{ChessMove, Notation},
+    chess_move::ChessMove,
     hashtable::TranspositionTable,
+    notation::SmithNotation,
     search::{self, KillSwitch, SearchConfig},
     uci::{self, EngineMessage, GuiMessage, Id},
 };
@@ -94,7 +95,7 @@ fn setup_position(board: &mut Board, pos: uci::Position, moves: &[String]) {
     *board = Board::from_fen(fen).unwrap();
 
     for move_str in moves {
-        let chess_move = board.find_move(move_str, Notation::Smith);
+        let chess_move = board.find_move::<SmithNotation>(move_str);
 
         if let Some(cm) = chess_move {
             board.make_move(cm);

@@ -1,6 +1,6 @@
 use crate::{
     board::{movegen::MoveList, Board},
-    chess_move::{ChessMove, Notation},
+    chess_move::ChessMove,
     eval::{evaluation, Eval},
     hashtable::{HEKind, Probe, TranspositionTable},
     time_man::{Limits, TimeMan},
@@ -187,11 +187,7 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
             let info = EngineMessage::Info(uci::Info {
                 depth: Some(stats.depth as u32),
                 nodes: Some(stats.nodes as u32),
-                pv: stats
-                    .pv
-                    .into_iter()
-                    .map(|m| format!("{}", m.display(Notation::Smith)))
-                    .collect(),
+                pv: stats.pv.into_iter().map(|m| format!("{}", m.display_smith())).collect(),
                 // FIXME: Mate score can be off by 1 at low depths,
                 // because the score comes straight from the hashtable which stored the entry one move ago.
                 score: Some(uci::Score(stats.score)),
@@ -202,7 +198,7 @@ fn search_thread(config: ThreadConfig, mut board: Board) {
         }
 
         let bestmove = EngineMessage::Bestmove {
-            move_: format!("{}", bestmove.display(Notation::Smith)),
+            move_: format!("{}", bestmove.display_smith()),
             ponder: None,
         };
 

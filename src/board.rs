@@ -4,7 +4,8 @@ pub mod movegen;
 use self::movegen::{magic_bishop_moves, magic_rook_moves, MoveList};
 use crate::{
     bitboard::{BitBoard, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS},
-    chess_move::{ChessMove, Notation},
+    chess_move::ChessMove,
+    notation::Notation,
     types::{CastlePerm, CastlePerms, Color, File, Piece, PieceType, Rank, Square},
 };
 use lazy_static::lazy_static;
@@ -459,12 +460,23 @@ impl Board {
             .any(|h| h.position_key == self.position_key)
     }
 
-    pub fn find_move(&mut self, move_str: &str, notation: Notation) -> Option<ChessMove> {
+    pub fn find_move<N>(&mut self, move_str: &str) -> Option<ChessMove>
+    where
+        N: Notation,
+    {
         let mut movelist = MoveList::new();
         self.generate_all_moves(&mut movelist);
-        movelist
-            .into_iter()
-            .find(|cm| format!("{}", cm.display(notation)) == *move_str)
+
+        for cmove in movelist {
+            let mut string = String::new();
+            N::write(&mut string, cmove, self).unwrap();
+
+            if string == move_str {
+                return Some(cmove);
+            }
+        }
+
+        None
     }
 }
 
