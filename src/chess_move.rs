@@ -1,8 +1,5 @@
-use crate::{
-    notation::SmithNotation,
-    types::{Piece, PieceType, Square},
-};
-use num_enum::UnsafeFromPrimitive;
+use crate::notation::SmithNotation;
+use mattis_types::{Piece, PieceType, Square, UnsafeFromPrimitive};
 use std::fmt::{Debug, Display};
 
 /// `ChessMove` contains the start and end field of a move and information about castling, piece promotion and captures.
@@ -233,9 +230,9 @@ impl Debug for ChessMove {
 
 #[cfg(test)]
 mod tests {
+    use mattis_types::{Piece, Square, TryFromPrimitive};
+
     use super::ChessMove;
-    use crate::types::*;
-    use num_enum::TryFromPrimitive;
 
     #[test]
     fn type_size() {

@@ -1,12 +1,10 @@
-use std::{io::Write, ops::BitAnd};
-
 use mattis::{
     bitboard::BitBoard,
     board::movegen::{BISHOP_MAGIC_BIT_COUNT, BISHOP_MAGIC_MASKS, ROOK_MAGIC_BIT_COUNT, ROOK_MAGIC_MASKS},
-    types::Square,
 };
-use num_enum::TryFromPrimitive;
+use mattis_types::{Square, TryFromPrimitive};
 use rand::{thread_rng, Rng};
+use std::{io::Write, ops::BitAnd};
 
 fn main() {
     let mut rook_file = std::fs::File::create("./rook_magics").unwrap();

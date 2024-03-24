@@ -1,7 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use crate::types::{File, Rank, Square};
-use num_enum::{TryFromPrimitive, UnsafeFromPrimitive};
+use mattis_types::{File, Rank, Square, TryFromPrimitive, UnsafeFromPrimitive};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct BitBoard(u64);
@@ -473,9 +472,9 @@ lazy_static::lazy_static! {
 
 #[cfg(test)]
 mod tests {
+    use mattis_types::{Square, TryFromPrimitive};
+
     use super::BitBoard;
-    use crate::types::Square;
-    use num_enum::TryFromPrimitive;
 
     #[test]
     fn set_and_clear() {

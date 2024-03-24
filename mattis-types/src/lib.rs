@@ -1,8 +1,9 @@
-use num_enum::{IntoPrimitive, TryFromPrimitive, UnsafeFromPrimitive};
 use std::{
     fmt::Display,
     ops::{Add, Index, IndexMut, Sub},
 };
+
+pub use num_enum::{IntoPrimitive, TryFromPrimitive, UnsafeFromPrimitive};
 
 macro_rules! impl_to_usize {
     ($type:ty, $repr:ty) => {

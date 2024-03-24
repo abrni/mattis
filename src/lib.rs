@@ -10,5 +10,4 @@ pub mod hashtable;
 pub mod notation;
 pub mod search;
 pub mod time_man;
-pub mod types;
 pub mod uci;

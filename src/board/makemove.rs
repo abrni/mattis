@@ -1,8 +1,9 @@
+use mattis_types::{CastlePerms, Color, Piece, PieceType, Square};
+
 use super::Board;
 use crate::{
     board::{HistoryEntry, CASTLE_KEYS, COLOR_KEY, EN_PASSANT_KEYS, PIECE_KEYS},
     chess_move::ChessMove,
-    types::{CastlePerms, Color, Piece, PieceType, Square},
 };
 
 impl Board {

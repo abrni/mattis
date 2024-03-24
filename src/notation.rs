@@ -1,9 +1,9 @@
 use crate::{
     board::{movegen::MoveList, Board},
     chess_move::ChessMove,
-    types::PieceType,
 };
 use core::fmt;
+use mattis_types::PieceType;
 use std::{fmt::Write, io};
 
 pub struct FmtBridge<T>(pub T);

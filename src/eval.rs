@@ -1,8 +1,8 @@
 use crate::{
     bitboard::{BLACK_PAWN_PASSED_MASKS, FILE_BITBOARDS, ISOLATED_PAWN_MASKS, WHITE_PAWN_PASSED_MASKS},
     board::Board,
-    types::{Color, Piece, PieceType, Square},
 };
+use mattis_types::{Color, Piece, PieceType, Square};
 use std::ops::{Add, AddAssign, Neg, Sub, SubAssign};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash, Default)]

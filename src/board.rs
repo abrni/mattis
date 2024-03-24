@@ -6,10 +6,9 @@ use crate::{
     bitboard::{BitBoard, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS},
     chess_move::ChessMove,
     notation::Notation,
-    types::{CastlePerm, CastlePerms, Color, File, Piece, PieceType, Rank, Square},
 };
 use lazy_static::lazy_static;
-use num_enum::TryFromPrimitive;
+use mattis_types::{CastlePerm, CastlePerms, Color, File, Piece, PieceType, Rank, Square, TryFromPrimitive};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::{fmt::Display, sync::Mutex};
 use thiserror::Error;
@@ -548,7 +547,8 @@ impl Display for Board {
 #[cfg(test)]
 mod tests {
     use super::Board;
-    use crate::{board::movegen::MoveList, chess_move::ChessMove, types::Square};
+    use crate::{board::movegen::MoveList, chess_move::ChessMove};
+    use mattis_types::Square;
 
     #[test]
     fn empty_board() {

@@ -1,3 +1,6 @@
+[workspace]
+members = [".", "mattis-types"]
+
 [package]
 name = "mattis"
 version = "2.0.0"
@@ -9,12 +12,11 @@ name = "perft_bench"
 harness = false
 
 [dependencies]
-bus = "2.4.1"
 lazy_static = "1.4.0"
-num_enum = { version = "0.7.2", features = ["complex-expressions"] }
 rand = "0.8.5"
 smallvec = "1.13.1"
 thiserror = "1.0.57"
+mattis-types = { path = "mattis-types" }
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }

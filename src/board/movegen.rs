@@ -1,11 +1,11 @@
+use mattis_types::{CastlePerm, Color, File, Piece, PieceType, Rank, Square, TryFromPrimitive};
+
 use crate::{
     bitboard::{BitBoard, BISHOP_MOVE_PATTERNS, BORDER, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS, RANK_BITBOARDS},
     chess_move::{ChessMove, ChessMoveBuilder},
-    types::{CastlePerm, Color, File, Piece, PieceType, Rank, Square},
 };
 
 use super::Board;
-use num_enum::TryFromPrimitive;
 
 pub type MoveList = smallvec::SmallVec<[ChessMove; 128]>;
 
