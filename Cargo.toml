@@ -11,6 +11,11 @@ default-run = "mattis"
 name = "perft_bench"
 harness = false
 
+[profile.release]
+codegen-units = 1
+lto = "fat"
+strip = "symbols"
+
 [dependencies]
 lazy_static = "1.4.0"
 rand = "0.8.5"
