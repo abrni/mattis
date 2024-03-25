@@ -1,6 +1,9 @@
 use crate::{
     chess_move::{ChessMove, ChessMoveBuilder},
-    tables::{BISHOP_MOVE_PATTERNS, BORDER, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS, RANK_BITBOARDS},
+    tables::{
+        BISHOP_MAGICS, BISHOP_MAGIC_BIT_COUNT, BISHOP_MAGIC_MASKS, KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS,
+        RANK_BITBOARDS, ROOK_MAGICS, ROOK_MAGIC_BIT_COUNT, ROOK_MAGIC_MASKS,
+    },
 };
 use mattis_bitboard::BitBoard;
 use mattis_types::{CastlePerm, Color, File, Piece, PieceType, Rank, Square, TryFromPrimitive};
@@ -352,12 +355,6 @@ impl Board {
     }
 }
 
-// ---------------------------------------------------------------------------------------------------------------------
-// ---------------------------------------------------------------------------------------------------------------------
-// MAGIC TABLES --------------------------------------------------------------------------------------------------------
-// ---------------------------------------------------------------------------------------------------------------------
-// ---------------------------------------------------------------------------------------------------------------------
-
 pub fn magic_bishop_moves(square: Square, blockers: BitBoard) -> BitBoard {
     let blockers = blockers.intersection(BISHOP_MAGIC_MASKS[square]);
     let key = blockers.to_u64().wrapping_mul(BISHOP_MAGICS[square]);
@@ -372,94 +369,17 @@ pub fn magic_rook_moves(square: Square, blockers: BitBoard) -> BitBoard {
     ROOK_ATTACK_TABLE[square][key as usize]
 }
 
-pub const BISHOP_MAGICS: [u64; 64] = unsafe { std::mem::transmute(*include_bytes!("../../bishop_magics")) };
-
-pub const ROOK_MAGICS: [u64; 64] = unsafe { std::mem::transmute(*include_bytes!("../../rook_magics")) };
-
-#[rustfmt::skip]
-pub const ROOK_MAGIC_BIT_COUNT: [u32; 64] = [
-    12, 11, 11, 11, 11, 11, 11, 12,
-    11, 10, 10, 10, 10, 10, 10, 11,
-    11, 10, 10, 10, 10, 10, 10, 11,
-    11, 10, 10, 10, 10, 10, 10, 11,
-    11, 10, 10, 10, 10, 10, 10, 11,
-    11, 10, 10, 10, 10, 10, 10, 11,
-    11, 10, 10, 10, 10, 10, 10, 11,
-    12, 11, 11, 11, 11, 11, 11, 12,
-];
-
-#[rustfmt::skip]
-pub const BISHOP_MAGIC_BIT_COUNT: [u32; 64] = [
-    6, 5, 5, 5, 5, 5, 5, 6,
-    5, 5, 5, 5, 5, 5, 5, 5,
-    5, 5, 7, 7, 7, 7, 5, 5,
-    5, 5, 7, 9, 9, 7, 5, 5,
-    5, 5, 7, 9, 9, 7, 5, 5,
-    5, 5, 7, 7, 7, 7, 5, 5,
-    5, 5, 5, 5, 5, 5, 5, 5,
-    6, 5, 5, 5, 5, 5, 5, 6,
-];
-
 lazy_static::lazy_static! {
-    pub static ref ROOK_MAGIC_MASKS: [BitBoard; 64] = {
-        let mut boards = [BitBoard::EMPTY; 64];
-
-        for (i, m) in boards.iter_mut().enumerate() {
-            let mut result = BitBoard::EMPTY;
-            let square = Square::try_from_primitive(i as u8).unwrap();
-            let rank = square.rank();
-            let file = square.file();
-
-            if let Some(r) = rank.up() {
-                for r in Rank::range_inclusive(r, Rank::R7) {
-                    result.set(Square::from_file_rank(file, r));
-                }
-            }
-
-            if let Some(r) = rank.down() {
-                for r in Rank::range_inclusive(Rank::R2, r) {
-                    result.set(Square::from_file_rank(file, r));
-                }
-            }
-
-            if let Some(f) = file.up() {
-                for f in File::range_inclusive(f, File::G) {
-                    result.set(Square::from_file_rank(f, rank));
-                }
-            }
-
-            if let Some(f) = file.down() {
-                for f in File::range_inclusive(File::B, f) {
-                    result.set(Square::from_file_rank(f, rank));
-                }
-            }
-
-            *m = result;
-        }
-
-        boards
-    };
-
-    pub static ref BISHOP_MAGIC_MASKS: [BitBoard; 64] = {
-        let mut masks = BISHOP_MOVE_PATTERNS;
-
-        for m in &mut masks {
-            *m = m.without(BORDER);
-        }
-
-        masks
-    };
-
    pub static ref ROOK_ATTACK_TABLE: Vec<Vec<BitBoard>> = {
         let mut table = vec![vec![]; 64];
 
-        for square_num in 0..64 {
-            let square = Square::try_from_primitive(square_num as u8).unwrap();
-            let mask = ROOK_MAGIC_MASKS[square_num];
+        for (square, square_entry) in table.iter_mut().enumerate() {
+            let square = Square::try_from_primitive(square as u8).unwrap();
+            let mask = ROOK_MAGIC_MASKS[square];
             let permutations = 1 << mask.bit_count();
             let file = square.file();
             let rank = square.rank();
-            table[square].resize(1 << ROOK_MAGIC_BIT_COUNT[square] as usize, BitBoard::EMPTY);
+            square_entry.resize(1 << ROOK_MAGIC_BIT_COUNT[square] as usize, BitBoard::EMPTY);
 
             for i in 0..permutations {
                 let blockers = blocker_permutation(i, mask);
@@ -494,7 +414,7 @@ lazy_static::lazy_static! {
                 }
 
                 let key = blockers.to_u64().wrapping_mul(ROOK_MAGICS[square]) >> (64 - ROOK_MAGIC_BIT_COUNT[square]);
-                table[square][key as usize] = attack;
+                square_entry[key as usize] = attack;
             }
         }
 
@@ -505,13 +425,13 @@ lazy_static::lazy_static! {
     pub static ref BISHOP_ATTACK_TABLE: Vec<Vec<BitBoard>> = {
         let mut table = vec![vec![]; 64];
 
-        for square_num in 0..64 {
-            let square = Square::try_from_primitive(square_num as u8).unwrap();
-            let mask = BISHOP_MAGIC_MASKS[square_num];
+        for (square, square_entry) in table.iter_mut().enumerate() {
+            let square = Square::try_from_primitive(square as u8).unwrap();
+            let mask = BISHOP_MAGIC_MASKS[square];
             let permutations = 1 << mask.bit_count();
             let file = square.file();
             let rank = square.rank();
-            table[square].resize(1 << BISHOP_MAGIC_BIT_COUNT[square] as usize, BitBoard::EMPTY);
+            square_entry.resize(1 << BISHOP_MAGIC_BIT_COUNT[square] as usize, BitBoard::EMPTY);
 
             for i in 0..permutations {
                 let blockers = blocker_permutation(i, mask);
@@ -546,7 +466,7 @@ lazy_static::lazy_static! {
                 }
 
                 let key = blockers.to_u64().wrapping_mul(BISHOP_MAGICS[square]) >> (64 - BISHOP_MAGIC_BIT_COUNT[square]);
-                table[square][key as usize] = attack;
+                square_entry[key as usize] = attack;
             }
         }
 
