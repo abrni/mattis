@@ -1,3 +1,4 @@
+use super::Board;
 use crate::{
     chess_move::{ChessMove, ChessMoveBuilder},
     tables::{
@@ -5,10 +6,9 @@ use crate::{
         RANK_BITBOARDS, ROOK_MAGICS, ROOK_MAGIC_BIT_COUNT, ROOK_MAGIC_MASKS,
     },
 };
+use ctor::ctor;
 use mattis_bitboard::BitBoard;
 use mattis_types::{CastlePerm, Color, File, Piece, PieceType, Rank, Square, TryFromPrimitive};
-
-use super::Board;
 
 pub type MoveList = smallvec::SmallVec<[ChessMove; 128]>;
 
@@ -359,121 +359,148 @@ pub fn magic_bishop_moves(square: Square, blockers: BitBoard) -> BitBoard {
     let blockers = blockers.intersection(BISHOP_MAGIC_MASKS[square]);
     let key = blockers.to_u64().wrapping_mul(BISHOP_MAGICS[square]);
     let key = key >> (64 - BISHOP_MAGIC_BIT_COUNT[square]);
-    BISHOP_ATTACK_TABLE[square][key as usize]
+
+    let table_row = unsafe { BISHOP_ATTACK_TABLE.get_unchecked(square as u8 as usize) };
+    unsafe { *table_row.get_unchecked(key as usize) }
 }
 
 pub fn magic_rook_moves(square: Square, blockers: BitBoard) -> BitBoard {
     let blockers = blockers.intersection(ROOK_MAGIC_MASKS[square]);
     let key = blockers.to_u64().wrapping_mul(ROOK_MAGICS[square]);
     let key = key >> (64 - ROOK_MAGIC_BIT_COUNT[square]);
-    ROOK_ATTACK_TABLE[square][key as usize]
+
+    let table_row = unsafe { ROOK_ATTACK_TABLE.get_unchecked(square as u8 as usize) };
+    unsafe { *table_row.get_unchecked(key as usize) }
 }
 
-lazy_static::lazy_static! {
-   pub static ref ROOK_ATTACK_TABLE: Vec<Vec<BitBoard>> = {
-        let mut table = vec![vec![]; 64];
+#[ctor]
+static ROOK_ATTACK_TABLE: Vec<Vec<BitBoard>> = {
+    let mut table = vec![vec![]; 64];
 
-        for (square, square_entry) in table.iter_mut().enumerate() {
-            let square = Square::try_from_primitive(square as u8).unwrap();
-            let mask = ROOK_MAGIC_MASKS[square];
-            let permutations = 1 << mask.bit_count();
-            let file = square.file();
-            let rank = square.rank();
-            square_entry.resize(1 << ROOK_MAGIC_BIT_COUNT[square] as usize, BitBoard::EMPTY);
+    for (square, square_entry) in table.iter_mut().enumerate() {
+        let square = Square::try_from_primitive(square as u8).unwrap();
+        let mask = ROOK_MAGIC_MASKS[square];
+        let permutations = 1 << mask.bit_count();
+        let file = square.file();
+        let rank = square.rank();
+        square_entry.resize(1 << ROOK_MAGIC_BIT_COUNT[square] as usize, BitBoard::EMPTY);
 
-            for i in 0..permutations {
-                let blockers = blocker_permutation(i, mask);
-                let mut attack = BitBoard::EMPTY;
+        for i in 0..permutations {
+            let blockers = blocker_permutation(i, mask);
+            let mut attack = BitBoard::EMPTY;
 
-                if let Some(r) = rank.up() {
-                    for r in Rank::range_inclusive(r, Rank::R8) {
-                        attack.set(Square::from_file_rank(file, r));
-                        if blockers.get(Square::from_file_rank(file, r)) { break; }
+            if let Some(r) = rank.up() {
+                for r in Rank::range_inclusive(r, Rank::R8) {
+                    attack.set(Square::from_file_rank(file, r));
+                    if blockers.get(Square::from_file_rank(file, r)) {
+                        break;
                     }
                 }
-
-                if let Some(r) = rank.down() {
-                    for r in Rank::range_inclusive(Rank::R1, r).rev() {
-                        attack.set(Square::from_file_rank(file, r));
-                        if blockers.get(Square::from_file_rank(file, r)) { break; }
-                    }
-                }
-
-                if let Some(f) = file.up() {
-                    for f in File::range_inclusive(f, File::H) {
-                        attack.set(Square::from_file_rank(f, rank));
-                        if blockers.get(Square::from_file_rank(f, rank)) { break; }
-                    }
-                }
-
-                if let Some(f) = file.down() {
-                    for f in File::range_inclusive(File::A, f).rev() {
-                        attack.set(Square::from_file_rank(f, rank));
-                        if blockers.get(Square::from_file_rank(f, rank)) { break; }
-                    }
-                }
-
-                let key = blockers.to_u64().wrapping_mul(ROOK_MAGICS[square]) >> (64 - ROOK_MAGIC_BIT_COUNT[square]);
-                square_entry[key as usize] = attack;
             }
-        }
 
-        table
-    };
-
-
-    pub static ref BISHOP_ATTACK_TABLE: Vec<Vec<BitBoard>> = {
-        let mut table = vec![vec![]; 64];
-
-        for (square, square_entry) in table.iter_mut().enumerate() {
-            let square = Square::try_from_primitive(square as u8).unwrap();
-            let mask = BISHOP_MAGIC_MASKS[square];
-            let permutations = 1 << mask.bit_count();
-            let file = square.file();
-            let rank = square.rank();
-            square_entry.resize(1 << BISHOP_MAGIC_BIT_COUNT[square] as usize, BitBoard::EMPTY);
-
-            for i in 0..permutations {
-                let blockers = blocker_permutation(i, mask);
-                let mut attack = BitBoard::EMPTY;
-
-                if let Some((r, f)) = rank.up().zip(file.up()) {
-                    for (r, f) in std::iter::zip(Rank::range_inclusive(r, Rank::R8), File::range_inclusive(f, File::H)) {
-                        attack.set(Square::from_file_rank(f, r));
-                        if blockers.get(Square::from_file_rank(f, r)) { break; }
+            if let Some(r) = rank.down() {
+                for r in Rank::range_inclusive(Rank::R1, r).rev() {
+                    attack.set(Square::from_file_rank(file, r));
+                    if blockers.get(Square::from_file_rank(file, r)) {
+                        break;
                     }
                 }
-
-                if let Some((r, f)) = rank.up().zip(file.down()) {
-                    for (r, f) in std::iter::zip(Rank::range_inclusive(r, Rank::R8), File::range_inclusive(File::A, f).rev()) {
-                        attack.set(Square::from_file_rank(f, r));
-                        if blockers.get(Square::from_file_rank(f, r)) { break; }
-                    }
-                }
-
-                if let Some((r, f)) = rank.down().zip(file.up()) {
-                    for (r, f) in std::iter::zip(Rank::range_inclusive(Rank::R1, r).rev(), File::range_inclusive(f, File::H)) {
-                        attack.set(Square::from_file_rank(f, r));
-                        if blockers.get(Square::from_file_rank(f, r)) { break; }
-                    }
-                }
-
-                if let Some((r, f)) = rank.down().zip(file.down()) {
-                    for (r, f) in std::iter::zip(Rank::range_inclusive(Rank::R1, r).rev(), File::range_inclusive(File::A, f).rev()) {
-                        attack.set(Square::from_file_rank(f, r));
-                        if blockers.get(Square::from_file_rank(f, r)) { break; }
-                    }
-                }
-
-                let key = blockers.to_u64().wrapping_mul(BISHOP_MAGICS[square]) >> (64 - BISHOP_MAGIC_BIT_COUNT[square]);
-                square_entry[key as usize] = attack;
             }
+
+            if let Some(f) = file.up() {
+                for f in File::range_inclusive(f, File::H) {
+                    attack.set(Square::from_file_rank(f, rank));
+                    if blockers.get(Square::from_file_rank(f, rank)) {
+                        break;
+                    }
+                }
+            }
+
+            if let Some(f) = file.down() {
+                for f in File::range_inclusive(File::A, f).rev() {
+                    attack.set(Square::from_file_rank(f, rank));
+                    if blockers.get(Square::from_file_rank(f, rank)) {
+                        break;
+                    }
+                }
+            }
+
+            let key = blockers.to_u64().wrapping_mul(ROOK_MAGICS[square]) >> (64 - ROOK_MAGIC_BIT_COUNT[square]);
+            square_entry[key as usize] = attack;
         }
+    }
 
-        table
-    };
+    table
+};
 
-}
+#[ctor]
+static BISHOP_ATTACK_TABLE: Vec<Vec<BitBoard>> = {
+    let mut table = vec![vec![]; 64];
+
+    for (square, square_entry) in table.iter_mut().enumerate() {
+        let square = Square::try_from_primitive(square as u8).unwrap();
+        let mask = BISHOP_MAGIC_MASKS[square];
+        let permutations = 1 << mask.bit_count();
+        let file = square.file();
+        let rank = square.rank();
+        square_entry.resize(1 << BISHOP_MAGIC_BIT_COUNT[square] as usize, BitBoard::EMPTY);
+
+        for i in 0..permutations {
+            let blockers = blocker_permutation(i, mask);
+            let mut attack = BitBoard::EMPTY;
+
+            if let Some((r, f)) = rank.up().zip(file.up()) {
+                for (r, f) in std::iter::zip(Rank::range_inclusive(r, Rank::R8), File::range_inclusive(f, File::H)) {
+                    attack.set(Square::from_file_rank(f, r));
+                    if blockers.get(Square::from_file_rank(f, r)) {
+                        break;
+                    }
+                }
+            }
+
+            if let Some((r, f)) = rank.up().zip(file.down()) {
+                for (r, f) in std::iter::zip(
+                    Rank::range_inclusive(r, Rank::R8),
+                    File::range_inclusive(File::A, f).rev(),
+                ) {
+                    attack.set(Square::from_file_rank(f, r));
+                    if blockers.get(Square::from_file_rank(f, r)) {
+                        break;
+                    }
+                }
+            }
+
+            if let Some((r, f)) = rank.down().zip(file.up()) {
+                for (r, f) in std::iter::zip(
+                    Rank::range_inclusive(Rank::R1, r).rev(),
+                    File::range_inclusive(f, File::H),
+                ) {
+                    attack.set(Square::from_file_rank(f, r));
+                    if blockers.get(Square::from_file_rank(f, r)) {
+                        break;
+                    }
+                }
+            }
+
+            if let Some((r, f)) = rank.down().zip(file.down()) {
+                for (r, f) in std::iter::zip(
+                    Rank::range_inclusive(Rank::R1, r).rev(),
+                    File::range_inclusive(File::A, f).rev(),
+                ) {
+                    attack.set(Square::from_file_rank(f, r));
+                    if blockers.get(Square::from_file_rank(f, r)) {
+                        break;
+                    }
+                }
+            }
+
+            let key = blockers.to_u64().wrapping_mul(BISHOP_MAGICS[square]) >> (64 - BISHOP_MAGIC_BIT_COUNT[square]);
+            square_entry[key as usize] = attack;
+        }
+    }
+
+    table
+};
 
 // ---------------------------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
