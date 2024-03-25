@@ -359,15 +359,27 @@ pub fn magic_bishop_moves(square: Square, blockers: BitBoard) -> BitBoard {
     let blockers = blockers.intersection(BISHOP_MAGIC_MASKS[square]);
     let key = blockers.to_u64().wrapping_mul(BISHOP_MAGICS[square]);
     let key = key >> (64 - BISHOP_MAGIC_BIT_COUNT[square]);
-    BISHOP_ATTACK_TABLE[square][key as usize]
+
+    unsafe {
+        *BISHOP_ATTACK_TABLE
+            .get_unchecked(square as u8 as usize)
+            .get_unchecked(key as usize)
+    }
 }
 
 pub fn magic_rook_moves(square: Square, blockers: BitBoard) -> BitBoard {
     let blockers = blockers.intersection(ROOK_MAGIC_MASKS[square]);
     let key = blockers.to_u64().wrapping_mul(ROOK_MAGICS[square]);
     let key = key >> (64 - ROOK_MAGIC_BIT_COUNT[square]);
-    ROOK_ATTACK_TABLE[square][key as usize]
+
+    unsafe {
+        *ROOK_ATTACK_TABLE
+            .get_unchecked(square as u8 as usize)
+            .get_unchecked(key as usize)
+    }
 }
+
+thread_local! {}
 
 lazy_static::lazy_static! {
    pub static ref ROOK_ATTACK_TABLE: Vec<Vec<BitBoard>> = {

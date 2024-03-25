@@ -2,9 +2,14 @@ use mattis_types::{CastlePerms, Color, Piece, PieceType, Square};
 
 use super::Board;
 use crate::{
-    board::HistoryEntry,
+    board::{
+        movegen::{magic_bishop_moves, magic_rook_moves},
+        HistoryEntry,
+    },
     chess_move::ChessMove,
-    tables::{ZOBRIST_CASTLE_KEYS, ZOBRIST_COLOR_KEY, ZOBRIST_EN_PASSANT_KEYS, ZOBRIST_PIECE_KEYS},
+    tables::{
+        KNIGHT_MOVE_PATTERNS, ZOBRIST_CASTLE_KEYS, ZOBRIST_COLOR_KEY, ZOBRIST_EN_PASSANT_KEYS, ZOBRIST_PIECE_KEYS,
+    },
 };
 
 impl Board {
@@ -18,12 +23,23 @@ impl Board {
     pub fn make_move(&mut self, m: ChessMove) -> bool {
         let start_square = m.start();
         let end_square = m.end();
-        let color = self.color;
 
         #[cfg(debug_assertions)]
         {
             self.check_board_integrity();
             assert!(self.pieces[start_square].is_some());
+        }
+
+        let moving_piece = unsafe { self.pieces[start_square].unwrap_unchecked() };
+        let color = self.color;
+
+        // If the king moves into check, the move is definitely not legal
+        if moving_piece.piece_type() == PieceType::King && self.is_square_attacked(end_square, self.color.flipped()) {
+            return false;
+        }
+
+        if !self.in_check && moving_piece.piece_type() != PieceType::King && self.will_be_discovered_check(m) {
+            return false;
         }
 
         let captured = if m.is_en_passant() {
@@ -40,6 +56,7 @@ impl Board {
             en_passant: self.en_passant,
             castle_perms: self.castle_perms,
             position_key: self.position_key,
+            in_check: self.in_check,
         });
 
         if m.is_en_passant() {
@@ -114,13 +131,16 @@ impl Board {
         self.color = self.color.flipped();
         self.position_key ^= ZOBRIST_COLOR_KEY;
 
-        #[cfg(debug_assertions)]
-        self.check_board_integrity();
+        let was_in_check = self.in_check;
+        self.in_check = self.gave_check(m);
 
-        if self.is_square_attacked(self.king_square[color], self.color) {
+        if was_in_check && self.is_square_attacked(self.king_square[color], self.color) {
             self.take_move();
             return false;
         }
+
+        #[cfg(debug_assertions)]
+        self.check_board_integrity();
 
         true
     }
@@ -142,6 +162,7 @@ impl Board {
         }
 
         self.fifty_move = his.fifty_move;
+        self.in_check = his.in_check;
 
         // Reset castle permitions
         self.position_key ^= ZOBRIST_CASTLE_KEYS[self.castle_perms.as_u8() as usize];
@@ -212,7 +233,7 @@ impl Board {
     pub fn make_null_move(&mut self) {
         #[cfg(debug_assertions)]
         self.check_board_integrity();
-        debug_assert!(!self.in_check());
+        debug_assert!(!self.in_check);
 
         self.ply += 1;
         self.history.push(HistoryEntry {
@@ -222,6 +243,7 @@ impl Board {
             en_passant: self.en_passant,
             castle_perms: self.castle_perms,
             position_key: self.position_key,
+            in_check: self.in_check,
         });
 
         self.color = self.color.flipped();
@@ -231,6 +253,8 @@ impl Board {
         if let Some(sq) = self.en_passant.take() {
             self.position_key ^= ZOBRIST_EN_PASSANT_KEYS[sq];
         }
+
+        self.in_check = false;
 
         #[cfg(debug_assertions)]
         self.check_board_integrity();
@@ -250,6 +274,7 @@ impl Board {
         self.castle_perms = his.castle_perms;
         self.fifty_move = his.fifty_move;
         self.en_passant = his.en_passant;
+        self.in_check = his.in_check;
 
         if let Some(sq) = self.en_passant {
             self.position_key ^= ZOBRIST_EN_PASSANT_KEYS[sq];
@@ -319,6 +344,85 @@ impl Board {
 
         self.bb_all_per_color[color].set(to);
         self.bb_all.set(to);
+    }
+
+    fn will_be_discovered_check(&self, cmove: ChessMove) -> bool {
+        let king_square = self.king_square[self.color];
+
+        let mut bb_all = self.bb_all;
+        bb_all.clear(cmove.start());
+        bb_all.set(cmove.end());
+
+        let queen = Piece::new(PieceType::Queen, self.color.flipped());
+        let bishop = Piece::new(PieceType::Bishop, self.color.flipped());
+        let rook = Piece::new(PieceType::Rook, self.color.flipped());
+
+        let bq_attacks = magic_bishop_moves(king_square, bb_all);
+
+        if bq_attacks.get(cmove.start()) {
+            let mut bishops_and_queens = self.bitboards[queen].union(self.bitboards[bishop]);
+            bishops_and_queens.clear(cmove.end());
+
+            if !bq_attacks.intersection(bishops_and_queens).is_empty() {
+                return true;
+            }
+        }
+
+        let rq_attacks = magic_rook_moves(king_square, bb_all);
+        if rq_attacks.get(cmove.start()) {
+            let mut rooks_and_queens = self.bitboards[queen].union(self.bitboards[rook]);
+            rooks_and_queens.clear(cmove.end());
+
+            if !rq_attacks.intersection(rooks_and_queens).is_empty() {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn gave_check(&self, cmove: ChessMove) -> bool {
+        let king_square = self.king_square[self.color];
+        let piece = unsafe { self.pieces[cmove.end()].unwrap_unchecked() };
+
+        let direct_check = match piece.piece_type() {
+            PieceType::Pawn => match self.color {
+                Color::White => {
+                    let bb = self.bitboards[Piece::BlackPawn];
+                    bb.shifted_southeast().get(king_square) || bb.shifted_southwest().get(king_square)
+                }
+                Color::Black => {
+                    let bb = self.bitboards[Piece::WhitePawn];
+                    bb.shifted_northeast().get(king_square) || bb.shifted_northwest().get(king_square)
+                }
+            },
+            PieceType::Knight => KNIGHT_MOVE_PATTERNS[cmove.end()].get(king_square),
+            PieceType::Bishop => magic_bishop_moves(cmove.end(), self.bb_all).get(king_square),
+            PieceType::Rook => magic_rook_moves(cmove.end(), self.bb_all).get(king_square),
+            PieceType::Queen => {
+                magic_bishop_moves(cmove.end(), self.bb_all).get(king_square)
+                    || magic_rook_moves(cmove.end(), self.bb_all).get(king_square)
+            }
+            PieceType::King => {
+                if cmove.is_kingside_castle() {
+                    let start_square = match self.color {
+                        Color::White => Square::F8,
+                        Color::Black => Square::F1,
+                    };
+                    magic_rook_moves(start_square, self.bb_all).get(king_square)
+                } else if cmove.is_queenside_castle() {
+                    let start_square = match self.color {
+                        Color::White => Square::D8,
+                        Color::Black => Square::D1,
+                    };
+                    magic_rook_moves(start_square, self.bb_all).get(king_square)
+                } else {
+                    false
+                }
+            }
+        };
+
+        direct_check || self.will_be_discovered_check(cmove)
     }
 }
 

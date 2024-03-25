@@ -96,7 +96,7 @@ impl AlgebraicNotation {
 
         assert!(board.make_move(cmove));
 
-        if board.in_check() {
+        if board.in_check {
             let mut movelist = MoveList::new();
             board.generate_all_moves(&mut movelist);
 

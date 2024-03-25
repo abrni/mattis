@@ -44,6 +44,7 @@ pub struct HistoryEntry {
     pub en_passant: Option<Square>,
     pub castle_perms: CastlePerms,
     pub position_key: u64,
+    pub in_check: bool,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -66,6 +67,7 @@ pub struct Board {
     pub count_major_pieces: [usize; 2],  // counts the number of major pieces for both sides (rooks, queens, king)
     pub count_minor_pieces: [usize; 2],  // counts the number of minor pieces for both sides (bishops, knights)
     pub material: [i16; 2],              // the material in centipawns for both sides
+    pub in_check: bool,                  // is the current side in check
 
     pub history: Vec<HistoryEntry>, // stores the board history
 }
@@ -89,6 +91,7 @@ impl Board {
             count_major_pieces: [0; 2],
             count_minor_pieces: [0; 2],
             material: [0; 2],
+            in_check: false,
             history: vec![],
         };
 
@@ -223,6 +226,8 @@ impl Board {
                 self.king_square[color] = square;
             }
         }
+
+        self.in_check = self.is_in_check();
     }
 
     pub fn as_fen(&self) -> String {
@@ -293,7 +298,7 @@ impl Board {
         fen
     }
 
-    pub fn in_check(&self) -> bool {
+    fn is_in_check(&self) -> bool {
         let my_king_square = self.king_square[self.color];
         let op_color = self.color.flipped();
         self.is_square_attacked(my_king_square, op_color)
@@ -320,7 +325,7 @@ impl Board {
             }
         }
 
-        // attacked by a king?
+        // attacked by a knight?
         let knight_piece = match color {
             Color::Black => Piece::BlackKnight,
             Color::White => Piece::WhiteKnight,
@@ -423,6 +428,8 @@ impl Board {
 
         assert_eq!(self.pieces[self.king_square[Color::White]].unwrap(), Piece::WhiteKing);
         assert_eq!(self.pieces[self.king_square[Color::Black]].unwrap(), Piece::BlackKing);
+
+        assert_eq!(self.in_check, self.is_in_check())
     }
 
     pub fn is_repetition(&self) -> bool {
@@ -509,7 +516,8 @@ impl Display for Board {
                         }
                     }
                 }
-                1 => write!(f, " * tpos key: {:#08x}", self.position_key)?,
+                1 => write!(f, " * in check: {}", self.in_check)?,
+                0 => write!(f, " * tpos key: {:#08x}", self.position_key)?,
                 _ => (),
             }
 

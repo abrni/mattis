@@ -385,7 +385,7 @@ fn alpha_beta(
     // properly evaluate, whether we are able to get out of check or not.
     // Even though we handle being in check in the quiescence search, this still
     // seems to yield positive results.
-    if board.in_check() {
+    if board.in_check {
         depth += 1;
     }
 
@@ -405,7 +405,7 @@ fn alpha_beta(
     // We don't want null move pruning, if we are in check, because that would cause an illegal position.
     if allow_null_move
         && !is_pv
-        && !board.in_check()
+        && !board.in_check
         && board.ply != 0
         && board.count_big_pieces[board.color] > 1
         && depth >= 4
@@ -516,7 +516,7 @@ fn alpha_beta(
 
     // If we haven't found any legal move, we are either in checkmate or in a stalemate.
     if legal_moves == 0 {
-        if board.in_check() {
+        if board.in_check {
             return -Eval::mate_in(board.ply as u8);
         }
 
@@ -542,7 +542,7 @@ fn quiescence(mut alpha: Eval, beta: Eval, board: &mut Board, ctx: &mut ABContex
     }
 
     let standing_pat = evaluation(board);
-    let in_check = board.in_check();
+    let in_check = board.in_check;
 
     if !in_check {
         if standing_pat >= beta {
