@@ -5,38 +5,15 @@ use self::movegen::{magic_bishop_moves, magic_rook_moves, MoveList};
 use crate::{
     chess_move::ChessMove,
     notation::Notation,
-    tables::{KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS},
+    tables::{
+        KING_MOVE_PATTERNS, KNIGHT_MOVE_PATTERNS, ZOBRIST_CASTLE_KEYS, ZOBRIST_COLOR_KEY, ZOBRIST_EN_PASSANT_KEYS,
+        ZOBRIST_PIECE_KEYS,
+    },
 };
-use lazy_static::lazy_static;
 use mattis_bitboard::BitBoard;
 use mattis_types::{CastlePerm, CastlePerms, Color, File, Piece, PieceType, Rank, Square, TryFromPrimitive};
-use rand::{rngs::StdRng, Rng, SeedableRng};
-use std::{fmt::Display, sync::Mutex};
+use std::fmt::Display;
 use thiserror::Error;
-
-lazy_static! {
-    static ref __KEY_RNG: Mutex<StdRng> = Mutex::new(StdRng::seed_from_u64(0)); // always produce the same keys
-
-    pub static ref PIECE_KEYS: [[u64; 12]; 64] = {
-        let mut rng = __KEY_RNG.lock().unwrap();
-        let mut keys = [[0; 12]; 64];
-        keys.iter_mut().for_each(|l| *l = rng.gen());
-        keys
-    };
-    pub static ref COLOR_KEY: u64 = __KEY_RNG.lock().unwrap().gen();
-    pub static ref CASTLE_KEYS: [u64; 16] = {
-        let mut keys: [u64; 16]  = __KEY_RNG.lock().unwrap().gen();
-        // an unitialized board should always have position key 0
-        keys[CastlePerms::NONE.as_u8() as usize] = 0;
-        keys
-    };
-    pub static ref EN_PASSANT_KEYS: [u64; 64] = {
-        let mut rng = __KEY_RNG.lock().unwrap();
-        let mut keys = [0; 64];
-        keys.iter_mut().for_each(|k| *k = rng.gen());
-        keys
-    };
-}
 
 #[derive(Debug, Error)]
 pub enum FenError {
@@ -122,23 +99,21 @@ impl Board {
     pub fn generate_position_key(&self) -> u64 {
         let mut key: u64 = 0;
 
-        for sq in 0..64 {
-            let piece = self.pieces[sq];
-
+        for (square, piece) in self.pieces.iter().enumerate() {
             if let Some(piece) = piece {
-                key ^= PIECE_KEYS[sq][piece];
+                key ^= ZOBRIST_PIECE_KEYS[square][*piece];
             }
         }
 
         if self.color == Color::White {
-            key ^= *COLOR_KEY;
+            key ^= ZOBRIST_COLOR_KEY;
         }
 
         if let Some(sq) = self.en_passant {
-            key ^= EN_PASSANT_KEYS[sq];
+            key ^= ZOBRIST_EN_PASSANT_KEYS[sq];
         }
 
-        key ^= CASTLE_KEYS[self.castle_perms.as_u8() as usize];
+        key ^= ZOBRIST_CASTLE_KEYS[self.castle_perms.as_u8() as usize];
 
         key
     }

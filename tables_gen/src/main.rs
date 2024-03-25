@@ -21,6 +21,11 @@ fn main() {
 
     {
         use tables_gen::*;
+        run_gen!(zobrist_piece_keys);
+        run_gen!(zobrist_color_key);
+        run_gen!(zobrist_castle_keys);
+        run_gen!(zobrist_en_passant_keys);
+
         run_gen!(file_bitboards);
         run_gen!(not_file_bitboards);
 

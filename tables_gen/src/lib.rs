@@ -1,7 +1,31 @@
 use mattis_bitboard::BitBoard;
-use mattis_types::{File, Rank, Square, TryFromPrimitive};
+use mattis_types::{CastlePerms, File, Rank, Square, TryFromPrimitive};
 use rand::Rng;
 use std::ops::BitAnd;
+
+pub fn zobrist_piece_keys() -> [[u64; 12]; 64] {
+    let mut rng = rand::thread_rng();
+    let mut keys = [[0; 12]; 64];
+    keys.iter_mut().for_each(|l| *l = rng.gen());
+    keys
+}
+
+pub fn zobrist_color_key() -> u64 {
+    rand::thread_rng().gen()
+}
+
+pub fn zobrist_castle_keys() -> [u64; 16] {
+    let mut keys: [u64; 16] = rand::thread_rng().gen();
+    keys[CastlePerms::NONE.as_u8() as usize] = 0;
+    keys
+}
+
+pub fn zobrist_en_passant_keys() -> [u64; 64] {
+    let mut rng = rand::thread_rng();
+    let mut keys = [0; 64];
+    keys.iter_mut().for_each(|k| *k = rng.gen());
+    keys
+}
 
 pub fn file_bitboards() -> [BitBoard; 8] {
     let mut boards = [BitBoard::EMPTY; 8];

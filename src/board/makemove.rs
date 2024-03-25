@@ -2,8 +2,9 @@ use mattis_types::{CastlePerms, Color, Piece, PieceType, Square};
 
 use super::Board;
 use crate::{
-    board::{HistoryEntry, CASTLE_KEYS, COLOR_KEY, EN_PASSANT_KEYS, PIECE_KEYS},
+    board::HistoryEntry,
     chess_move::ChessMove,
+    tables::{ZOBRIST_CASTLE_KEYS, ZOBRIST_COLOR_KEY, ZOBRIST_EN_PASSANT_KEYS, ZOBRIST_PIECE_KEYS},
 };
 
 impl Board {
@@ -62,15 +63,15 @@ impl Board {
 
         // remove the en passant square and hash it out if necessary
         if let Some(sq) = self.en_passant.take() {
-            self.position_key ^= EN_PASSANT_KEYS[sq];
+            self.position_key ^= ZOBRIST_EN_PASSANT_KEYS[sq];
         }
 
         // update castling permitions and update hash accordingly
-        self.position_key ^= CASTLE_KEYS[self.castle_perms.as_u8() as usize];
+        self.position_key ^= ZOBRIST_CASTLE_KEYS[self.castle_perms.as_u8() as usize];
         let castle_perms =
             self.castle_perms.as_u8() & CASTLE_PERM_MODIFIERS[start_square] & CASTLE_PERM_MODIFIERS[end_square];
         self.castle_perms = CastlePerms::from_u8(castle_perms);
-        self.position_key ^= CASTLE_KEYS[self.castle_perms.as_u8() as usize];
+        self.position_key ^= ZOBRIST_CASTLE_KEYS[self.castle_perms.as_u8() as usize];
 
         // update fifty move counter and ply
         self.fifty_move += 1;
@@ -93,7 +94,7 @@ impl Board {
             // Safety: Always a valid square.
             let en_pas = unsafe { start_square.add_unchecked(dir) };
             self.en_passant = Some(en_pas);
-            self.position_key ^= EN_PASSANT_KEYS[en_pas];
+            self.position_key ^= ZOBRIST_EN_PASSANT_KEYS[en_pas];
         }
 
         // do the actual move
@@ -111,7 +112,7 @@ impl Board {
         }
 
         self.color = self.color.flipped();
-        self.position_key ^= *COLOR_KEY;
+        self.position_key ^= ZOBRIST_COLOR_KEY;
 
         #[cfg(debug_assertions)]
         self.check_board_integrity();
@@ -137,24 +138,24 @@ impl Board {
 
         // Hash out current en passant square, if there is one
         if let Some(sq) = self.en_passant {
-            self.position_key ^= EN_PASSANT_KEYS[sq];
+            self.position_key ^= ZOBRIST_EN_PASSANT_KEYS[sq];
         }
 
         self.fifty_move = his.fifty_move;
 
         // Reset castle permitions
-        self.position_key ^= CASTLE_KEYS[self.castle_perms.as_u8() as usize];
+        self.position_key ^= ZOBRIST_CASTLE_KEYS[self.castle_perms.as_u8() as usize];
         self.castle_perms = his.castle_perms;
-        self.position_key ^= CASTLE_KEYS[self.castle_perms.as_u8() as usize];
+        self.position_key ^= ZOBRIST_CASTLE_KEYS[self.castle_perms.as_u8() as usize];
 
         // Reset en passant square from history entry and update the hash
         self.en_passant = his.en_passant;
         if let Some(sq) = self.en_passant {
-            self.position_key ^= EN_PASSANT_KEYS[sq];
+            self.position_key ^= ZOBRIST_EN_PASSANT_KEYS[sq];
         }
 
         self.color = self.color.flipped();
-        self.position_key ^= *COLOR_KEY;
+        self.position_key ^= ZOBRIST_COLOR_KEY;
 
         if his.move16.is_en_passant() {
             let enemy_pawn = Piece::new(PieceType::Pawn, self.color.flipped());
@@ -224,11 +225,11 @@ impl Board {
         });
 
         self.color = self.color.flipped();
-        self.position_key ^= *COLOR_KEY;
+        self.position_key ^= ZOBRIST_COLOR_KEY;
 
         // remove the en passant square and hash it out if necessary
         if let Some(sq) = self.en_passant.take() {
-            self.position_key ^= EN_PASSANT_KEYS[sq];
+            self.position_key ^= ZOBRIST_EN_PASSANT_KEYS[sq];
         }
 
         #[cfg(debug_assertions)]
@@ -242,7 +243,7 @@ impl Board {
         self.ply -= 1;
 
         if let Some(sq) = self.en_passant {
-            self.position_key ^= EN_PASSANT_KEYS[sq];
+            self.position_key ^= ZOBRIST_EN_PASSANT_KEYS[sq];
         }
 
         let his = self.history.pop().unwrap();
@@ -251,11 +252,11 @@ impl Board {
         self.en_passant = his.en_passant;
 
         if let Some(sq) = self.en_passant {
-            self.position_key ^= EN_PASSANT_KEYS[sq];
+            self.position_key ^= ZOBRIST_EN_PASSANT_KEYS[sq];
         }
 
         self.color = self.color.flipped();
-        self.position_key ^= *COLOR_KEY;
+        self.position_key ^= ZOBRIST_COLOR_KEY;
 
         #[cfg(debug_assertions)]
         self.check_board_integrity();
@@ -265,7 +266,7 @@ impl Board {
         let piece = self.pieces[square].take().unwrap();
         let color = piece.color();
 
-        self.position_key ^= PIECE_KEYS[square][piece];
+        self.position_key ^= ZOBRIST_PIECE_KEYS[square][piece];
         self.material[color] -= piece.value();
         self.count_pieces[piece] -= 1;
         self.bitboards[piece].clear(square);
@@ -285,7 +286,7 @@ impl Board {
         debug_assert_eq!(self.pieces[square], None);
         let color = piece.color();
 
-        self.position_key ^= PIECE_KEYS[square][piece];
+        self.position_key ^= ZOBRIST_PIECE_KEYS[square][piece];
         self.pieces[square] = Some(piece);
         self.material[color] += piece.value();
         self.count_pieces[piece] += 1;
@@ -307,8 +308,8 @@ impl Board {
         let color = piece.color();
         self.pieces[to] = Some(piece);
 
-        self.position_key ^= PIECE_KEYS[from][piece];
-        self.position_key ^= PIECE_KEYS[to][piece];
+        self.position_key ^= ZOBRIST_PIECE_KEYS[from][piece];
+        self.position_key ^= ZOBRIST_PIECE_KEYS[to][piece];
 
         self.bitboards[piece].clear(from);
         self.bitboards[piece].set(to);
