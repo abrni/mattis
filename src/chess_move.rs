@@ -1,4 +1,7 @@
-use crate::notation::SmithNotation;
+use crate::{
+    board::Board,
+    notation::{AlgebraicNotation, SmithNotation},
+};
 use mattis_types::{Piece, PieceType, Square, UnsafeFromPrimitive};
 use std::fmt::{Debug, Display};
 
@@ -90,6 +93,12 @@ impl ChessMove {
     pub fn display_smith(self) -> MoveDisplaySmith {
         MoveDisplaySmith { cmove: self }
     }
+
+    pub fn display_algebraic(self, board: &mut Board) -> MoveDisplayAlgebraic {
+        let mut text = "".to_string();
+        AlgebraicNotation::write(&mut text, self, board).unwrap();
+        MoveDisplayAlgebraic { text }
+    }
 }
 
 pub struct MoveDisplaySmith {
@@ -99,6 +108,16 @@ pub struct MoveDisplaySmith {
 impl Display for MoveDisplaySmith {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         SmithNotation::write(f, self.cmove)
+    }
+}
+
+pub struct MoveDisplayAlgebraic {
+    text: String,
+}
+
+impl Display for MoveDisplayAlgebraic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.text)
     }
 }
 
