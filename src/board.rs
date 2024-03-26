@@ -443,6 +443,12 @@ impl Board {
         self.generate_all_moves(&mut movelist);
 
         for cmove in movelist {
+            if !self.make_move(cmove) {
+                continue;
+            }
+
+            self.take_move();
+
             let mut string = String::new();
             N::write(&mut string, cmove, self).unwrap();
 
