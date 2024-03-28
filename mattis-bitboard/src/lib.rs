@@ -88,29 +88,15 @@ impl BitBoard {
 
     /// Clears the least significant 1-bit and returns its index
     pub fn pop(&mut self) -> Option<Square> {
-        #[rustfmt::skip]
-        const POP_MAGIC_TABLE: [u8 ; 64] = [
-            63, 30,  3, 32, 25, 41, 22, 33,
-            15, 50, 42, 13, 11, 53, 19, 34,
-            61, 29,  2, 51, 21, 43, 45, 10,
-            18, 47,  1, 54,  9, 57,  0, 35,
-            62, 31, 40,  4, 49,  5, 52, 26,
-            60,  6, 23, 44, 46, 27, 56, 16,
-             7, 39, 48, 24, 59, 14, 12, 55,
-            38, 28, 58, 20, 37, 17, 36,  8,
-        ];
-
-        if self.is_empty() {
-            return None;
-        }
-
-        let b = self.0 ^ (self.0 - 1);
-        let fold: u32 = ((b & u64::MAX) ^ (b >> 32)) as u32;
+        let sq = self.0.trailing_zeros();
         self.0 &= self.0 - 1;
 
-        let idx = POP_MAGIC_TABLE[(fold.wrapping_mul(0x783a9b23) >> 26) as usize];
-        // Safety: `POP_MAGIC_TABLE` only contains numbers lower than 64.
-        unsafe { Some(Square::unchecked_transmute_from(idx)) }
+        if sq == 64 {
+            return None;
+        };
+
+        let sq = unsafe { Square::unchecked_transmute_from(sq as u8) };
+        Some(sq)
     }
 
     pub fn iter_bit_indices(self) -> impl Iterator<Item = Square> {
