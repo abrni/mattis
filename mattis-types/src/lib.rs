@@ -1,3 +1,8 @@
+#![warn(clippy::return_self_not_must_use)]
+#![warn(clippy::missing_safety_doc)]
+#![warn(clippy::undocumented_unsafe_blocks)]
+#![warn(clippy::must_use_candidate)]
+
 use std::{
     fmt::Display,
     ops::{Add, Index, IndexMut, Sub},
@@ -69,6 +74,7 @@ macro_rules! impl_iterators {
         impl ExactSizeIterator for $itertype {}
 
         impl $type {
+            #[must_use]
             pub fn range_inclusive(a: Self, b: Self) -> $itertype {
                 let a = <$repr>::from(a);
                 let b = <$repr>::from(b);
@@ -76,6 +82,7 @@ macro_rules! impl_iterators {
                 $itertype { range: a..=b }
             }
 
+            #[must_use]
             pub fn iter_all() -> $itertype {
                 Self::range_inclusive(Self::MIN, Self::MAX)
             }
@@ -107,18 +114,22 @@ impl PieceType {
         Self::King,
     ];
 
+    #[must_use]
     pub const fn is_big(self) -> bool {
         !matches!(self, Self::Pawn)
     }
 
+    #[must_use]
     pub const fn is_major(self) -> bool {
         matches!(self, Self::Rook | Self::Queen | Self::King)
     }
 
+    #[must_use]
     pub const fn is_minor(self) -> bool {
         matches!(self, Self::Bishop | Self::Knight)
     }
 
+    #[must_use]
     pub const fn value(self) -> i16 {
         match self {
             Self::Pawn => 100,
@@ -129,6 +140,7 @@ impl PieceType {
         }
     }
 
+    #[must_use]
     pub fn to_char(self) -> char {
         match self {
             Self::Pawn => 'p',
@@ -199,6 +211,7 @@ impl Piece {
         Self::BlackKing,
     ];
 
+    #[must_use]
     pub const fn new(ty: PieceType, color: Color) -> Self {
         // Safety:
         // - White pieces have the same bit repr as PieceType.
@@ -206,6 +219,7 @@ impl Piece {
         unsafe { std::mem::transmute(ty as u8 + 6 * color as u8) }
     }
 
+    #[must_use]
     pub const fn from_char(c: char) -> Option<Self> {
         match c {
             'P' => Some(Self::WhitePawn),
@@ -224,6 +238,7 @@ impl Piece {
         }
     }
 
+    #[must_use]
     pub const fn to_char(self) -> char {
         match self {
             Self::WhitePawn => 'P',
@@ -241,22 +256,27 @@ impl Piece {
         }
     }
 
+    #[must_use]
     pub const fn is_big(self) -> bool {
         self.piece_type().is_big()
     }
 
+    #[must_use]
     pub const fn is_major(self) -> bool {
         self.piece_type().is_major()
     }
 
+    #[must_use]
     pub const fn is_minor(self) -> bool {
         self.piece_type().is_minor()
     }
 
+    #[must_use]
     pub const fn value(self) -> i16 {
         self.piece_type().value()
     }
 
+    #[must_use]
     pub const fn piece_type(self) -> PieceType {
         match self {
             Self::WhitePawn | Self::BlackPawn => PieceType::Pawn,
@@ -268,6 +288,7 @@ impl Piece {
         }
     }
 
+    #[must_use]
     pub const fn color(self) -> Color {
         match self {
             Self::WhitePawn
@@ -302,6 +323,7 @@ impl Color {
     const MIN: Self = Self::White;
     const MAX: Self = Self::Black;
 
+    #[must_use]
     pub fn from_char(c: char) -> Option<Self> {
         match c {
             'w' => Some(Self::White),
@@ -310,6 +332,7 @@ impl Color {
         }
     }
 
+    #[must_use]
     pub fn to_char(self) -> char {
         match self {
             Self::White => 'w',
@@ -348,6 +371,7 @@ impl File {
     const MIN: Self = Self::A;
     const MAX: Self = Self::H;
 
+    #[must_use]
     pub fn from_char(c: char) -> Option<Self> {
         match c {
             'a' => Some(Self::A),
@@ -362,6 +386,7 @@ impl File {
         }
     }
 
+    #[must_use]
     pub fn to_char(self) -> char {
         match self {
             Self::A => 'a',
@@ -375,11 +400,13 @@ impl File {
         }
     }
 
+    #[must_use]
     pub fn up(self) -> Option<Self> {
         let f: u8 = self.into();
         Self::try_from_primitive(f + 1).ok()
     }
 
+    #[must_use]
     pub fn down(self) -> Option<Self> {
         let f: u8 = self.into();
         Self::try_from_primitive(f.checked_sub(1)?).ok()
@@ -433,6 +460,7 @@ impl Rank {
     const MIN: Self = Self::R1;
     const MAX: Self = Self::R8;
 
+    #[must_use]
     pub fn from_char(c: char) -> Option<Self> {
         match c {
             '1' => Some(Self::R1),
@@ -447,6 +475,7 @@ impl Rank {
         }
     }
 
+    #[must_use]
     pub fn to_char(self) -> char {
         match self {
             Self::R1 => '1',
@@ -460,11 +489,13 @@ impl Rank {
         }
     }
 
+    #[must_use]
     pub fn up(self) -> Option<Self> {
         let r: u8 = self.into();
         Self::try_from_primitive(r + 1).ok()
     }
 
+    #[must_use]
     pub fn down(self) -> Option<Self> {
         let r: u8 = self.into();
         Self::try_from_primitive(r.checked_sub(1)?).ok()
@@ -523,6 +554,7 @@ pub enum CastlePerm {
 }
 
 impl CastlePerm {
+    #[must_use]
     pub fn from_char(c: char) -> Option<Self> {
         match c {
             'K' => Some(Self::WhiteKingside),
@@ -533,6 +565,7 @@ impl CastlePerm {
         }
     }
 
+    #[must_use]
     pub fn to_char(self) -> char {
         match self {
             Self::WhiteKingside => 'K',
@@ -560,15 +593,18 @@ impl CastlePerms {
         self.0 &= !perm;
     }
 
+    #[must_use]
     pub fn get(&self, perm: CastlePerm) -> bool {
         let perm: u8 = perm.into();
         (self.0 & perm) > 0
     }
 
+    #[must_use]
     pub fn as_u8(self) -> u8 {
         self.0
     }
 
+    #[must_use]
     pub fn from_u8(v: u8) -> Self {
         Self(v)
     }
@@ -611,6 +647,7 @@ impl Square {
     pub const MIN: Self = Self::A1;
     pub const MAX: Self = Self::H8;
 
+    #[must_use]
     pub fn from_file_rank(file: File, rank: Rank) -> Self {
         let file: u8 = file.into();
         let rank: u8 = rank.into();
@@ -619,6 +656,7 @@ impl Square {
         unsafe { Self::unchecked_transmute_from(square) }
     }
 
+    #[must_use]
     pub fn file(self) -> File {
         let sq = u8::from(self);
         let file = sq % 8;
@@ -626,6 +664,7 @@ impl Square {
         unsafe { File::unchecked_transmute_from(file) }
     }
 
+    #[must_use]
     pub fn rank(self) -> Rank {
         let sq = u8::from(self);
         let rank = sq / 8;
