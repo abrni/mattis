@@ -9,7 +9,6 @@ name = "perft_bench"
 harness = false
 
 [dependencies]
-rand = "0.8.5"
 smallvec = "1.13.1"
 thiserror = "1.0.57"
 mattis-types = { path = "../mattis-types" }
@@ -19,6 +18,7 @@ ctor = "0.2.7"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
+rand = "0.8.5"
 
 [build-dependencies]
 mattis-tablegen = { path = "../mattis-tablegen" }
