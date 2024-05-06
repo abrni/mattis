@@ -360,7 +360,10 @@ pub fn magic_bishop_moves(square: Square, blockers: BitBoard) -> BitBoard {
     let key = blockers.to_u64().wrapping_mul(BISHOP_MAGICS[square]);
     let key = key >> (64 - BISHOP_MAGIC_BIT_COUNT[square]);
 
+    // Safety: `square` is always in a valid range (0-64)
     let table_row = unsafe { BISHOP_ATTACK_TABLE.get_unchecked(square as u8 as usize) };
+
+    // Safety: `key` is always in a valid range
     unsafe { *table_row.get_unchecked(key as usize) }
 }
 
@@ -369,7 +372,10 @@ pub fn magic_rook_moves(square: Square, blockers: BitBoard) -> BitBoard {
     let key = blockers.to_u64().wrapping_mul(ROOK_MAGICS[square]);
     let key = key >> (64 - ROOK_MAGIC_BIT_COUNT[square]);
 
+    // Safety: `square` is always in a valid range (0-64)
     let table_row = unsafe { ROOK_ATTACK_TABLE.get_unchecked(square as u8 as usize) };
+
+    // Safety: `key` is always in a valid range
     unsafe { *table_row.get_unchecked(key as usize) }
 }
 
