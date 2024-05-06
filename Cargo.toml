@@ -1,6 +1,13 @@
 [workspace]
 resolver = "2"
-members = ["mattis", "mattis-bitboard", "mattis-types", "mattis-tablegen"]
+
+members = [
+    "mattis",
+    "mattis-bitboard",
+    "mattis-types",
+    "mattis-tablegen",
+    "mattis-uci",
+]
 
 [profile.release]
 codegen-units = 1

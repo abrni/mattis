@@ -9,8 +9,8 @@ use mattis::{
     hashtable::TranspositionTable,
     notation::SmithNotation,
     search::{self, KillSwitch, SearchConfig},
-    uci::{self, EngineMessage, GuiMessage, Id},
 };
+use mattis_uci::{self as uci, EngineMessage, GuiMessage, Id};
 
 const FEN_STARTPOS: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const HASHTABLE_SIZE_MB: usize = 256;

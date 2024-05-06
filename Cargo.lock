@@ -314,6 +314,7 @@ dependencies = [
  "mattis-bitboard",
  "mattis-tablegen",
  "mattis-types",
+ "mattis-uci",
  "rand",
  "smallvec",
  "thiserror",
@@ -344,6 +345,14 @@ version = "0.1.0"
 dependencies = [
  "num_enum",
  "rand",
+]
+
+[[package]]
+name = "mattis-uci"
+version = "0.1.0"
+dependencies = [
+ "mattis-types",
+ "thiserror",
 ]
 
 [[package]]

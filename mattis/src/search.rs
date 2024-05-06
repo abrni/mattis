@@ -4,9 +4,9 @@ use crate::{
     eval::evaluation,
     hashtable::{HEKind, Probe, TranspositionTable},
     time_man::{Limits, TimeMan},
-    uci::{self, EngineMessage},
 };
 use mattis_types::{Color, Eval, Piece, PieceType};
+use mattis_uci::{self as uci, EngineMessage};
 use std::{
     collections::HashMap,
     sync::{
