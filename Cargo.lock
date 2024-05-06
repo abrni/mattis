@@ -312,10 +312,10 @@ dependencies = [
  "criterion",
  "ctor",
  "mattis-bitboard",
+ "mattis-tablegen",
  "mattis-types",
  "rand",
  "smallvec",
- "tables_gen",
  "thiserror",
 ]
 
@@ -326,6 +326,16 @@ dependencies = [
  "bytemuck",
  "lazy_static",
  "mattis-types",
+]
+
+[[package]]
+name = "mattis-tablegen"
+version = "0.1.0"
+dependencies = [
+ "lazy_static",
+ "mattis-bitboard",
+ "mattis-types",
+ "rand",
 ]
 
 [[package]]
@@ -585,16 +595,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "tables_gen"
-version = "0.1.0"
-dependencies = [
- "lazy_static",
- "mattis-bitboard",
- "mattis-types",
- "rand",
 ]
 
 [[package]]

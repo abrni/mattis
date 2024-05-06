@@ -20,7 +20,7 @@ fn main() {
     }
 
     {
-        use tables_gen::*;
+        use mattis_tablegen::*;
         run_gen!(zobrist_piece_keys);
         run_gen!(zobrist_color_key);
         run_gen!(zobrist_castle_keys);
@@ -54,5 +54,5 @@ fn main() {
     }
 
     println!("cargo:rerun-if-changed=../target/generated_tables");
-    println!("cargo:rerun-if-changed=../tables_gen");
+    println!("cargo:rerun-if-changed=../mattis-tablegen");
 }

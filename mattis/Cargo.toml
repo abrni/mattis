@@ -8,11 +8,6 @@ default-run = "mattis"
 name = "perft_bench"
 harness = false
 
-[profile.release]
-codegen-units = 1
-lto = "fat"
-strip = "symbols"
-
 [dependencies]
 rand = "0.8.5"
 smallvec = "1.13.1"
@@ -25,5 +20,5 @@ ctor = "0.2.7"
 criterion = { version = "0.5.1", features = ["html_reports"] }
 
 [build-dependencies]
-tables_gen = { path = "../tables_gen" }
+mattis-tablegen = { path = "../mattis-tablegen" }
 bytemuck = "1.15.0"
