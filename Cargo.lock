@@ -343,6 +343,7 @@ name = "mattis-types"
 version = "0.1.0"
 dependencies = [
  "num_enum",
+ "rand",
 ]
 
 [[package]]

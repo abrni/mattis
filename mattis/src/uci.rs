@@ -1,4 +1,4 @@
-use crate::eval::Eval;
+use mattis_types::Eval;
 use std::fmt::Display;
 
 #[derive(Debug, thiserror::Error)]

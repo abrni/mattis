@@ -5,7 +5,7 @@
 
 use std::{
     fmt::Display,
-    ops::{Add, Index, IndexMut, Sub},
+    ops::{Add, AddAssign, Index, IndexMut, Neg, Sub, SubAssign},
 };
 
 pub use num_enum::{IntoPrimitive, TryFromPrimitive, UnsafeFromPrimitive};
@@ -736,6 +736,136 @@ impl Sub<i8> for Square {
 impl Display for Square {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}{}", self.file(), self.rank())
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash, Default)]
+pub struct Eval(i16);
+
+impl Eval {
+    // We only define constants for the positive case. Negative evaluations just use the same values but negated.
+    // This way we don't have to deal with i16::MIN and i16::MAX having different absolute values.
+    pub const DRAW: Self = Self(0);
+    pub const MAX: Self = Self(32_000); // The absolute maximum representable value
+    const _MATE_DEPTH_MAX: i16 = u8::MAX as i16; // Max amount of mates, we can represent
+    const MATE_RANGE_START: Self = Self(30_000); // Evals equal or above this value count as mate
+    const MATE_RANGE_END: Self = Self(30_256);
+
+    #[must_use]
+    pub fn mate_in(moves: u8) -> Self {
+        Self::MATE_RANGE_END - moves
+    }
+
+    #[must_use]
+    pub fn abs(self) -> Self {
+        Self(self.0.abs())
+    }
+
+    #[must_use]
+    pub fn is_mate(self) -> bool {
+        let abs = self.abs();
+        abs >= Self::MATE_RANGE_START && abs <= Self::MATE_RANGE_END
+    }
+
+    #[must_use]
+    pub fn mate_ply(self) -> Option<u8> {
+        if self.is_mate() {
+            let ply = i16::abs_diff(Self::MATE_RANGE_END.inner(), self.abs().inner());
+            Some(ply as u8)
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub fn inner(self) -> i16 {
+        self.0
+    }
+}
+
+impl Neg for Eval {
+    type Output = Eval;
+
+    fn neg(self) -> Self::Output {
+        Self(-self.0)
+    }
+}
+
+impl Add<Eval> for Eval {
+    type Output = Eval;
+
+    fn add(self, rhs: Eval) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+
+impl Sub<Eval> for Eval {
+    type Output = Eval;
+
+    fn sub(self, rhs: Eval) -> Self::Output {
+        Self(self.0 - rhs.0)
+    }
+}
+
+impl Add<i16> for Eval {
+    type Output = Eval;
+
+    fn add(self, rhs: i16) -> Self::Output {
+        Self(self.0 + rhs)
+    }
+}
+
+impl Sub<i16> for Eval {
+    type Output = Eval;
+
+    fn sub(self, rhs: i16) -> Self::Output {
+        Self(self.0 - rhs)
+    }
+}
+
+impl Add<u8> for Eval {
+    type Output = Eval;
+
+    fn add(self, rhs: u8) -> Self::Output {
+        Self(self.0 + rhs as i16)
+    }
+}
+
+impl Sub<u8> for Eval {
+    type Output = Eval;
+
+    fn sub(self, rhs: u8) -> Self::Output {
+        Self(self.0 - rhs as i16)
+    }
+}
+
+impl<T> AddAssign<T> for Eval
+where
+    Eval: Add<T, Output = Eval>,
+{
+    fn add_assign(&mut self, rhs: T) {
+        *self = *self + rhs;
+    }
+}
+
+impl<T> SubAssign<T> for Eval
+where
+    Eval: Sub<T, Output = Eval>,
+{
+    fn sub_assign(&mut self, rhs: T) {
+        *self = *self - rhs;
+    }
+}
+
+impl From<i16> for Eval {
+    fn from(value: i16) -> Self {
+        Self(value)
+    }
+}
+
+impl rand::distributions::Distribution<Eval> for rand::distributions::Standard {
+    fn sample<R: rand::prelude::Rng + ?Sized>(&self, rng: &mut R) -> Eval {
+        Eval::from(rng.gen::<i16>())
     }
 }
 

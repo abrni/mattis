@@ -1,4 +1,5 @@
-use crate::{board::Board, chess_move::ChessMove, eval::Eval};
+use crate::{board::Board, chess_move::ChessMove};
+use mattis_types::Eval;
 use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -202,9 +203,9 @@ mod test {
     use crate::{
         board::Board,
         chess_move::ChessMove,
-        eval::Eval,
         hashtable::{Data, Entry, TranspositionTable},
     };
+    use mattis_types::Eval;
 
     #[test]
     fn size_of_entry() {

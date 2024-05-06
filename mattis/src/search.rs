@@ -1,12 +1,12 @@
 use crate::{
     board::{movegen::MoveList, Board},
     chess_move::ChessMove,
-    eval::{evaluation, Eval},
+    eval::evaluation,
     hashtable::{HEKind, Probe, TranspositionTable},
     time_man::{Limits, TimeMan},
     uci::{self, EngineMessage},
 };
-use mattis_types::{Color, Piece, PieceType};
+use mattis_types::{Color, Eval, Piece, PieceType};
 use std::{
     collections::HashMap,
     sync::{
