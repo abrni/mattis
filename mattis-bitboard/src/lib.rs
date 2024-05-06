@@ -88,12 +88,7 @@ impl BitBoard {
     #[inline]
     pub fn get(&self, idx: Square) -> bool {
         let idx: usize = idx.into();
-
-        if let Some(v) = 1u64.checked_shl(idx as u32) {
-            (self.0 & v) > 0
-        } else {
-            false
-        }
+        self.0 & (1 << idx) > 0
     }
 
     #[inline]
