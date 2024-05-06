@@ -9,4 +9,3 @@ edition = "2021"
 mattis-types = { path = "../mattis-types" }
 mattis-bitboard = { path = "../mattis-bitboard" }
 rand = "0.8.5"
-lazy_static = "1.4.0"

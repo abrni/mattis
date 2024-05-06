@@ -333,7 +333,6 @@ dependencies = [
 name = "mattis-tablegen"
 version = "0.1.0"
 dependencies = [
- "lazy_static",
  "mattis-bitboard",
  "mattis-types",
  "rand",
