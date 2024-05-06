@@ -18,62 +18,74 @@ impl BitBoard {
     const NOT_FILE_H: Self = Self(0x7f7f7f7f7f7f7f7f);
 
     #[must_use]
+    #[inline]
     pub fn from_u64(v: u64) -> Self {
         Self(v)
     }
 
     #[must_use]
+    #[inline]
     pub fn to_u64(self) -> u64 {
         self.0
     }
 
     #[must_use]
+    #[inline]
     pub const fn is_empty(self) -> bool {
         self.0 == 0
     }
 
     #[must_use]
+    #[inline]
     pub const fn is_full(self) -> bool {
         self.0 == u64::MAX
     }
 
     #[must_use]
+    #[inline]
     pub const fn intersection(self, other: Self) -> Self {
         Self(self.0 & other.0)
     }
 
     #[must_use]
+    #[inline]
     pub const fn union(self, other: Self) -> Self {
         Self(self.0 | other.0)
     }
 
     #[must_use]
+    #[inline]
     pub const fn complement(self) -> Self {
         Self(!self.0)
     }
 
     #[must_use]
+    #[inline]
     pub const fn without(self, other: Self) -> Self {
         Self(self.0 & !other.0)
     }
 
+    #[inline]
     pub fn set(&mut self, idx: Square) {
         let idx: usize = idx.into();
         self.0 |= 1 << idx;
     }
 
+    #[inline]
     pub fn set_to(&mut self, idx: Square, value: bool) {
         let idx: usize = idx.into();
         self.0 &= !(1 << idx);
         self.0 |= (value as u64) << idx;
     }
 
+    #[inline]
     pub fn clear(&mut self, idx: Square) {
         let idx: usize = idx.into();
         self.0 &= !(1 << idx);
     }
 
     #[must_use]
+    #[inline]
     pub fn get(&self, idx: Square) -> bool {
         let idx: usize = idx.into();
 
@@ -84,12 +96,14 @@ impl BitBoard {
         }
     }
 
+    #[inline]
     pub fn silent_pop(&mut self) {
         self.0 &= self.0 - 1;
     }
 
     /// Clears the least significant 1-bit and returns its index
     #[must_use]
+    #[inline]
     pub fn pop(&mut self) -> Option<Square> {
         if self.0 == 0 {
             return None;
@@ -103,52 +117,62 @@ impl BitBoard {
         Some(sq)
     }
 
+    #[inline]
     pub fn iter_bit_indices(self) -> impl Iterator<Item = Square> {
         let mut b = self;
         std::iter::from_fn(move || b.pop())
     }
 
     #[must_use]
+    #[inline]
     pub fn bit_count(self) -> u32 {
         self.0.count_ones()
     }
 
     #[must_use]
+    #[inline]
     pub fn shifted_north(self) -> Self {
         Self(self.0 << 8)
     }
 
     #[must_use]
+    #[inline]
     pub fn shifted_south(self) -> Self {
         Self(self.0 >> 8)
     }
 
     #[must_use]
+    #[inline]
     pub fn shifted_east(self) -> Self {
         Self((self.0 << 1) & Self::NOT_FILE_A.to_u64())
     }
 
     #[must_use]
+    #[inline]
     pub fn shifted_west(self) -> Self {
         Self((self.0 >> 1) & Self::NOT_FILE_H.to_u64())
     }
 
     #[must_use]
+    #[inline]
     pub fn shifted_northeast(self) -> Self {
         Self((self.0 << 9) & Self::NOT_FILE_A.to_u64())
     }
 
     #[must_use]
+    #[inline]
     pub fn shifted_southeast(self) -> Self {
         Self((self.0 >> 7) & Self::NOT_FILE_A.to_u64())
     }
 
     #[must_use]
+    #[inline]
     pub fn shifted_southwest(self) -> Self {
         Self((self.0 >> 9) & Self::NOT_FILE_H.to_u64())
     }
 
     #[must_use]
+    #[inline]
     pub fn shifted_northwest(self) -> Self {
         Self((self.0 << 7) & Self::NOT_FILE_H.to_u64())
     }
