@@ -1,3 +1,8 @@
+#![warn(clippy::return_self_not_must_use)]
+#![warn(clippy::missing_safety_doc)]
+#![warn(clippy::undocumented_unsafe_blocks)]
+#![warn(clippy::must_use_candidate)]
+
 use bytemuck::{Pod, Zeroable};
 use mattis_types::{File, Rank, Square, UnsafeFromPrimitive};
 use std::fmt::{Debug, Display};
@@ -12,18 +17,22 @@ impl BitBoard {
     const NOT_FILE_A: Self = Self(0xfefefefefefefefe);
     const NOT_FILE_H: Self = Self(0x7f7f7f7f7f7f7f7f);
 
+    #[must_use]
     pub fn from_u64(v: u64) -> Self {
         Self(v)
     }
 
+    #[must_use]
     pub fn to_u64(self) -> u64 {
         self.0
     }
 
+    #[must_use]
     pub const fn is_empty(self) -> bool {
         self.0 == 0
     }
 
+    #[must_use]
     pub const fn is_full(self) -> bool {
         self.0 == u64::MAX
     }
@@ -50,28 +59,21 @@ impl BitBoard {
 
     pub fn set(&mut self, idx: Square) {
         let idx: usize = idx.into();
-
-        if let Some(v) = 1u64.checked_shl(idx as u32) {
-            self.0 |= v;
-        }
+        self.0 |= 1 << idx;
     }
 
     pub fn set_to(&mut self, idx: Square, value: bool) {
-        if value {
-            self.set(idx);
-        } else {
-            self.clear(idx);
-        }
+        let idx: usize = idx.into();
+        self.0 &= !(1 << idx);
+        self.0 |= (value as u64) << idx;
     }
 
     pub fn clear(&mut self, idx: Square) {
         let idx: usize = idx.into();
-
-        if let Some(v) = 1u64.checked_shl(idx as u32) {
-            self.0 &= !v;
-        }
+        self.0 &= !(1 << idx);
     }
 
+    #[must_use]
     pub fn get(&self, idx: Square) -> bool {
         let idx: usize = idx.into();
 
@@ -87,14 +89,16 @@ impl BitBoard {
     }
 
     /// Clears the least significant 1-bit and returns its index
+    #[must_use]
     pub fn pop(&mut self) -> Option<Square> {
+        if self.0 == 0 {
+            return None;
+        }
+
         let sq = self.0.trailing_zeros();
         self.0 &= self.0 - 1;
 
-        if sq == 64 {
-            return None;
-        };
-
+        // Safety: `sq` is always in range (0-64)
         let sq = unsafe { Square::unchecked_transmute_from(sq as u8) };
         Some(sq)
     }
@@ -104,6 +108,7 @@ impl BitBoard {
         std::iter::from_fn(move || b.pop())
     }
 
+    #[must_use]
     pub fn bit_count(self) -> u32 {
         self.0.count_ones()
     }
@@ -183,9 +188,18 @@ mod tests {
         for sq in 0..64 {
             let sq = Square::try_from_primitive(sq).unwrap();
             assert!(!bitboard.get(sq));
+
             bitboard.set(sq);
             assert!(bitboard.get(sq));
+
             bitboard.clear(sq);
+            assert!(!bitboard.get(sq));
+            assert!(bitboard.is_empty());
+
+            bitboard.set_to(sq, true);
+            assert!(bitboard.get(sq));
+
+            bitboard.set_to(sq, false);
             assert!(!bitboard.get(sq));
             assert!(bitboard.is_empty());
         }
