@@ -8,6 +8,7 @@ use mattis::{
     chess_move::ChessMove,
     hashtable::TranspositionTable,
     notation::SmithNotation,
+    perft::perft_full,
     search::{self, KillSwitch, SearchConfig},
 };
 use mattis_uci::{self as uci, EngineMessage, GuiMessage, Id};
@@ -17,6 +18,47 @@ const HASHTABLE_SIZE_MB: usize = 256;
 const THREAD_COUNT: u32 = 12;
 
 fn main() {
+    println!("Welcome to the mattis chess engine!");
+    println!("Please select a mode:");
+    println!("- `uci` for uci mode");
+    println!("- `tui` for a human-readable ui");
+
+    let mut stdin = BufReader::new(std::io::stdin());
+    let mut input = String::new();
+
+    loop {
+        input.clear();
+        stdin.read_line(&mut input).expect("Must be able to read from stdin");
+
+        match input.trim() {
+            "uci" => {
+                print_uci_info();
+                uci_loop();
+            }
+            "tui" => tui_loop(),
+            _ => continue,
+        }
+
+        break;
+    }
+}
+
+fn tui_loop() {
+    let mut stdin = BufReader::new(std::io::stdin());
+    let mut input = String::new();
+
+    loop {
+        input.clear();
+        stdin.read_line(&mut input).expect("Must be able to read from stdin");
+
+        match input.trim() {
+            "perft" => perft_full(),
+            _ => println!("unknown command"),
+        }
+    }
+}
+
+fn uci_loop() {
     let ttable = Arc::new(TranspositionTable::new(HASHTABLE_SIZE_MB));
     let search_killers = Arc::new(Mutex::new(vec![[ChessMove::default(); 2]; 1024].into_boxed_slice()));
     let search_history = Arc::new(Mutex::new([[0; 64]; 12]));
@@ -28,7 +70,7 @@ fn main() {
 
     loop {
         input.clear();
-        stdin.read_line(&mut input).expect("Could not read input line");
+        stdin.read_line(&mut input).expect("Must be able to read from stdin");
 
         let Ok(message) = GuiMessage::parse(&input) else {
             println!("Received unknown command");
