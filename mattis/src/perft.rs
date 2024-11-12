@@ -19,6 +19,7 @@ pub fn perft_full() {
             print!(" - depth {depth:02}, expect {expected_leaves} leaves ... ");
             std::io::stdout().flush().unwrap();
 
+            #[allow(clippy::absurd_extreme_comparisons)]
             if expected_leaves > MAX_LEAVES {
                 println!("skipping");
                 break;

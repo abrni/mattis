@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use clap::{Parser, Subcommand};
 use mattis::{
     board::Board,
     chess_move::ChessMove,
@@ -17,44 +18,26 @@ const FEN_STARTPOS: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -
 const HASHTABLE_SIZE_MB: usize = 256;
 const THREAD_COUNT: u32 = 12;
 
-fn main() {
-    println!("Welcome to the mattis chess engine!");
-    println!("Please select a mode:");
-    println!("- `uci` for uci mode");
-    println!("- `tui` for a human-readable ui");
-
-    let mut stdin = BufReader::new(std::io::stdin());
-    let mut input = String::new();
-
-    loop {
-        input.clear();
-        stdin.read_line(&mut input).expect("Must be able to read from stdin");
-
-        match input.trim() {
-            "uci" => {
-                print_uci_info();
-                uci_loop();
-            }
-            "tui" => tui_loop(),
-            _ => continue,
-        }
-
-        break;
-    }
+#[derive(Debug, Parser, Clone)]
+struct Args {
+    #[command(subcommand)]
+    command: Option<Command>,
 }
 
-fn tui_loop() {
-    let mut stdin = BufReader::new(std::io::stdin());
-    let mut input = String::new();
+#[derive(Debug, Default, Subcommand, Clone)]
+enum Command {
+    #[default]
+    Uci,
+    Perft,
+}
 
-    loop {
-        input.clear();
-        stdin.read_line(&mut input).expect("Must be able to read from stdin");
+fn main() {
+    let args = Args::parse();
+    let command = args.command.unwrap_or(Command::Uci); // Default to UCI, if no command is given
 
-        match input.trim() {
-            "perft" => perft_full(),
-            _ => println!("unknown command"),
-        }
+    match command {
+        Command::Uci => uci_loop(),
+        Command::Perft => perft_full(),
     }
 }
 
