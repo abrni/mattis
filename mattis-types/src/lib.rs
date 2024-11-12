@@ -161,16 +161,16 @@ impl_iterators!(PieceType, PieceTypeIter, u8);
 #[repr(u8)]
 pub enum Piece {
     WhitePawn,
-    WhiteKnight,
-    WhiteBishop,
-    WhiteRook,
-    WhiteQueen,
-    WhiteKing,
     BlackPawn,
+    WhiteKnight,
     BlackKnight,
+    WhiteBishop,
     BlackBishop,
+    WhiteRook,
     BlackRook,
+    WhiteQueen,
     BlackQueen,
+    WhiteKing,
     BlackKing,
 }
 
@@ -213,10 +213,11 @@ impl Piece {
 
     #[must_use]
     pub const fn new(ty: PieceType, color: Color) -> Self {
-        // Safety:
-        // - White pieces have the same bit repr as PieceType.
-        // - For black pieces, we just need to add 6 (because there are 6 piece types).
-        unsafe { std::mem::transmute(ty as u8 + 6 * color as u8) }
+        // Safety: `unchecked_add` is always in range
+        let result = unsafe { (ty as u8).wrapping_shl(1).unchecked_add(color as u8) };
+
+        // Safety: The correct layout is ensured by `#[repr(u8)]`
+        unsafe { std::mem::transmute(result) }
     }
 
     #[must_use]
@@ -875,10 +876,9 @@ mod tests {
 
     #[test]
     fn convert_piece_types() {
-        for color in [Color::White, Color::Black] {
-            for piece_type in PieceType::ALL {
+        for color in Color::iter_all() {
+            for piece_type in PieceType::iter_all() {
                 let piece = Piece::new(piece_type, color);
-                println!("{color:?}, {piece_type:?} -> {piece:?}");
                 assert_eq!(piece.piece_type(), piece_type);
                 assert_eq!(piece.color(), color);
             }
