@@ -1,5 +1,6 @@
 use std::{
     io::{BufRead, BufReader},
+    path::PathBuf,
     sync::{Arc, Mutex},
 };
 
@@ -28,7 +29,14 @@ struct Args {
 enum Command {
     #[default]
     Uci,
-    Perft,
+    Perft {
+        /// Skip tests with this many or more expected leaf nodes
+        #[arg(long, short)]
+        skip: Option<u32>,
+        /// Read testcases from a file. Otherwise a default builtin testsuite is used.
+        #[arg(long, short)]
+        file: Option<PathBuf>,
+    },
 }
 
 fn main() {
@@ -37,7 +45,7 @@ fn main() {
 
     match command {
         Command::Uci => uci_loop(),
-        Command::Perft => perft_full(),
+        Command::Perft { file, skip } => perft_full(file.as_deref(), skip),
     }
 }
 

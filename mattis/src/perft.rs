@@ -1,11 +1,15 @@
-use std::io::Write;
-
 use crate::board::{movegen::MoveList, Board};
+use std::{io::Write, path::Path};
 
-const MAX_LEAVES: u32 = u32::MAX;
+const BUILTIN_PERFTSUITE: &str = include_str!("../../perftsuite.epd");
 
-pub fn perft_full() {
-    let testsuite = std::fs::read_to_string("perftsuite.epd").unwrap();
+pub fn perft_full(testfile: Option<&Path>, skip_threshold: Option<u32>) {
+    let testsuite = match testfile {
+        Some(f) => &std::fs::read_to_string(f).unwrap(),
+        None => BUILTIN_PERFTSUITE,
+    };
+
+    let skip_threshold = skip_threshold.unwrap_or(u32::MAX);
 
     for line in testsuite.lines() {
         let mut parts = line.split(';');
@@ -16,13 +20,12 @@ pub fn perft_full() {
             let depth = depth + 1;
             let expected_leaves: u32 = p.split_whitespace().nth(1).unwrap().parse().unwrap();
 
-            print!(" - depth {depth:02}, expect {expected_leaves} leaves ... ");
+            print!("\t- depth {depth}, expect {expected_leaves} leaves ... ");
             std::io::stdout().flush().unwrap();
 
-            #[allow(clippy::absurd_extreme_comparisons)]
-            if expected_leaves > MAX_LEAVES {
+            if expected_leaves >= skip_threshold {
                 println!("skipping");
-                break;
+                continue;
             }
 
             let mut board = Board::from_fen(fen).unwrap();
