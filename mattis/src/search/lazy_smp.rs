@@ -1,14 +1,13 @@
-use super::{alpha_beta, history::SearchHistory, killers::SearchKillers, ABContext, SearchStats};
+use super::{alpha_beta, history::SearchHistory, killers::SearchKillers, report_after_search, ABContext, SearchStats};
 use crate::{
     board::Board,
     chess_move::ChessMove,
     hashtable::TranspositionTable,
-    search::IterativeDeepening,
+    search::{report_after_depth, IterativeDeepening, ReportMode},
     time_man::{Limits, TimeMan},
 };
 use mattis_types::{Color, Eval};
 use mattis_uci as uci;
-use mattis_uci::EngineMessage;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -42,6 +41,7 @@ impl KillSwitch {
 
 #[derive(Clone)]
 pub struct SearchConfig<'a> {
+    pub report_mode: ReportMode,
     pub allow_null_pruning: bool,
     pub thread_count: u32,
     pub go: uci::Go,
@@ -104,6 +104,7 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
     let join_handles: Vec<JoinHandle<()>> = (0..config.thread_count)
         .map(|i| {
             let thread_config = ThreadConfig {
+                report_mode: config.report_mode,
                 tp_table: Arc::clone(&config.tp_table),
                 search_killers: Arc::clone(&config.search_killers),
                 search_history: Arc::clone(&config.search_history),
@@ -125,6 +126,7 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
 }
 
 pub struct ThreadConfig {
+    report_mode: ReportMode,
     tp_table: Arc<TranspositionTable>,
     search_killers: Shared<SearchKillers>,
     search_history: Shared<SearchHistory>,
@@ -150,26 +152,12 @@ pub fn search_thread(config: ThreadConfig, mut board: Board) {
 
         while let Some(stats) = iterative_deepening.next_depth(&mut board, &mut ctx) {
             bestmove = stats.bestmove;
-
-            let info = EngineMessage::Info(uci::Info {
-                depth: Some(stats.depth as u32),
-                nodes: Some(stats.nodes as u32),
-                pv: stats.pv.into_iter().map(|m| format!("{}", m.display_smith())).collect(),
-                // FIXME: Mate score can be off by 1 at low depths,
-                // because the score comes straight from the hashtable which stored the entry one move ago.
-                score: Some(uci::Score(stats.score)),
-                ..Default::default()
-            });
-
-            println!("{info}");
+            report_after_depth(config.report_mode, stats);
         }
 
-        let bestmove = EngineMessage::Bestmove {
-            move_: format!("{}", bestmove.display_smith()),
-            ponder: None,
-        };
+        ctx.stats.bestmove = bestmove; // TODO: Do we need this assignment?
+        report_after_search(config.report_mode, ctx.stats);
 
-        println!("{bestmove}");
         *config.search_killers.write().unwrap() = ctx.search_killers;
         *config.search_history.write().unwrap() = ctx.search_history;
         ctx.time_man.force_stop();

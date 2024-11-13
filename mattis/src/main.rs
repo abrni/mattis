@@ -15,6 +15,7 @@ use mattis::{
         history::SearchHistory,
         killers::SearchKillers,
         lazy_smp::{KillSwitch, SearchConfig},
+        ReportMode,
     },
 };
 use mattis_uci::{self as uci, EngineMessage, GuiMessage, Id};
@@ -78,11 +79,12 @@ fn single_search(startpos: &str, null_pruning: bool) {
     let board = Board::from_fen(startpos).unwrap();
 
     let go = uci::Go {
-        depth: Some(10),
+        depth: Some(13),
         ..Default::default()
     };
 
-    let config = SearchConfig {
+    let search_config = SearchConfig {
+        report_mode: ReportMode::Full,
         allow_null_pruning: null_pruning,
         thread_count: THREAD_COUNT,
         go,
@@ -91,6 +93,7 @@ fn single_search(startpos: &str, null_pruning: bool) {
         search_killers: Arc::clone(&search_killers),
         search_history: Arc::clone(&search_history),
     };
+    let config = search_config;
 
     let kill_switch = search::lazy_smp::run_search(config);
     while kill_switch.is_alive() {}
@@ -134,6 +137,7 @@ fn uci_loop() {
 
                 ttable.next_age();
                 let config = SearchConfig {
+                    report_mode: ReportMode::Uci,
                     allow_null_pruning: true,
                     thread_count: THREAD_COUNT,
                     go,

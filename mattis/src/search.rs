@@ -8,6 +8,8 @@ use crate::{
 use history::SearchHistory;
 use killers::SearchKillers;
 use mattis_types::{Eval, Piece, PieceType};
+use mattis_uci as uci;
+use mattis_uci::EngineMessage;
 use std::{collections::HashMap, sync::Arc};
 
 pub mod history;
@@ -64,12 +66,11 @@ impl IterativeDeepening {
     }
 
     fn next_depth(&mut self, board: &mut Board, ctx: &mut ABContext) -> Option<SearchStats> {
-        ctx.stats.depth = self.next_depth;
-
         if !ctx.time_man.enough_time_for_next_depth(&ctx.stats) {
             return None;
         };
 
+        ctx.stats.depth = self.next_depth;
         let mut alpha = self.last_eval - PieceType::Pawn.value() / 2;
         let mut beta = self.last_eval + PieceType::Pawn.value() / 2;
         let mut loop_count = 0;
@@ -78,6 +79,7 @@ impl IterativeDeepening {
             let score = alpha_beta(alpha, beta, self.next_depth, board, ctx, ctx.allow_null_pruning, true);
 
             if ctx.time_man.stop(&ctx.stats, true) {
+                ctx.stats.depth -= 1;
                 return None;
             }
 
@@ -100,12 +102,12 @@ impl IterativeDeepening {
         self.next_depth += 1;
 
         if ctx.time_man.stop(&ctx.stats, false) {
+            ctx.stats.depth -= 1;
             None
         } else {
             ctx.stats.score = score;
             ctx.stats.pv = pv_line(&ctx.transposition_table, board);
             ctx.stats.bestmove = ctx.stats.pv.first().copied().unwrap_or_default();
-
             Some(ctx.stats.clone())
         }
     }
@@ -199,12 +201,12 @@ fn alpha_beta(
         return Eval::DRAW;
     }
 
+    ctx.stats.nodes += 1;
+
     if depth == 0 {
         ctx.stats.leaves += 1;
         return quiescence(alpha, beta, board, ctx);
     }
-
-    ctx.stats.nodes += 1;
 
     // Check if we reached a draw by fifty move rule or 3-fold-repetition.
     // We actually evaluate a single repetition as a draw, so we can find
@@ -366,8 +368,6 @@ fn alpha_beta(
 }
 
 fn quiescence(mut alpha: Eval, beta: Eval, board: &mut Board, ctx: &mut ABContext) -> Eval {
-    ctx.stats.nodes += 1;
-
     if board.is_repetition() || board.fifty_move >= 100 {
         return Eval::DRAW;
     }
@@ -421,4 +421,95 @@ fn quiescence(mut alpha: Eval, beta: Eval, board: &mut Board, ctx: &mut ABContex
     }
 
     alpha
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ReportMode {
+    Uci,
+    Full,
+}
+
+fn report_after_depth(mode: ReportMode, stats: SearchStats) {
+    match mode {
+        ReportMode::Uci => {
+            let info = EngineMessage::Info(uci::Info {
+                depth: Some(stats.depth as u32),
+                nodes: Some(stats.nodes as u32),
+                pv: stats.pv.into_iter().map(|m| format!("{}", m.display_smith())).collect(),
+                // FIXME: Mate score can be off by 1 at low depths,
+                // because the score comes straight from the hashtable which stored the entry one move ago.
+                score: Some(uci::Score(stats.score)),
+                ..Default::default()
+            });
+
+            println!("{info}");
+        }
+        ReportMode::Full => {
+            println!("Intermediate (depth {}):", stats.depth);
+            println!(
+                " - bestmove: {}, score: {}, ",
+                stats.bestmove.display_smith(),
+                uci::Score(stats.score)
+            );
+            println!(
+                " - leaves: {}, nodes: {}, ratio: {:0.02}",
+                stats.leaves,
+                stats.nodes,
+                stats.leaves as f64 / stats.nodes as f64
+            );
+            println!(
+                " - fhf: {}, fh: {}, ratio: {:0.02}",
+                stats.fhf,
+                stats.fh,
+                stats.fhf as f64 / stats.fh as f64
+            );
+            print!(" - pv:");
+
+            for m in stats.pv {
+                print!(" {}", m.display_smith());
+            }
+
+            println!()
+        }
+    }
+}
+
+fn report_after_search(mode: ReportMode, stats: SearchStats) {
+    match mode {
+        ReportMode::Uci => {
+            let bestmove = EngineMessage::Bestmove {
+                move_: format!("{}", stats.bestmove.display_smith()),
+                ponder: None,
+            };
+
+            println!("{bestmove}");
+        }
+        ReportMode::Full => {
+            println!("Final (depth {}):", stats.depth);
+            println!(
+                " - bestmove: {}, score: {}, ",
+                stats.bestmove.display_smith(),
+                uci::Score(stats.score)
+            );
+            println!(
+                " - leaves: {}, nodes: {}, ratio: {:0.02}",
+                stats.leaves,
+                stats.nodes,
+                stats.leaves as f64 / stats.nodes as f64
+            );
+            println!(
+                " - fhf: {}, fh: {}, ratio: {:0.02}",
+                stats.fhf,
+                stats.fh,
+                stats.fhf as f64 / stats.fh as f64
+            );
+            print!(" - pv:");
+
+            for m in stats.pv {
+                print!(" {}", m.display_smith());
+            }
+
+            println!()
+        }
+    }
 }
