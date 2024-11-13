@@ -5,6 +5,8 @@ use crate::{
     hashtable::{HEKind, Probe, TranspositionTable},
     time_man::{Limits, TimeMan},
 };
+use history::SearchHistory;
+use killers::SearchKillers;
 use mattis_types::{Color, Eval, Piece, PieceType};
 use mattis_uci::{self as uci, EngineMessage};
 use std::{
@@ -17,31 +19,10 @@ use std::{
     time::Duration,
 };
 
+pub mod history;
+pub mod killers;
+
 pub type Sync<T> = Arc<RwLock<T>>;
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct SearchKillers(Box<[[ChessMove; 2]]>);
-
-impl SearchKillers {
-    pub fn new(size: usize) -> Self {
-        Self(vec![Default::default(); size].into_boxed_slice())
-    }
-}
-
-impl Default for SearchKillers {
-    fn default() -> Self {
-        Self::new(1024)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct SearchHistory([[u64; 64]; 12]);
-
-impl Default for SearchHistory {
-    fn default() -> Self {
-        Self([[0; 64]; 12])
-    }
-}
 
 struct ABContext {
     time_man: TimeMan,
@@ -362,13 +343,13 @@ fn score_move(m: ChessMove, pv_move: Option<ChessMove>, ctx: &ABContext, board: 
         //SAFETY: A chess move always moves a piece
         let attacker = unsafe { board.pieces[m.start()].unwrap_unchecked().piece_type() };
         1_000_000 + mvv_lva(attacker, victim)
-    } else if ctx.search_killers.0[board.ply][0] == m {
+    } else if ctx.search_killers.slot1(board.ply) == m {
         900_000
-    } else if ctx.search_killers.0[board.ply][1] == m {
+    } else if ctx.search_killers.slot2(board.ply) == m {
         800_000
     } else {
         let piece = board.pieces[m.start()].unwrap();
-        ctx.search_history.0[piece][m.end()] as i32
+        ctx.search_history.entry(piece, m.end()) as i32
     }
 }
 
@@ -512,8 +493,7 @@ fn alpha_beta(
             // If the same move is encountered at the same ply but in a different position, it will be
             // prefered by move ordering. We use two killer slots, to not forget good moves in some situations.
             if !m.is_capture() && !m.is_promotion() {
-                ctx.search_killers.0[board.ply][1] = ctx.search_killers.0[board.ply][0];
-                ctx.search_killers.0[board.ply][0] = m;
+                ctx.search_killers.store(board.ply, m);
             }
 
             // Store the move in the hashtable and mark it as a beta-cutoff
@@ -530,7 +510,7 @@ fn alpha_beta(
             // different added value.
             if !m.is_capture() {
                 let piece = board.pieces[m.start()].unwrap();
-                ctx.search_history.0[piece][m.end()] += depth as u64; // TODO: is this better: += depth * depth or 2^depth?
+                *ctx.search_history.entry_mut(piece, m.end()) += depth as u64; // TODO: is this better: += depth * depth or 2^depth?
             }
         }
 

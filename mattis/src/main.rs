@@ -10,7 +10,7 @@ use mattis::{
     hashtable::TranspositionTable,
     notation::SmithNotation,
     perft::perft_full,
-    search::{self, KillSwitch, SearchConfig, SearchHistory, SearchKillers},
+    search::{self, history::SearchHistory, killers::SearchKillers, KillSwitch, SearchConfig},
 };
 use mattis_uci::{self as uci, EngineMessage, GuiMessage, Id};
 
