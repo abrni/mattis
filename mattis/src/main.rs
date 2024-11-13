@@ -10,7 +10,12 @@ use mattis::{
     hashtable::TranspositionTable,
     notation::SmithNotation,
     perft::perft_full,
-    search::{self, history::SearchHistory, killers::SearchKillers, KillSwitch, SearchConfig},
+    search::{
+        self,
+        history::SearchHistory,
+        killers::SearchKillers,
+        lazy_smp::{KillSwitch, SearchConfig},
+    },
 };
 use mattis_uci::{self as uci, EngineMessage, GuiMessage, Id};
 
@@ -87,7 +92,7 @@ fn single_search(startpos: &str, null_pruning: bool) {
         search_history: Arc::clone(&search_history),
     };
 
-    let kill_switch = search::run_search(config);
+    let kill_switch = search::lazy_smp::run_search(config);
     while kill_switch.is_alive() {}
 }
 
@@ -134,7 +139,7 @@ fn uci_loop() {
                     search_history: Arc::clone(&search_history),
                 };
 
-                active_search_kill = Some(search::run_search(config));
+                active_search_kill = Some(search::lazy_smp::run_search(config));
             }
             GuiMessage::Stop => {
                 if let Some(s) = active_search_kill.take() {
