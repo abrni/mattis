@@ -12,7 +12,7 @@ pub enum HEKind {
 
 pub enum Probe {
     NoHit,         // We have no hit in the table
-    PV(ChessMove), // We do have a hit in the table, but it is not exact and does not cause a branch cutoff
+    Pv(ChessMove), // We do have a hit in the table, but it is not exact and does not cause a branch cutoff
     CutOff(Eval),  // We have a successful hit, that was exact or causes a branch cutoff
 }
 
@@ -171,7 +171,7 @@ impl TranspositionTable {
         // If the stored data is from a lower depth, than we are requesting, it cannot be used for a branch-cutoff.
         // Just return the move as a pv move for move ordering.
         if data.depth < depth {
-            return Probe::PV(cmove);
+            return Probe::Pv(cmove);
         }
 
         // Adjust the score, if its a mate score.
@@ -188,7 +188,7 @@ impl TranspositionTable {
             HEKind::Alpha if score <= alpha => Probe::CutOff(alpha),
             HEKind::Beta if score >= beta => Probe::CutOff(beta),
             HEKind::Exact => Probe::CutOff(score),
-            _ => Probe::PV(cmove),
+            _ => Probe::Pv(cmove),
         }
     }
 
