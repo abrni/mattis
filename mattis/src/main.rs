@@ -119,6 +119,10 @@ fn uci_loop() {
             GuiMessage::Uci => print_uci_info(),
             GuiMessage::Ucinewgame => {
                 ttable.reset();
+                *search_history.write().unwrap() = SearchHistory::default();
+                *search_killers.write().unwrap() = SearchKillers::default();
+                board = Board::from_fen(FEN_STARTPOS).unwrap();
+                let _ = active_search_kill.take().map(|k| k.kill());
             }
             GuiMessage::Isready => println!("{}", EngineMessage::Readyok),
             GuiMessage::Position { pos, moves } => setup_position(&mut board, pos, &moves),
