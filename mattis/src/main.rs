@@ -1,13 +1,12 @@
 use std::{
     io::{BufRead, BufReader},
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{Arc, RwLock},
 };
 
-use clap::{builder::Str, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 use mattis::{
     board::Board,
-    chess_move::ChessMove,
     hashtable::TranspositionTable,
     notation::SmithNotation,
     perft::perft_full,
@@ -69,8 +68,8 @@ fn main() {
 
 fn single_search(startpos: &str, null_pruning: bool) {
     let ttable = Arc::new(TranspositionTable::new(HASHTABLE_SIZE_MB));
-    let search_killers = Arc::new(Mutex::new(vec![[ChessMove::default(); 2]; 1024].into_boxed_slice()));
-    let search_history = Arc::new(Mutex::new([[0; 64]; 12]));
+    let search_killers = Arc::new(RwLock::new(vec![Default::default(); 1024].into_boxed_slice()));
+    let search_history = Arc::new(RwLock::new([[0; 64]; 12]));
     let board = Board::from_fen(startpos).unwrap();
 
     let go = uci::Go {
@@ -94,8 +93,8 @@ fn single_search(startpos: &str, null_pruning: bool) {
 
 fn uci_loop() {
     let ttable = Arc::new(TranspositionTable::new(HASHTABLE_SIZE_MB));
-    let search_killers = Arc::new(Mutex::new(vec![[ChessMove::default(); 2]; 1024].into_boxed_slice()));
-    let search_history = Arc::new(Mutex::new([[0; 64]; 12]));
+    let search_killers = Arc::new(RwLock::new(vec![Default::default(); 1024].into_boxed_slice()));
+    let search_history = Arc::new(RwLock::new([[0; 64]; 12]));
     let mut board = Board::from_fen(FEN_STARTPOS).unwrap();
     let mut active_search_kill: Option<KillSwitch> = None;
 
