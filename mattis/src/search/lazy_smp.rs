@@ -47,19 +47,23 @@ impl LazySMP {
             let history = Arc::clone(&history);
             let killers = Arc::clone(&killers);
             let (tx, rx) = std::sync::mpsc::channel();
-            let main = Some(std::thread::spawn(|| main_search_thread(ttable, history, killers, rx)));
+            let main = Some(std::thread::spawn(|| {
+                search_thread(ThreadKind::Main, ttable, history, killers, rx)
+            }));
 
             (main, tx)
         };
 
         // Spawn all the supporter threads
         let supporters = (0..threads - 1)
-            .map(|_| {
+            .map(|i| {
                 let ttable = Arc::clone(&ttable);
                 let history = Arc::clone(&history);
                 let killers = Arc::clone(&killers);
                 let (tx, rx) = std::sync::mpsc::channel();
-                let handle = std::thread::spawn(|| supporter_search_thread(ttable, history, killers, rx));
+                let handle = std::thread::spawn(move || {
+                    search_thread(ThreadKind::Supporter(i as u32), ttable, history, killers, rx)
+                });
                 (handle, tx)
             })
             .collect();
@@ -124,7 +128,6 @@ impl LazySMP {
 
         let config = ThreadConfig {
             report_mode: search_config.report_mode,
-            thread_num: 0,
             time_man: time_man.clone(),
             expected_eval,
             allow_null_pruning: search_config.allow_null_pruning,
@@ -134,10 +137,9 @@ impl LazySMP {
             .send(Message::StartSearch(config, board.clone()))
             .unwrap();
 
-        for (thread_num, (_, tx)) in self.supporters.iter().enumerate() {
+        for (_, tx) in &self.supporters {
             let config = ThreadConfig {
                 report_mode: search_config.report_mode,
-                thread_num: thread_num as u32,
                 time_man: time_man.clone(),
                 expected_eval,
                 allow_null_pruning: search_config.allow_null_pruning,
@@ -183,14 +185,21 @@ enum Message {
     Quit,
 }
 
-fn main_search_thread(
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
+enum ThreadKind {
+    Main,
+    Supporter(u32),
+}
+
+fn search_thread(
+    kind: ThreadKind,
     ttable: Arc<TranspositionTable>,
     history: Shared<SearchHistory>,
     killers: Shared<SearchKillers>,
     rx: Receiver<Message>,
 ) {
     loop {
-        let (config, mut board) = match rx.recv().unwrap() {
+        let (config, board) = match rx.recv().unwrap() {
             Message::StartSearch(thread_config, board) => (thread_config, board),
             Message::Quit => {
                 println!("main thread quits");
@@ -198,8 +207,8 @@ fn main_search_thread(
             }
         };
 
-        let mut ctx = ABContext {
-            time_man: config.time_man,
+        let ctx = ABContext {
+            time_man: config.time_man.clone(),
             stats: SearchStats::default(),
             transposition_table: Arc::clone(&ttable),
             search_killers: killers.read().unwrap().clone(),
@@ -207,55 +216,44 @@ fn main_search_thread(
             allow_null_pruning: config.allow_null_pruning,
         };
 
-        let mut bestmove = ChessMove::default();
-        let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, 1);
-
-        while let Some(stats) = iterative_deepening.next_depth(&mut board, &mut ctx) {
-            bestmove = stats.bestmove;
-            report_after_depth(config.report_mode, stats);
+        match kind {
+            ThreadKind::Main => search_as_main(config, board, ctx, &history, &killers),
+            ThreadKind::Supporter(thread_num) => search_as_supporter(thread_num, config, board, ctx),
         }
-
-        ctx.stats.bestmove = bestmove; // TODO: Do we need this assignment?
-        report_after_search(config.report_mode, ctx.stats);
-
-        *killers.write().unwrap() = ctx.search_killers;
-        *history.write().unwrap() = ctx.search_history;
-        ctx.time_man.force_stop();
     }
 }
 
-fn supporter_search_thread(
-    ttable: Arc<TranspositionTable>,
-    history: Shared<SearchHistory>,
-    killers: Shared<SearchKillers>,
-    rx: Receiver<Message>,
+fn search_as_main(
+    config: ThreadConfig,
+    mut board: Board,
+    mut ctx: ABContext,
+    history: &Shared<SearchHistory>,
+    killers: &Shared<SearchKillers>,
 ) {
+    let mut bestmove = ChessMove::default();
+    let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, 1);
+
+    while let Some(stats) = iterative_deepening.next_depth(&mut board, &mut ctx) {
+        bestmove = stats.bestmove;
+        report_after_depth(config.report_mode, stats);
+    }
+
+    ctx.stats.bestmove = bestmove; // TODO: Do we need this assignment?
+    report_after_search(config.report_mode, ctx.stats);
+
+    *killers.write().unwrap() = ctx.search_killers;
+    *history.write().unwrap() = ctx.search_history;
+    ctx.time_man.force_stop();
+}
+
+fn search_as_supporter(thread_num: u32, config: ThreadConfig, mut board: Board, mut ctx: ABContext) {
+    let start_depth = u16::min(thread_num as u16 + 1, ctx.time_man.depth_limit());
     loop {
-        let (config, mut board) = match rx.recv().unwrap() {
-            Message::StartSearch(thread_config, board) => (thread_config, board),
-            Message::Quit => {
-                println!("supporter thread quits");
-                break;
-            }
-        };
+        let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, start_depth);
+        while iterative_deepening.next_depth(&mut board, &mut ctx).is_some() {}
 
-        let mut ctx = ABContext {
-            time_man: config.time_man,
-            stats: SearchStats::default(),
-            transposition_table: Arc::clone(&ttable),
-            search_killers: killers.read().unwrap().clone(),
-            search_history: history.read().unwrap().clone(),
-            allow_null_pruning: config.allow_null_pruning,
-        };
-
-        let start_depth = u16::min(config.thread_num as u16, ctx.time_man.depth_limit());
-        loop {
-            let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, start_depth);
-            while iterative_deepening.next_depth(&mut board, &mut ctx).is_some() {}
-
-            if ctx.time_man.stop(&ctx.stats, false) {
-                break;
-            }
+        if ctx.time_man.stop(&ctx.stats, false) {
+            break;
         }
     }
 }
@@ -291,7 +289,6 @@ pub fn calculate_time_limit(go: &uci::Go, color: Color) -> Option<(Duration, Dur
 
 pub struct ThreadConfig {
     report_mode: ReportMode,
-    thread_num: u32,
     time_man: TimeMan,
     expected_eval: Eval,
     allow_null_pruning: bool,
