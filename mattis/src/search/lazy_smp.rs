@@ -27,6 +27,7 @@ pub struct LazySMP {
     ttable: Arc<TranspositionTable>,
     history: Shared<SearchHistory>,
     killers: Shared<SearchKillers>,
+    active_search: Option<Arc<AtomicBool>>,
 }
 
 impl LazySMP {
@@ -67,17 +68,56 @@ impl LazySMP {
             ttable,
             history,
             killers,
+            active_search: None,
         }
     }
 
     /// Starts a search. Fails, if a search is already running
-    pub fn start_search(config: SearchConfig) -> Result<(), ()> {
-        todo!()
+    pub fn start_search(&mut self, config: SearchConfig) -> Result<(), ()> {
+        if self.is_search_running() {
+            return Err(());
+        }
+
+        let (hard_time, soft_time) = calculate_time_limit(&config.go, config.board.color).unzip();
+
+        let time_man = Limits::new()
+            .depth(config.go.depth.map(|d| d as u16))
+            .nodes(config.go.nodes.map(|n| n as u64))
+            .hard_time(hard_time)
+            .soft_time(soft_time)
+            .start_now();
+
+        let switch = time_man.raw_stop_flag();
+        self.active_search = Some(switch);
+
+        let config = ThreadConfig {
+            report_mode: config.report_mode,
+            tp_table: Arc::clone(&self.ttable),        // this can be deleted
+            search_killers: Arc::clone(&self.killers), // this can be deleted
+            search_history: Arc::clone(&self.history), // this can be deleted
+            thread_num: 0,
+            time_man: time_man.clone(),
+            expected_eval: Eval::DRAW, // TODO: this is wrong
+            allow_null_pruning: config.allow_null_pruning,
+        };
+
+        self.main_sender.send(Message::StartSearch(config)).unwrap();
+        Ok(())
     }
 
     /// Stops the search. Fails, if no search is running.
-    pub fn stop_search() -> Result<(), ()> {
-        todo!()
+    pub fn stop_search(&mut self) -> Result<(), ()> {
+        self.active_search
+            .take()
+            .ok_or(())
+            .map(|switch| switch.store(true, Ordering::Relaxed))
+    }
+
+    pub fn is_search_running(&self) -> bool {
+        self.active_search
+            .as_ref()
+            .map(|s| !s.load(Ordering::Relaxed))
+            .unwrap_or(false)
     }
 }
 
