@@ -9,6 +9,7 @@ use crate::{
 use mattis_types::{Color, Eval};
 use mattis_uci as uci;
 use std::{
+    os::linux::raw::stat,
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::{Receiver, Sender},
@@ -73,16 +74,16 @@ impl LazySMP {
     }
 
     /// Starts a search. Fails, if a search is already running
-    pub fn start_search(&mut self, config: SearchConfig) -> Result<(), ()> {
+    pub fn start_search(&mut self, search_config: SearchConfig) -> Result<(), ()> {
         if self.is_search_running() {
             return Err(());
         }
 
-        let (hard_time, soft_time) = calculate_time_limit(&config.go, config.board.color).unzip();
+        let (hard_time, soft_time) = calculate_time_limit(&search_config.go, search_config.board.color).unzip();
 
         let time_man = Limits::new()
-            .depth(config.go.depth.map(|d| d as u16))
-            .nodes(config.go.nodes.map(|n| n as u64))
+            .depth(search_config.go.depth.map(|d| d as u16))
+            .nodes(search_config.go.nodes.map(|n| n as u64))
             .hard_time(hard_time)
             .soft_time(soft_time)
             .start_now();
@@ -92,17 +93,32 @@ impl LazySMP {
 
         self.ttable.next_age();
 
-        let board = config.board.clone();
+        let board = search_config.board.clone();
 
         let config = ThreadConfig {
-            report_mode: config.report_mode,
+            report_mode: search_config.report_mode,
             thread_num: 0,
             time_man: time_man.clone(),
             expected_eval: Eval::DRAW, // TODO: this is wrong
-            allow_null_pruning: config.allow_null_pruning,
+            allow_null_pruning: search_config.allow_null_pruning,
         };
 
-        self.main_sender.send(Message::StartSearch(config, board)).unwrap();
+        self.main_sender
+            .send(Message::StartSearch(config, board.clone()))
+            .unwrap();
+
+        for (thread_num, (_, tx)) in self.supporters.iter().enumerate() {
+            let config = ThreadConfig {
+                report_mode: search_config.report_mode,
+                thread_num: thread_num as u32,
+                time_man: time_man.clone(),
+                expected_eval: Eval::DRAW, // TODO: this is wrong
+                allow_null_pruning: search_config.allow_null_pruning,
+            };
+
+            tx.send(Message::StartSearch(config, board.clone())).unwrap();
+        }
+
         Ok(())
     }
 
@@ -183,18 +199,35 @@ fn main_search_thread(
 }
 
 fn supporter_search_thread(
-    _ttable: Arc<TranspositionTable>,
-    _history: Shared<SearchHistory>,
-    _killers: Shared<SearchKillers>,
+    ttable: Arc<TranspositionTable>,
+    history: Shared<SearchHistory>,
+    killers: Shared<SearchKillers>,
     rx: Receiver<Message>,
 ) {
     loop {
-        let message = rx.recv().unwrap();
-
-        match message {
-            Message::StartSearch(thread_config, board) => todo!(),
+        let (config, mut board) = match rx.recv().unwrap() {
+            Message::StartSearch(thread_config, board) => (thread_config, board),
             Message::Quit => {
                 println!("supporter thread quits");
+                break;
+            }
+        };
+
+        let mut ctx = ABContext {
+            time_man: config.time_man,
+            stats: SearchStats::default(),
+            transposition_table: Arc::clone(&ttable),
+            search_killers: killers.read().unwrap().clone(),
+            search_history: history.read().unwrap().clone(),
+            allow_null_pruning: config.allow_null_pruning,
+        };
+
+        let start_depth = u16::min(config.thread_num as u16, ctx.time_man.depth_limit());
+        loop {
+            let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, start_depth);
+            while iterative_deepening.next_depth(&mut board, &mut ctx).is_some() {}
+
+            if ctx.time_man.stop(&ctx.stats, false) {
                 break;
             }
         }
