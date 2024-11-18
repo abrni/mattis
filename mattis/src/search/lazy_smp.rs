@@ -1,6 +1,6 @@
 use super::{alpha_beta, history::SearchHistory, killers::SearchKillers, report_after_search, ABContext, SearchStats};
 use crate::{
-    board::{self, Board},
+    board::Board,
     chess_move::ChessMove,
     hashtable::TranspositionTable,
     search::{report_after_depth, IterativeDeepening, ReportMode},
@@ -73,7 +73,7 @@ impl LazySMP {
     }
 
     /// Starts a search. Fails, if a search is already running
-    pub fn start_search(&mut self, config: SearchConfig, board: &Board) -> Result<(), ()> {
+    pub fn start_search(&mut self, config: SearchConfig) -> Result<(), ()> {
         if self.is_search_running() {
             return Err(());
         }
@@ -92,6 +92,8 @@ impl LazySMP {
 
         self.ttable.next_age();
 
+        let board = config.board.clone();
+
         let config = ThreadConfig {
             report_mode: config.report_mode,
             tp_table: Arc::clone(&self.ttable),        // this can be deleted
@@ -103,9 +105,7 @@ impl LazySMP {
             allow_null_pruning: config.allow_null_pruning,
         };
 
-        self.main_sender
-            .send(Message::StartSearch(config, board.clone()))
-            .unwrap();
+        self.main_sender.send(Message::StartSearch(config, board)).unwrap();
         Ok(())
     }
 

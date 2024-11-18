@@ -95,8 +95,9 @@ fn single_search(startpos: &str, null_pruning: bool) {
     };
     let config = search_config;
 
-    let kill_switch = search::lazy_smp::run_search(config);
-    while kill_switch.is_alive() {}
+    let mut lazysmp = LazySMP::create(THREAD_COUNT as usize);
+    lazysmp.start_search(config).unwrap();
+    while lazysmp.is_search_running() {}
 }
 
 fn uci_loop() {
@@ -146,7 +147,7 @@ fn uci_loop() {
                     search_history: Arc::clone(&search_history),
                 };
 
-                lazysmp.start_search(config, &board).unwrap();
+                lazysmp.start_search(config).unwrap();
             }
             GuiMessage::Stop => {
                 let _ = lazysmp.stop_search();
