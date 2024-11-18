@@ -19,6 +19,25 @@ use std::{
 
 pub type Shared<T> = Arc<RwLock<T>>;
 
+struct LazySMP {
+    main: JoinHandle<()>,
+    supporters: Vec<JoinHandle<()>>,
+}
+
+impl LazySMP {
+    pub fn create(threads: usize) -> Self {
+        assert!(threads > 0, "At least 1 search thread is necessary.");
+
+        // Spawn the main search thread
+        let main = std::thread::spawn(|| ());
+
+        // Spawn all the supporter threads
+        let supporters = (0..threads - 1).map(|_| std::thread::spawn(|| ())).collect();
+
+        Self { main, supporters }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct KillSwitch {
     switch: Arc<AtomicBool>,
