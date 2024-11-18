@@ -16,6 +16,8 @@ mattis-bitboard = { path = "../mattis-bitboard" }
 mattis-uci = { path = "../mattis-uci" }
 ctor = "0.2.7"
 clap = { version = "4.5.20", features = ["derive"] }
+parking_lot = "0.12.3"
+bus = "2.4.1"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }

@@ -6,21 +6,22 @@ use crate::{
     search::{report_after_depth, IterativeDeepening, ReportMode},
     time_man::{Limits, TimeMan},
 };
+use bus::{Bus, BusReader};
 use mattis_types::{Color, Eval};
 use mattis_uci as uci;
+use parking_lot::RwLock;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc::{Receiver, Sender},
-        Arc, RwLock,
+        Arc,
     },
     thread::JoinHandle,
     time::Duration,
 };
 
-pub type Shared<T> = Arc<RwLock<T>>;
+type Shared<T> = Arc<RwLock<T>>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SearchConfig {
     pub report_mode: ReportMode,
     pub allow_null_pruning: bool,
@@ -80,22 +81,21 @@ impl LazySMPSetup {
     pub fn create(&self) -> LazySMP {
         assert!(self.thread_count > 0, "At least 1 search thread is necessary.");
 
-        let ttable = Arc::new(TranspositionTable::new(self.ttable_size_mb)); // TODO: allow configuration
+        let ttable = Arc::new(TranspositionTable::new(self.ttable_size_mb));
         let history = Arc::new(RwLock::new(SearchHistory::default()));
         let killers = Arc::new(RwLock::new(SearchKillers::default()));
+        let mut bus = Bus::new(1);
 
         // Spawn the main search thread
-        let (main, main_sender) = {
+        let main = {
             let ttable = Arc::clone(&ttable);
             let history = Arc::clone(&history);
             let killers = Arc::clone(&killers);
-            let (tx, rx) = std::sync::mpsc::channel();
+            let rx = bus.add_rx();
 
-            let main = Some(std::thread::spawn(|| {
+            Some(std::thread::spawn(|| {
                 search_thread(ThreadKind::Main, ttable, history, killers, rx)
-            }));
-
-            (main, tx)
+            }))
         };
 
         // Spawn all the supporter threads
@@ -104,54 +104,49 @@ impl LazySMPSetup {
                 let ttable = Arc::clone(&ttable);
                 let history = Arc::clone(&history);
                 let killers = Arc::clone(&killers);
-                let (tx, rx) = std::sync::mpsc::channel();
-                let handle = std::thread::spawn(move || {
-                    search_thread(ThreadKind::Supporter(i as u32), ttable, history, killers, rx)
-                });
-                (handle, tx)
+                let thread_kind = ThreadKind::Supporter(i as u32);
+                let rx = bus.add_rx();
+
+                std::thread::spawn(move || search_thread(thread_kind, ttable, history, killers, rx))
             })
             .collect();
 
         LazySMP {
             main,
-            main_sender,
             supporters,
             ttable,
             history,
             killers,
             search_stop_flag: None,
             board: Board::startpos(),
+            bus,
         }
     }
 }
 
 pub struct LazySMP {
     main: Option<JoinHandle<()>>,
-    main_sender: Sender<Message>,
-    supporters: Vec<(JoinHandle<()>, Sender<Message>)>,
+    supporters: Vec<JoinHandle<()>>,
     ttable: Arc<TranspositionTable>,
     history: Shared<SearchHistory>,
     killers: Shared<SearchKillers>,
     search_stop_flag: Option<Arc<AtomicBool>>,
     board: Board,
+    bus: Bus<Message>,
 }
 
 impl LazySMP {
     pub fn reset_tables(&mut self) {
         self.ttable.reset();
-        *self.history.write().unwrap() = SearchHistory::default();
-        *self.killers.write().unwrap() = SearchKillers::default();
+        *self.history.write() = SearchHistory::default();
+        *self.killers.write() = SearchKillers::default();
     }
 
     pub fn set_board(&mut self, board: Board) {
         self.board = board.clone();
-        self.main_sender
-            .send(Message::SetupBoard(Box::new(board.clone())))
-            .unwrap();
 
-        for (_, tx) in &self.supporters {
-            tx.send(Message::SetupBoard(Box::new(board.clone()))).unwrap();
-        }
+        let message = Message::SetupBoard(Box::new(board));
+        self.bus.broadcast(message);
     }
 
     /// Starts a new search.
@@ -187,7 +182,6 @@ impl LazySMP {
         let expected_eval = self.estimate_eval(&search_config, &time_man);
 
         // Create the Message for telling the threads to start searching
-
         let message = Message::StartSearch(Arc::new(ThreadConfig {
             report_mode: search_config.report_mode,
             time_man: time_man.clone(),
@@ -195,13 +189,8 @@ impl LazySMP {
             allow_null_pruning: search_config.allow_null_pruning,
         }));
 
-        // Tell each supporter thread to start searching
-        for (_, tx) in &self.supporters {
-            tx.send(message.clone()).unwrap();
-        }
-
-        // Tell the main search thread to start searching
-        self.main_sender.send(message).unwrap();
+        // Tell each thread to start searching
+        self.bus.broadcast(message);
 
         Ok(())
     }
@@ -229,8 +218,8 @@ impl LazySMP {
             time_man: time_man.clone(),
             stats: SearchStats::default(),
             transposition_table: Arc::clone(&self.ttable),
-            search_killers: self.killers.read().unwrap().clone(),
-            search_history: self.history.read().unwrap().clone(),
+            search_killers: self.killers.read().clone(),
+            search_history: self.history.read().clone(),
             allow_null_pruning: config.allow_null_pruning,
         };
 
@@ -248,14 +237,12 @@ impl LazySMP {
 
 impl Drop for LazySMP {
     fn drop(&mut self) {
-        // Make the supporter threads quit
-        self.supporters.drain(..).for_each(|(h, tx)| {
-            tx.send(Message::Quit).unwrap();
-            h.join().unwrap();
+        self.bus.broadcast(Message::Quit);
+
+        self.supporters.drain(..).for_each(|handle| {
+            handle.join().unwrap();
         });
 
-        // Make the main thread quit
-        self.main_sender.send(Message::Quit).unwrap();
         self.main.take().unwrap().join().unwrap();
     }
 }
@@ -265,7 +252,7 @@ fn search_thread(
     ttable: Arc<TranspositionTable>,
     history: Shared<SearchHistory>,
     killers: Shared<SearchKillers>,
-    rx: Receiver<Message>,
+    mut rx: BusReader<Message>,
 ) {
     let mut board = Board::startpos();
 
@@ -278,8 +265,8 @@ fn search_thread(
                     time_man: config.time_man.clone(),
                     stats: SearchStats::default(),
                     transposition_table: Arc::clone(&ttable),
-                    search_killers: killers.read().unwrap().clone(),
-                    search_history: history.read().unwrap().clone(),
+                    search_killers: killers.read().clone(),
+                    search_history: history.read().clone(),
                     allow_null_pruning: config.allow_null_pruning,
                 };
 
@@ -320,8 +307,8 @@ fn search_as_main(
     ctx.stats.bestmove = bestmove; // TODO: Do we need this assignment?
     report_after_search(report_mode, ctx.stats);
 
-    *killers.write().unwrap() = ctx.search_killers;
-    *history.write().unwrap() = ctx.search_history;
+    *killers.write() = ctx.search_killers;
+    *history.write() = ctx.search_history;
     ctx.time_man.force_stop();
 }
 
