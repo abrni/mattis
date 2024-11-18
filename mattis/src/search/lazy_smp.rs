@@ -72,6 +72,12 @@ impl LazySMP {
         }
     }
 
+    pub fn reset_tables(&mut self) {
+        self.ttable.reset();
+        *self.history.write().unwrap() = SearchHistory::default();
+        *self.killers.write().unwrap() = SearchKillers::default();
+    }
+
     /// Starts a search. Fails, if a search is already running
     pub fn start_search(&mut self, search_config: SearchConfig) -> Result<(), ()> {
         if self.is_search_running() {
@@ -259,9 +265,6 @@ pub struct SearchConfig<'a> {
     pub thread_count: u32,
     pub go: uci::Go,
     pub board: &'a Board,
-    pub tp_table: Arc<TranspositionTable>,
-    pub search_killers: Shared<SearchKillers>,
-    pub search_history: Shared<SearchHistory>,
 }
 
 pub fn calculate_time_limit(go: &uci::Go, color: Color) -> Option<(Duration, Duration)> {
@@ -287,9 +290,6 @@ pub fn calculate_time_limit(go: &uci::Go, color: Color) -> Option<(Duration, Dur
 
 pub struct ThreadConfig {
     report_mode: ReportMode,
-    // tp_table: Arc<TranspositionTable>,
-    // search_killers: Shared<SearchKillers>,
-    // search_history: Shared<SearchHistory>,
     thread_num: u32,
     time_man: TimeMan,
     expected_eval: Eval,

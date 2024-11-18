@@ -72,9 +72,6 @@ fn main() {
 }
 
 fn single_search(startpos: &str, null_pruning: bool) {
-    let ttable = Arc::new(TranspositionTable::new(HASHTABLE_SIZE_MB));
-    let search_killers = Arc::new(RwLock::new(SearchKillers::default()));
-    let search_history = Arc::new(RwLock::new(SearchHistory::default()));
     let board = Board::from_fen(startpos).unwrap();
 
     let go = uci::Go {
@@ -88,9 +85,6 @@ fn single_search(startpos: &str, null_pruning: bool) {
         thread_count: THREAD_COUNT,
         go,
         board: &board,
-        tp_table: Arc::clone(&ttable),
-        search_killers: Arc::clone(&search_killers),
-        search_history: Arc::clone(&search_history),
     };
     let config = search_config;
 
@@ -100,9 +94,6 @@ fn single_search(startpos: &str, null_pruning: bool) {
 }
 
 fn uci_loop() {
-    let ttable = Arc::new(TranspositionTable::new(HASHTABLE_SIZE_MB));
-    let search_killers = Arc::new(RwLock::new(SearchKillers::default()));
-    let search_history = Arc::new(RwLock::new(SearchHistory::default()));
     let mut board = Board::from_fen(FEN_STARTPOS).unwrap();
     let mut lazysmp = LazySMP::create(THREAD_COUNT as usize);
 
@@ -121,9 +112,7 @@ fn uci_loop() {
         match message {
             GuiMessage::Uci => print_uci_info(),
             GuiMessage::Ucinewgame => {
-                ttable.reset();
-                *search_history.write().unwrap() = SearchHistory::default();
-                *search_killers.write().unwrap() = SearchKillers::default();
+                lazysmp.reset_tables();
                 board = Board::from_fen(FEN_STARTPOS).unwrap();
                 let _ = lazysmp.stop_search();
             }
@@ -141,9 +130,6 @@ fn uci_loop() {
                     thread_count: THREAD_COUNT,
                     go,
                     board: &board,
-                    tp_table: Arc::clone(&ttable),
-                    search_killers: Arc::clone(&search_killers),
-                    search_history: Arc::clone(&search_history),
                 };
 
                 lazysmp.start_search(config).unwrap();
