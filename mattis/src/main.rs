@@ -115,18 +115,15 @@ fn uci_loop() {
                 lazysmp.set_board(board.clone());
             }
             GuiMessage::Go(go) => {
-                if lazysmp.is_search_running() {
-                    println!("Already searching");
-                    continue;
-                }
-
                 let config = SearchConfig {
                     report_mode: ReportMode::Uci,
                     allow_null_pruning: true,
                     go,
                 };
 
-                lazysmp.start_search(config).unwrap();
+                if lazysmp.start_search(config).is_err() {
+                    println!("Already searching");
+                };
             }
             GuiMessage::Stop => {
                 lazysmp.stop_search();
