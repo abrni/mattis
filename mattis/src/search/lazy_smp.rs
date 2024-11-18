@@ -9,7 +9,6 @@ use crate::{
 use mattis_types::{Color, Eval};
 use mattis_uci as uci;
 use std::{
-    os::linux::raw::stat,
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::{Receiver, Sender},
@@ -253,26 +252,6 @@ fn supporter_search_thread(
     }
 }
 
-#[derive(Debug, Default)]
-pub struct KillSwitch {
-    switch: Arc<AtomicBool>,
-    join_handles: Vec<JoinHandle<()>>,
-}
-
-impl KillSwitch {
-    pub fn kill(self) {
-        self.switch.store(true, Ordering::Relaxed);
-
-        for h in self.join_handles {
-            h.join().unwrap();
-        }
-    }
-
-    pub fn is_alive(&self) -> bool {
-        !self.switch.load(Ordering::Relaxed)
-    }
-}
-
 #[derive(Clone)]
 pub struct SearchConfig<'a> {
     pub report_mode: ReportMode,
@@ -306,59 +285,6 @@ pub fn calculate_time_limit(go: &uci::Go, color: Color) -> Option<(Duration, Dur
     })
 }
 
-pub fn run_search(config: SearchConfig) -> KillSwitch {
-    let (hard_time, soft_time) = calculate_time_limit(&config.go, config.board.color).unzip();
-
-    let time_man = Limits::new()
-        .depth(config.go.depth.map(|d| d as u16))
-        .nodes(config.go.nodes.map(|n| n as u64))
-        .hard_time(hard_time)
-        .soft_time(soft_time)
-        .start_now();
-
-    let mut ctx = ABContext {
-        time_man: time_man.clone(),
-        stats: SearchStats::default(),
-        transposition_table: Arc::clone(&config.tp_table),
-        search_killers: config.search_killers.read().unwrap().clone(),
-        search_history: config.search_history.read().unwrap().clone(),
-        allow_null_pruning: config.allow_null_pruning,
-    };
-
-    let expected_eval = alpha_beta(
-        -Eval::MAX,
-        Eval::MAX,
-        1,
-        &mut config.board.clone(),
-        &mut ctx,
-        config.allow_null_pruning,
-        false,
-    );
-
-    let join_handles: Vec<JoinHandle<()>> = (0..config.thread_count)
-        .map(|i| {
-            let thread_config = ThreadConfig {
-                report_mode: config.report_mode,
-                // tp_table: Arc::clone(&config.tp_table),
-                // search_killers: Arc::clone(&config.search_killers),
-                // search_history: Arc::clone(&config.search_history),
-                thread_num: i,
-                time_man: time_man.clone(),
-                expected_eval,
-                allow_null_pruning: config.allow_null_pruning,
-            };
-
-            let board = config.board.clone();
-            std::thread::spawn(move || search_thread(thread_config, board))
-        })
-        .collect();
-
-    KillSwitch {
-        switch: time_man.raw_stop_flag(),
-        join_handles,
-    }
-}
-
 pub struct ThreadConfig {
     report_mode: ReportMode,
     // tp_table: Arc<TranspositionTable>,
@@ -368,50 +294,4 @@ pub struct ThreadConfig {
     time_man: TimeMan,
     expected_eval: Eval,
     allow_null_pruning: bool,
-}
-
-pub fn search_thread(config: ThreadConfig, mut board: Board) {
-    // let mut ctx = ABContext {
-    //     time_man: config.time_man,
-    //     stats: SearchStats::default(),
-    //     // transposition_table: config.tp_table,
-    //     // search_killers: config.search_killers.read().unwrap().clone(),
-    //     // search_history: config.search_history.read().unwrap().clone(),
-    //     allow_null_pruning: config.allow_null_pruning,
-    // };
-
-    let mut ctx = ABContext {
-        time_man: config.time_man,
-        stats: SearchStats::default(),
-        transposition_table: Arc::new(TranspositionTable::new(0)),
-        search_killers: SearchKillers::default(),
-        search_history: SearchHistory::default(),
-        allow_null_pruning: config.allow_null_pruning,
-    };
-
-    if config.thread_num == 0 {
-        let mut bestmove = ChessMove::default();
-        let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, 1);
-
-        while let Some(stats) = iterative_deepening.next_depth(&mut board, &mut ctx) {
-            bestmove = stats.bestmove;
-            report_after_depth(config.report_mode, stats);
-        }
-
-        ctx.stats.bestmove = bestmove; // TODO: Do we need this assignment?
-        report_after_search(config.report_mode, ctx.stats);
-
-        // *config.search_killers.write().unwrap() = ctx.search_killers;
-        // *config.search_history.write().unwrap() = ctx.search_history;
-        ctx.time_man.force_stop();
-    } else {
-        let start_depth = u16::min(config.thread_num as u16, ctx.time_man.depth_limit());
-        loop {
-            let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, start_depth);
-            while iterative_deepening.next_depth(&mut board, &mut ctx).is_some() {}
-            if ctx.time_man.stop(&ctx.stats, false) {
-                break;
-            }
-        }
-    }
 }
