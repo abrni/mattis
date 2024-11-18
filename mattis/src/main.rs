@@ -11,7 +11,6 @@ use mattis::{
     notation::SmithNotation,
     perft::perft_full,
     search::{
-        self,
         history::SearchHistory,
         killers::SearchKillers,
         lazy_smp::{LazySMP, SearchConfig},

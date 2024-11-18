@@ -96,9 +96,6 @@ impl LazySMP {
 
         let config = ThreadConfig {
             report_mode: config.report_mode,
-            tp_table: Arc::clone(&self.ttable),        // this can be deleted
-            search_killers: Arc::clone(&self.killers), // this can be deleted
-            search_history: Arc::clone(&self.history), // this can be deleted
             thread_num: 0,
             time_man: time_man.clone(),
             expected_eval: Eval::DRAW, // TODO: this is wrong
@@ -145,9 +142,9 @@ enum Message {
 }
 
 fn main_search_thread(
-    _ttable: Arc<TranspositionTable>,
-    _history: Shared<SearchHistory>,
-    _killers: Shared<SearchKillers>,
+    ttable: Arc<TranspositionTable>,
+    history: Shared<SearchHistory>,
+    killers: Shared<SearchKillers>,
     rx: Receiver<Message>,
 ) {
     loop {
@@ -162,9 +159,9 @@ fn main_search_thread(
         let mut ctx = ABContext {
             time_man: config.time_man,
             stats: SearchStats::default(),
-            transposition_table: config.tp_table,
-            search_killers: config.search_killers.read().unwrap().clone(),
-            search_history: config.search_history.read().unwrap().clone(),
+            transposition_table: Arc::clone(&ttable),
+            search_killers: killers.read().unwrap().clone(),
+            search_history: history.read().unwrap().clone(),
             allow_null_pruning: config.allow_null_pruning,
         };
 
@@ -179,8 +176,8 @@ fn main_search_thread(
         ctx.stats.bestmove = bestmove; // TODO: Do we need this assignment?
         report_after_search(config.report_mode, ctx.stats);
 
-        *config.search_killers.write().unwrap() = ctx.search_killers;
-        *config.search_history.write().unwrap() = ctx.search_history;
+        *killers.write().unwrap() = ctx.search_killers;
+        *history.write().unwrap() = ctx.search_history;
         ctx.time_man.force_stop();
     }
 }
@@ -290,9 +287,9 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
         .map(|i| {
             let thread_config = ThreadConfig {
                 report_mode: config.report_mode,
-                tp_table: Arc::clone(&config.tp_table),
-                search_killers: Arc::clone(&config.search_killers),
-                search_history: Arc::clone(&config.search_history),
+                // tp_table: Arc::clone(&config.tp_table),
+                // search_killers: Arc::clone(&config.search_killers),
+                // search_history: Arc::clone(&config.search_history),
                 thread_num: i,
                 time_man: time_man.clone(),
                 expected_eval,
@@ -312,9 +309,9 @@ pub fn run_search(config: SearchConfig) -> KillSwitch {
 
 pub struct ThreadConfig {
     report_mode: ReportMode,
-    tp_table: Arc<TranspositionTable>,
-    search_killers: Shared<SearchKillers>,
-    search_history: Shared<SearchHistory>,
+    // tp_table: Arc<TranspositionTable>,
+    // search_killers: Shared<SearchKillers>,
+    // search_history: Shared<SearchHistory>,
     thread_num: u32,
     time_man: TimeMan,
     expected_eval: Eval,
@@ -322,12 +319,21 @@ pub struct ThreadConfig {
 }
 
 pub fn search_thread(config: ThreadConfig, mut board: Board) {
+    // let mut ctx = ABContext {
+    //     time_man: config.time_man,
+    //     stats: SearchStats::default(),
+    //     // transposition_table: config.tp_table,
+    //     // search_killers: config.search_killers.read().unwrap().clone(),
+    //     // search_history: config.search_history.read().unwrap().clone(),
+    //     allow_null_pruning: config.allow_null_pruning,
+    // };
+
     let mut ctx = ABContext {
         time_man: config.time_man,
         stats: SearchStats::default(),
-        transposition_table: config.tp_table,
-        search_killers: config.search_killers.read().unwrap().clone(),
-        search_history: config.search_history.read().unwrap().clone(),
+        transposition_table: Arc::new(TranspositionTable::new(0)),
+        search_killers: SearchKillers::default(),
+        search_history: SearchHistory::default(),
         allow_null_pruning: config.allow_null_pruning,
     };
 
@@ -343,8 +349,8 @@ pub fn search_thread(config: ThreadConfig, mut board: Board) {
         ctx.stats.bestmove = bestmove; // TODO: Do we need this assignment?
         report_after_search(config.report_mode, ctx.stats);
 
-        *config.search_killers.write().unwrap() = ctx.search_killers;
-        *config.search_history.write().unwrap() = ctx.search_history;
+        // *config.search_killers.write().unwrap() = ctx.search_killers;
+        // *config.search_history.write().unwrap() = ctx.search_history;
         ctx.time_man.force_stop();
     } else {
         let start_depth = u16::min(config.thread_num as u16, ctx.time_man.depth_limit());
