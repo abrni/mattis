@@ -20,6 +20,20 @@ use std::{
 
 pub type Shared<T> = Arc<RwLock<T>>;
 
+#[derive(Clone)]
+pub struct SearchConfig {
+    pub report_mode: ReportMode,
+    pub allow_null_pruning: bool,
+    pub go: uci::Go,
+}
+
+struct ThreadConfig {
+    report_mode: ReportMode,
+    time_man: TimeMan,
+    expected_eval: Eval,
+    allow_null_pruning: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct AlreadyRunning;
 
@@ -91,7 +105,7 @@ impl LazySMPSetup {
             ttable,
             history,
             killers,
-            active_search: None,
+            search_stop_flag: None,
             board: Board::startpos(),
         }
     }
@@ -104,7 +118,7 @@ pub struct LazySMP {
     ttable: Arc<TranspositionTable>,
     history: Shared<SearchHistory>,
     killers: Shared<SearchKillers>,
-    active_search: Option<Arc<AtomicBool>>,
+    search_stop_flag: Option<Arc<AtomicBool>>,
     board: Board,
 }
 
@@ -124,12 +138,20 @@ impl LazySMP {
         }
     }
 
-    /// Starts a search. Fails, if a search is already running
+    /// Starts a new search.
+    ///
+    /// Fails, if a search is already running
     pub fn start_search(&mut self, search_config: SearchConfig) -> Result<(), AlreadyRunning> {
         if self.is_search_running() {
             return Err(AlreadyRunning);
         }
 
+        // Advance the transposition table to the next age
+        // TODO: Check if this is actually valid
+        // (this only makes sense, if the previous search was from the same game and only at most a few plies ago)
+        self.ttable.next_age();
+
+        // Calculate the time limit and create the time manager
         let (hard_time, soft_time) = calculate_time_limit(&search_config.go, self.board.color).unzip();
 
         let time_man = Limits::new()
@@ -139,39 +161,16 @@ impl LazySMP {
             .soft_time(soft_time)
             .start_now();
 
-        let switch = time_man.raw_stop_flag();
-        self.active_search = Some(switch);
+        // Make sure, we extract the stop flag from the time manager, so we can stop the search at will
+        let stop_flag = time_man.raw_stop_flag();
+        self.search_stop_flag = Some(stop_flag);
 
-        self.ttable.next_age();
+        // Estimate a very rough evaluation result for the first aspiration window
+        // TODO: maybe the main search thread should do this?
+        // TODO: Or maybe test, if this is even worth it at all?
+        let expected_eval = self.estimate_eval(&search_config, &time_man);
 
-        let mut ctx = ABContext {
-            time_man: time_man.clone(),
-            stats: SearchStats::default(),
-            transposition_table: Arc::clone(&self.ttable),
-            search_killers: self.killers.read().unwrap().clone(),
-            search_history: self.history.read().unwrap().clone(),
-            allow_null_pruning: search_config.allow_null_pruning,
-        };
-
-        let expected_eval = alpha_beta(
-            -Eval::MAX,
-            Eval::MAX,
-            1,
-            &mut self.board.clone(),
-            &mut ctx,
-            search_config.allow_null_pruning,
-            false,
-        );
-
-        let config = ThreadConfig {
-            report_mode: search_config.report_mode,
-            time_man: time_man.clone(),
-            expected_eval,
-            allow_null_pruning: search_config.allow_null_pruning,
-        };
-
-        self.main_sender.send(Message::StartSearch(config)).unwrap();
-
+        // Tell each supporter thread to start searching
         for (_, tx) in &self.supporters {
             let config = ThreadConfig {
                 report_mode: search_config.report_mode,
@@ -183,21 +182,58 @@ impl LazySMP {
             tx.send(Message::StartSearch(config)).unwrap();
         }
 
+        // Tell the main search thread to start searching
+        {
+            let config = ThreadConfig {
+                report_mode: search_config.report_mode,
+                time_man: time_man.clone(),
+                expected_eval,
+                allow_null_pruning: search_config.allow_null_pruning,
+            };
+
+            self.main_sender.send(Message::StartSearch(config)).unwrap();
+        }
+
         Ok(())
     }
 
     /// Stops the search, if it is running. Otherwise nothing happens.
     pub fn stop_search(&mut self) {
-        if let Some(switch) = self.active_search.take() {
-            switch.store(true, Ordering::Relaxed)
+        if let Some(stop_flag) = self.search_stop_flag.take() {
+            stop_flag.store(true, Ordering::Relaxed)
         }
     }
 
+    /// Is there currently a search running on the thread pool?
     pub fn is_search_running(&self) -> bool {
-        self.active_search
+        // A search is running if:
+        //   - a search stop flag exists
+        //   - and this flag is set to `false`, meaning the search hasn't stopped.
+        self.search_stop_flag
             .as_ref()
             .map(|s| !s.load(Ordering::Relaxed))
             .unwrap_or(false)
+    }
+
+    fn estimate_eval(&self, config: &SearchConfig, time_man: &TimeMan) -> Eval {
+        let mut ctx = ABContext {
+            time_man: time_man.clone(),
+            stats: SearchStats::default(),
+            transposition_table: Arc::clone(&self.ttable),
+            search_killers: self.killers.read().unwrap().clone(),
+            search_history: self.history.read().unwrap().clone(),
+            allow_null_pruning: config.allow_null_pruning,
+        };
+
+        alpha_beta(
+            -Eval::MAX,
+            Eval::MAX,
+            1,
+            &mut self.board.clone(),
+            &mut ctx,
+            config.allow_null_pruning,
+            false,
+        )
     }
 }
 
@@ -294,13 +330,6 @@ fn search_as_supporter(thread_num: u32, config: ThreadConfig, board: &mut Board,
     }
 }
 
-#[derive(Clone)]
-pub struct SearchConfig {
-    pub report_mode: ReportMode,
-    pub allow_null_pruning: bool,
-    pub go: uci::Go,
-}
-
 pub fn calculate_time_limit(go: &uci::Go, color: Color) -> Option<(Duration, Duration)> {
     let (time, inc) = match color {
         Color::White => (go.wtime, go.winc),
@@ -320,11 +349,4 @@ pub fn calculate_time_limit(go: &uci::Go, color: Color) -> Option<(Duration, Dur
 
         (hard_limit, soft_limit)
     })
-}
-
-pub struct ThreadConfig {
-    report_mode: ReportMode,
-    time_man: TimeMan,
-    expected_eval: Eval,
-    allow_null_pruning: bool,
 }
