@@ -118,6 +118,11 @@ impl Board {
         key
     }
 
+    pub fn startpos() -> Self {
+        const FEN_STARTPOS: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+        Self::from_fen(FEN_STARTPOS).unwrap()
+    }
+
     pub fn from_fen(fen: &str) -> Result<Self, FenError> {
         let mut board = Board::new();
 

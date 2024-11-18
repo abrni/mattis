@@ -66,9 +66,7 @@ fn main() {
     }
 }
 
-fn single_search(startpos: &str, null_pruning: bool) {
-    let board = Board::from_fen(startpos).unwrap();
-
+fn single_search(pos: &str, null_pruning: bool) {
     let go = uci::Go {
         depth: Some(13),
         ..Default::default()
@@ -78,11 +76,12 @@ fn single_search(startpos: &str, null_pruning: bool) {
         report_mode: ReportMode::Full,
         allow_null_pruning: null_pruning,
         go,
-        board: &board,
     };
     let config = search_config;
 
     let mut lazysmp = LazySMP::create(THREAD_COUNT as usize);
+    let board = Board::from_fen(pos).unwrap();
+    lazysmp.set_board(board);
     lazysmp.start_search(config).unwrap();
     while lazysmp.is_search_running() {}
 }
@@ -111,7 +110,10 @@ fn uci_loop() {
                 lazysmp.stop_search();
             }
             GuiMessage::Isready => println!("{}", EngineMessage::Readyok),
-            GuiMessage::Position { pos, moves } => setup_position(&mut board, pos, &moves),
+            GuiMessage::Position { pos, moves } => {
+                setup_position(&mut board, pos, &moves);
+                lazysmp.set_board(board.clone());
+            }
             GuiMessage::Go(go) => {
                 if lazysmp.is_search_running() {
                     println!("Already searching");
@@ -122,7 +124,6 @@ fn uci_loop() {
                     report_mode: ReportMode::Uci,
                     allow_null_pruning: true,
                     go,
-                    board: &board,
                 };
 
                 lazysmp.start_search(config).unwrap();

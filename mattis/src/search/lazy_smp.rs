@@ -31,6 +31,7 @@ pub struct LazySMP {
     history: Shared<SearchHistory>,
     killers: Shared<SearchKillers>,
     active_search: Option<Arc<AtomicBool>>,
+    board: Board,
 }
 
 impl LazySMP {
@@ -76,6 +77,7 @@ impl LazySMP {
             history,
             killers,
             active_search: None,
+            board: Board::startpos(),
         }
     }
 
@@ -85,13 +87,22 @@ impl LazySMP {
         *self.killers.write().unwrap() = SearchKillers::default();
     }
 
+    pub fn set_board(&mut self, board: Board) {
+        self.board = board.clone();
+        self.main_sender.send(Message::SetupBoard(board.clone())).unwrap();
+
+        for (_, tx) in &self.supporters {
+            tx.send(Message::SetupBoard(board.clone())).unwrap();
+        }
+    }
+
     /// Starts a search. Fails, if a search is already running
     pub fn start_search(&mut self, search_config: SearchConfig) -> Result<(), AlreadyRunning> {
         if self.is_search_running() {
             return Err(AlreadyRunning);
         }
 
-        let (hard_time, soft_time) = calculate_time_limit(&search_config.go, search_config.board.color).unzip();
+        let (hard_time, soft_time) = calculate_time_limit(&search_config.go, self.board.color).unzip();
 
         let time_man = Limits::new()
             .depth(search_config.go.depth.map(|d| d as u16))
@@ -104,8 +115,6 @@ impl LazySMP {
         self.active_search = Some(switch);
 
         self.ttable.next_age();
-
-        let board = search_config.board.clone();
 
         let mut ctx = ABContext {
             time_man: time_man.clone(),
@@ -120,7 +129,7 @@ impl LazySMP {
             -Eval::MAX,
             Eval::MAX,
             1,
-            &mut search_config.board.clone(),
+            &mut self.board.clone(),
             &mut ctx,
             search_config.allow_null_pruning,
             false,
@@ -133,9 +142,7 @@ impl LazySMP {
             allow_null_pruning: search_config.allow_null_pruning,
         };
 
-        self.main_sender
-            .send(Message::StartSearch(config, board.clone()))
-            .unwrap();
+        self.main_sender.send(Message::StartSearch(config)).unwrap();
 
         for (_, tx) in &self.supporters {
             let config = ThreadConfig {
@@ -145,7 +152,7 @@ impl LazySMP {
                 allow_null_pruning: search_config.allow_null_pruning,
             };
 
-            tx.send(Message::StartSearch(config, board.clone())).unwrap();
+            tx.send(Message::StartSearch(config)).unwrap();
         }
 
         Ok(())
@@ -181,7 +188,8 @@ impl Drop for LazySMP {
 }
 
 enum Message {
-    StartSearch(ThreadConfig, Board),
+    StartSearch(ThreadConfig),
+    SetupBoard(Board),
     Quit,
 }
 
@@ -198,34 +206,34 @@ fn search_thread(
     killers: Shared<SearchKillers>,
     rx: Receiver<Message>,
 ) {
+    let mut board = Board::startpos();
+
     loop {
-        let (config, board) = match rx.recv().unwrap() {
-            Message::StartSearch(thread_config, board) => (thread_config, board),
-            Message::Quit => {
-                println!("main thread quits");
-                break;
+        match rx.recv().unwrap() {
+            Message::SetupBoard(new_board) => board = new_board,
+            Message::Quit => break,
+            Message::StartSearch(config) => {
+                let ctx = ABContext {
+                    time_man: config.time_man.clone(),
+                    stats: SearchStats::default(),
+                    transposition_table: Arc::clone(&ttable),
+                    search_killers: killers.read().unwrap().clone(),
+                    search_history: history.read().unwrap().clone(),
+                    allow_null_pruning: config.allow_null_pruning,
+                };
+
+                match kind {
+                    ThreadKind::Main => search_as_main(config, &mut board, ctx, &history, &killers),
+                    ThreadKind::Supporter(thread_num) => search_as_supporter(thread_num, config, &mut board, ctx),
+                }
             }
         };
-
-        let ctx = ABContext {
-            time_man: config.time_man.clone(),
-            stats: SearchStats::default(),
-            transposition_table: Arc::clone(&ttable),
-            search_killers: killers.read().unwrap().clone(),
-            search_history: history.read().unwrap().clone(),
-            allow_null_pruning: config.allow_null_pruning,
-        };
-
-        match kind {
-            ThreadKind::Main => search_as_main(config, board, ctx, &history, &killers),
-            ThreadKind::Supporter(thread_num) => search_as_supporter(thread_num, config, board, ctx),
-        }
     }
 }
 
 fn search_as_main(
     config: ThreadConfig,
-    mut board: Board,
+    board: &mut Board,
     mut ctx: ABContext,
     history: &Shared<SearchHistory>,
     killers: &Shared<SearchKillers>,
@@ -233,7 +241,7 @@ fn search_as_main(
     let mut bestmove = ChessMove::default();
     let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, 1);
 
-    while let Some(stats) = iterative_deepening.next_depth(&mut board, &mut ctx) {
+    while let Some(stats) = iterative_deepening.next_depth(board, &mut ctx) {
         bestmove = stats.bestmove;
         report_after_depth(config.report_mode, stats);
     }
@@ -246,11 +254,11 @@ fn search_as_main(
     ctx.time_man.force_stop();
 }
 
-fn search_as_supporter(thread_num: u32, config: ThreadConfig, mut board: Board, mut ctx: ABContext) {
+fn search_as_supporter(thread_num: u32, config: ThreadConfig, board: &mut Board, mut ctx: ABContext) {
     let start_depth = u16::min(thread_num as u16 + 1, ctx.time_man.depth_limit());
     loop {
         let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, start_depth);
-        while iterative_deepening.next_depth(&mut board, &mut ctx).is_some() {}
+        while iterative_deepening.next_depth(board, &mut ctx).is_some() {}
 
         if ctx.time_man.stop(&ctx.stats, false) {
             break;
@@ -259,11 +267,10 @@ fn search_as_supporter(thread_num: u32, config: ThreadConfig, mut board: Board, 
 }
 
 #[derive(Clone)]
-pub struct SearchConfig<'a> {
+pub struct SearchConfig {
     pub report_mode: ReportMode,
     pub allow_null_pruning: bool,
     pub go: uci::Go,
-    pub board: &'a Board,
 }
 
 pub fn calculate_time_limit(go: &uci::Go, color: Color) -> Option<(Duration, Duration)> {
