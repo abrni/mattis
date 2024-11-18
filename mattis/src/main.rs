@@ -14,7 +14,7 @@ use mattis::{
         self,
         history::SearchHistory,
         killers::SearchKillers,
-        lazy_smp::{KillSwitch, LazySMP, SearchConfig},
+        lazy_smp::{LazySMP, SearchConfig},
         ReportMode,
     },
 };
@@ -104,8 +104,7 @@ fn uci_loop() {
     let search_killers = Arc::new(RwLock::new(SearchKillers::default()));
     let search_history = Arc::new(RwLock::new(SearchHistory::default()));
     let mut board = Board::from_fen(FEN_STARTPOS).unwrap();
-    let mut active_search_kill: Option<KillSwitch> = None;
-    let _lazysmp = LazySMP::create(THREAD_COUNT as usize);
+    let mut lazysmp = LazySMP::create(THREAD_COUNT as usize);
 
     let mut stdin = BufReader::new(std::io::stdin());
     let mut input = String::new();
@@ -126,17 +125,16 @@ fn uci_loop() {
                 *search_history.write().unwrap() = SearchHistory::default();
                 *search_killers.write().unwrap() = SearchKillers::default();
                 board = Board::from_fen(FEN_STARTPOS).unwrap();
-                let _ = active_search_kill.take().map(|k| k.kill());
+                let _ = lazysmp.stop_search();
             }
             GuiMessage::Isready => println!("{}", EngineMessage::Readyok),
             GuiMessage::Position { pos, moves } => setup_position(&mut board, pos, &moves),
             GuiMessage::Go(go) => {
-                if active_search_kill.as_ref().is_some_and(|k| k.is_alive()) {
+                if lazysmp.is_search_running() {
                     println!("Already searching");
                     continue;
                 }
 
-                ttable.next_age();
                 let config = SearchConfig {
                     report_mode: ReportMode::Uci,
                     allow_null_pruning: true,
@@ -148,17 +146,13 @@ fn uci_loop() {
                     search_history: Arc::clone(&search_history),
                 };
 
-                active_search_kill = Some(search::lazy_smp::run_search(config));
+                lazysmp.start_search(config, &board).unwrap();
             }
             GuiMessage::Stop => {
-                if let Some(s) = active_search_kill.take() {
-                    s.kill()
-                }
+                let _ = lazysmp.stop_search();
             }
             GuiMessage::Quit => {
-                if let Some(s) = active_search_kill.take() {
-                    s.kill()
-                }
+                let _ = lazysmp.stop_search();
                 return;
             }
             _ => println!("This uci command is currently not supported."),
