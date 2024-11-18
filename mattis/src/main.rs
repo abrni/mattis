@@ -9,14 +9,13 @@ use mattis::{
     notation::SmithNotation,
     perft::perft_full,
     search::{
-        lazy_smp::{LazySMP, SearchConfig},
+        lazy_smp::{LazySMPSetup, SearchConfig},
         ReportMode,
     },
 };
 use mattis_uci::{self as uci, EngineMessage, GuiMessage, Id};
 
 const FEN_STARTPOS: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-const THREAD_COUNT: u32 = 12;
 
 #[derive(Debug, Parser, Clone)]
 struct Args {
@@ -79,7 +78,7 @@ fn single_search(pos: &str, null_pruning: bool) {
     };
     let config = search_config;
 
-    let mut lazysmp = LazySMP::create(THREAD_COUNT as usize);
+    let mut lazysmp = LazySMPSetup::default().create();
     let board = Board::from_fen(pos).unwrap();
     lazysmp.set_board(board);
     lazysmp.start_search(config).unwrap();
@@ -88,7 +87,7 @@ fn single_search(pos: &str, null_pruning: bool) {
 
 fn uci_loop() {
     let mut board = Board::from_fen(FEN_STARTPOS).unwrap();
-    let mut lazysmp = LazySMP::create(THREAD_COUNT as usize);
+    let mut lazysmp = LazySMPSetup::default().create();
 
     let mut stdin = BufReader::new(std::io::stdin());
     let mut input = String::new();

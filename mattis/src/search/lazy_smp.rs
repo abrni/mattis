@@ -23,22 +23,36 @@ pub type Shared<T> = Arc<RwLock<T>>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct AlreadyRunning;
 
-pub struct LazySMP {
-    main: Option<JoinHandle<()>>,
-    main_sender: Sender<Message>,
-    supporters: Vec<(JoinHandle<()>, Sender<Message>)>,
-    ttable: Arc<TranspositionTable>,
-    history: Shared<SearchHistory>,
-    killers: Shared<SearchKillers>,
-    active_search: Option<Arc<AtomicBool>>,
-    board: Board,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct LazySMPSetup {
+    thread_count: usize,
+    ttable_size_mb: usize,
 }
 
-impl LazySMP {
-    pub fn create(threads: usize) -> Self {
-        assert!(threads > 0, "At least 1 search thread is necessary.");
+impl Default for LazySMPSetup {
+    fn default() -> Self {
+        Self {
+            thread_count: 12,
+            ttable_size_mb: 256,
+        }
+    }
+}
 
-        let ttable = Arc::new(TranspositionTable::new(256)); // TODO: allow configuration
+impl LazySMPSetup {
+    pub fn thread_count(&mut self, thread_count: usize) -> &mut Self {
+        self.thread_count = thread_count;
+        self
+    }
+
+    pub fn ttable_size(&mut self, size_mb: usize) -> &mut Self {
+        self.ttable_size_mb = size_mb;
+        self
+    }
+
+    pub fn create(&self) -> LazySMP {
+        assert!(self.thread_count > 0, "At least 1 search thread is necessary.");
+
+        let ttable = Arc::new(TranspositionTable::new(self.ttable_size_mb)); // TODO: allow configuration
         let history = Arc::new(RwLock::new(SearchHistory::default()));
         let killers = Arc::new(RwLock::new(SearchKillers::default()));
 
@@ -48,6 +62,7 @@ impl LazySMP {
             let history = Arc::clone(&history);
             let killers = Arc::clone(&killers);
             let (tx, rx) = std::sync::mpsc::channel();
+
             let main = Some(std::thread::spawn(|| {
                 search_thread(ThreadKind::Main, ttable, history, killers, rx)
             }));
@@ -56,7 +71,7 @@ impl LazySMP {
         };
 
         // Spawn all the supporter threads
-        let supporters = (0..threads - 1)
+        let supporters = (0..self.thread_count - 1)
             .map(|i| {
                 let ttable = Arc::clone(&ttable);
                 let history = Arc::clone(&history);
@@ -69,7 +84,7 @@ impl LazySMP {
             })
             .collect();
 
-        Self {
+        LazySMP {
             main,
             main_sender,
             supporters,
@@ -80,7 +95,20 @@ impl LazySMP {
             board: Board::startpos(),
         }
     }
+}
 
+pub struct LazySMP {
+    main: Option<JoinHandle<()>>,
+    main_sender: Sender<Message>,
+    supporters: Vec<(JoinHandle<()>, Sender<Message>)>,
+    ttable: Arc<TranspositionTable>,
+    history: Shared<SearchHistory>,
+    killers: Shared<SearchKillers>,
+    active_search: Option<Arc<AtomicBool>>,
+    board: Board,
+}
+
+impl LazySMP {
     pub fn reset_tables(&mut self) {
         self.ttable.reset();
         *self.history.write().unwrap() = SearchHistory::default();
