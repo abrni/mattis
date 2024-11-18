@@ -95,11 +95,30 @@ impl LazySMP {
 
         let board = search_config.board.clone();
 
+        let mut ctx = ABContext {
+            time_man: time_man.clone(),
+            stats: SearchStats::default(),
+            transposition_table: Arc::clone(&self.ttable),
+            search_killers: self.killers.read().unwrap().clone(),
+            search_history: self.history.read().unwrap().clone(),
+            allow_null_pruning: search_config.allow_null_pruning,
+        };
+
+        let expected_eval = alpha_beta(
+            -Eval::MAX,
+            Eval::MAX,
+            1,
+            &mut search_config.board.clone(),
+            &mut ctx,
+            search_config.allow_null_pruning,
+            false,
+        );
+
         let config = ThreadConfig {
             report_mode: search_config.report_mode,
             thread_num: 0,
             time_man: time_man.clone(),
-            expected_eval: Eval::DRAW, // TODO: this is wrong
+            expected_eval,
             allow_null_pruning: search_config.allow_null_pruning,
         };
 
@@ -112,7 +131,7 @@ impl LazySMP {
                 report_mode: search_config.report_mode,
                 thread_num: thread_num as u32,
                 time_man: time_man.clone(),
-                expected_eval: Eval::DRAW, // TODO: this is wrong
+                expected_eval,
                 allow_null_pruning: search_config.allow_null_pruning,
             };
 
