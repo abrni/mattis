@@ -20,6 +20,9 @@ use std::{
 
 pub type Shared<T> = Arc<RwLock<T>>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct AlreadyRunning;
+
 pub struct LazySMP {
     main: Option<JoinHandle<()>>,
     main_sender: Sender<Message>,
@@ -79,9 +82,9 @@ impl LazySMP {
     }
 
     /// Starts a search. Fails, if a search is already running
-    pub fn start_search(&mut self, search_config: SearchConfig) -> Result<(), ()> {
+    pub fn start_search(&mut self, search_config: SearchConfig) -> Result<(), AlreadyRunning> {
         if self.is_search_running() {
-            return Err(());
+            return Err(AlreadyRunning);
         }
 
         let (hard_time, soft_time) = calculate_time_limit(&search_config.go, search_config.board.color).unzip();
@@ -146,12 +149,11 @@ impl LazySMP {
         Ok(())
     }
 
-    /// Stops the search. Fails, if no search is running.
-    pub fn stop_search(&mut self) -> Result<(), ()> {
-        self.active_search
-            .take()
-            .ok_or(())
-            .map(|switch| switch.store(true, Ordering::Relaxed))
+    /// Stops the search, if it is running. Otherwise nothing happens.
+    pub fn stop_search(&mut self) {
+        if let Some(switch) = self.active_search.take() {
+            switch.store(true, Ordering::Relaxed)
+        }
     }
 
     pub fn is_search_running(&self) -> bool {

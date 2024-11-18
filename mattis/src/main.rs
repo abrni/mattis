@@ -1,18 +1,14 @@
 use std::{
     io::{BufRead, BufReader},
     path::PathBuf,
-    sync::{Arc, RwLock},
 };
 
 use clap::{Parser, Subcommand};
 use mattis::{
     board::Board,
-    hashtable::TranspositionTable,
     notation::SmithNotation,
     perft::perft_full,
     search::{
-        history::SearchHistory,
-        killers::SearchKillers,
         lazy_smp::{LazySMP, SearchConfig},
         ReportMode,
     },
@@ -20,7 +16,6 @@ use mattis::{
 use mattis_uci::{self as uci, EngineMessage, GuiMessage, Id};
 
 const FEN_STARTPOS: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-const HASHTABLE_SIZE_MB: usize = 256;
 const THREAD_COUNT: u32 = 12;
 
 #[derive(Debug, Parser, Clone)]
@@ -114,7 +109,7 @@ fn uci_loop() {
             GuiMessage::Ucinewgame => {
                 lazysmp.reset_tables();
                 board = Board::from_fen(FEN_STARTPOS).unwrap();
-                let _ = lazysmp.stop_search();
+                lazysmp.stop_search();
             }
             GuiMessage::Isready => println!("{}", EngineMessage::Readyok),
             GuiMessage::Position { pos, moves } => setup_position(&mut board, pos, &moves),
@@ -135,10 +130,10 @@ fn uci_loop() {
                 lazysmp.start_search(config).unwrap();
             }
             GuiMessage::Stop => {
-                let _ = lazysmp.stop_search();
+                lazysmp.stop_search();
             }
             GuiMessage::Quit => {
-                let _ = lazysmp.stop_search();
+                lazysmp.stop_search();
                 return;
             }
             _ => println!("This uci command is currently not supported."),
