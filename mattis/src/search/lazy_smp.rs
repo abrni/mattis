@@ -27,11 +27,25 @@ pub struct SearchConfig {
     pub go: uci::Go,
 }
 
+#[derive(Debug, Clone)]
 struct ThreadConfig {
     report_mode: ReportMode,
     time_man: TimeMan,
     expected_eval: Eval,
     allow_null_pruning: bool,
+}
+
+#[derive(Debug, Clone)]
+enum Message {
+    StartSearch(Arc<ThreadConfig>),
+    SetupBoard(Box<Board>),
+    Quit,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
+enum ThreadKind {
+    Main,
+    Supporter(u32),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -131,10 +145,12 @@ impl LazySMP {
 
     pub fn set_board(&mut self, board: Board) {
         self.board = board.clone();
-        self.main_sender.send(Message::SetupBoard(board.clone())).unwrap();
+        self.main_sender
+            .send(Message::SetupBoard(Box::new(board.clone())))
+            .unwrap();
 
         for (_, tx) in &self.supporters {
-            tx.send(Message::SetupBoard(board.clone())).unwrap();
+            tx.send(Message::SetupBoard(Box::new(board.clone()))).unwrap();
         }
     }
 
@@ -170,29 +186,22 @@ impl LazySMP {
         // TODO: Or maybe test, if this is even worth it at all?
         let expected_eval = self.estimate_eval(&search_config, &time_man);
 
+        // Create the Message for telling the threads to start searching
+
+        let message = Message::StartSearch(Arc::new(ThreadConfig {
+            report_mode: search_config.report_mode,
+            time_man: time_man.clone(),
+            expected_eval,
+            allow_null_pruning: search_config.allow_null_pruning,
+        }));
+
         // Tell each supporter thread to start searching
         for (_, tx) in &self.supporters {
-            let config = ThreadConfig {
-                report_mode: search_config.report_mode,
-                time_man: time_man.clone(),
-                expected_eval,
-                allow_null_pruning: search_config.allow_null_pruning,
-            };
-
-            tx.send(Message::StartSearch(config)).unwrap();
+            tx.send(message.clone()).unwrap();
         }
 
         // Tell the main search thread to start searching
-        {
-            let config = ThreadConfig {
-                report_mode: search_config.report_mode,
-                time_man: time_man.clone(),
-                expected_eval,
-                allow_null_pruning: search_config.allow_null_pruning,
-            };
-
-            self.main_sender.send(Message::StartSearch(config)).unwrap();
-        }
+        self.main_sender.send(message).unwrap();
 
         Ok(())
     }
@@ -251,18 +260,6 @@ impl Drop for LazySMP {
     }
 }
 
-enum Message {
-    StartSearch(ThreadConfig),
-    SetupBoard(Board),
-    Quit,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
-enum ThreadKind {
-    Main,
-    Supporter(u32),
-}
-
 fn search_thread(
     kind: ThreadKind,
     ttable: Arc<TranspositionTable>,
@@ -274,7 +271,7 @@ fn search_thread(
 
     loop {
         match rx.recv().unwrap() {
-            Message::SetupBoard(new_board) => board = new_board,
+            Message::SetupBoard(new_board) => board = *new_board,
             Message::Quit => break,
             Message::StartSearch(config) => {
                 let ctx = ABContext {
@@ -287,8 +284,17 @@ fn search_thread(
                 };
 
                 match kind {
-                    ThreadKind::Main => search_as_main(config, &mut board, ctx, &history, &killers),
-                    ThreadKind::Supporter(thread_num) => search_as_supporter(thread_num, config, &mut board, ctx),
+                    ThreadKind::Main => search_as_main(
+                        config.expected_eval,
+                        config.report_mode,
+                        &mut board,
+                        ctx,
+                        &history,
+                        &killers,
+                    ),
+                    ThreadKind::Supporter(thread_num) => {
+                        search_as_supporter(thread_num, config.expected_eval, &mut board, ctx)
+                    }
                 }
             }
         };
@@ -296,32 +302,33 @@ fn search_thread(
 }
 
 fn search_as_main(
-    config: ThreadConfig,
+    expected_eval: Eval,
+    report_mode: ReportMode,
     board: &mut Board,
     mut ctx: ABContext,
     history: &Shared<SearchHistory>,
     killers: &Shared<SearchKillers>,
 ) {
     let mut bestmove = ChessMove::default();
-    let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, 1);
+    let mut iterative_deepening = IterativeDeepening::new(expected_eval, 1);
 
     while let Some(stats) = iterative_deepening.next_depth(board, &mut ctx) {
         bestmove = stats.bestmove;
-        report_after_depth(config.report_mode, stats);
+        report_after_depth(report_mode, stats);
     }
 
     ctx.stats.bestmove = bestmove; // TODO: Do we need this assignment?
-    report_after_search(config.report_mode, ctx.stats);
+    report_after_search(report_mode, ctx.stats);
 
     *killers.write().unwrap() = ctx.search_killers;
     *history.write().unwrap() = ctx.search_history;
     ctx.time_man.force_stop();
 }
 
-fn search_as_supporter(thread_num: u32, config: ThreadConfig, board: &mut Board, mut ctx: ABContext) {
+fn search_as_supporter(thread_num: u32, expected_eval: Eval, board: &mut Board, mut ctx: ABContext) {
     let start_depth = u16::min(thread_num as u16 + 1, ctx.time_man.depth_limit());
     loop {
-        let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, start_depth);
+        let mut iterative_deepening = IterativeDeepening::new(expected_eval, start_depth);
         while iterative_deepening.next_depth(board, &mut ctx).is_some() {}
 
         if ctx.time_man.stop(&ctx.stats, false) {
