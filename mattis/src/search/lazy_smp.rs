@@ -23,6 +23,9 @@ pub struct LazySMP {
     is_alive: Arc<AtomicBool>,
     main: Option<JoinHandle<()>>,
     supporters: Vec<JoinHandle<()>>,
+    ttable: Arc<TranspositionTable>,
+    history: Shared<SearchHistory>,
+    killers: Shared<SearchKillers>,
 }
 
 impl LazySMP {
@@ -30,16 +33,29 @@ impl LazySMP {
         assert!(threads > 0, "At least 1 search thread is necessary.");
 
         let is_alive = Arc::new(AtomicBool::new(true));
+        let ttable = Arc::new(TranspositionTable::new(256)); // TODO: allow configuration
+        let history = Arc::new(RwLock::new(SearchHistory::default()));
+        let killers = Arc::new(RwLock::new(SearchKillers::default()));
 
         // Spawn the main search thread
-        let is_alive_clone = Arc::clone(&is_alive);
-        let main = Some(std::thread::spawn(|| main_search_thread(is_alive_clone)));
+        let main = {
+            let is_alive = Arc::clone(&is_alive);
+            let ttable = Arc::clone(&ttable);
+            let history = Arc::clone(&history);
+            let killers = Arc::clone(&killers);
+            Some(std::thread::spawn(|| {
+                main_search_thread(is_alive, ttable, history, killers)
+            }))
+        };
 
         // Spawn all the supporter threads
         let supporters = (0..threads - 1)
             .map(|_| {
-                let is_alive_clone = Arc::clone(&is_alive);
-                std::thread::spawn(|| supporter_search_thread(is_alive_clone))
+                let is_alive = Arc::clone(&is_alive);
+                let ttable = Arc::clone(&ttable);
+                let history = Arc::clone(&history);
+                let killers = Arc::clone(&killers);
+                std::thread::spawn(|| supporter_search_thread(is_alive, ttable, history, killers))
             })
             .collect();
 
@@ -47,10 +63,13 @@ impl LazySMP {
             is_alive,
             main,
             supporters,
+            ttable,
+            history,
+            killers,
         }
     }
 
-    pub fn start_search() -> Result<(), ()> {
+    pub fn start_search(config: SearchConfig) -> Result<(), ()> {
         todo!()
     }
 }
@@ -66,7 +85,12 @@ impl Drop for LazySMP {
     }
 }
 
-fn main_search_thread(is_alive: Arc<AtomicBool>) {
+fn main_search_thread(
+    is_alive: Arc<AtomicBool>,
+    _ttable: Arc<TranspositionTable>,
+    _history: Shared<SearchHistory>,
+    _killers: Shared<SearchKillers>,
+) {
     loop {
         if !is_alive.load(Ordering::Relaxed) {
             println!("Kill main search thread");
@@ -75,7 +99,12 @@ fn main_search_thread(is_alive: Arc<AtomicBool>) {
     }
 }
 
-fn supporter_search_thread(is_alive: Arc<AtomicBool>) {
+fn supporter_search_thread(
+    is_alive: Arc<AtomicBool>,
+    _ttable: Arc<TranspositionTable>,
+    _history: Shared<SearchHistory>,
+    _killers: Shared<SearchKillers>,
+) {
     loop {
         if !is_alive.load(Ordering::Relaxed) {
             println!("Kill supporter search thread");
