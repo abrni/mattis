@@ -1,6 +1,6 @@
 use super::{alpha_beta, history::SearchHistory, killers::SearchKillers, report_after_search, ABContext, SearchStats};
 use crate::{
-    board::Board,
+    board::{self, Board},
     chess_move::ChessMove,
     hashtable::TranspositionTable,
     search::{report_after_depth, IterativeDeepening, ReportMode},
@@ -73,7 +73,7 @@ impl LazySMP {
     }
 
     /// Starts a search. Fails, if a search is already running
-    pub fn start_search(&mut self, config: SearchConfig) -> Result<(), ()> {
+    pub fn start_search(&mut self, config: SearchConfig, board: &Board) -> Result<(), ()> {
         if self.is_search_running() {
             return Err(());
         }
@@ -90,6 +90,8 @@ impl LazySMP {
         let switch = time_man.raw_stop_flag();
         self.active_search = Some(switch);
 
+        self.ttable.next_age();
+
         let config = ThreadConfig {
             report_mode: config.report_mode,
             tp_table: Arc::clone(&self.ttable),        // this can be deleted
@@ -101,7 +103,9 @@ impl LazySMP {
             allow_null_pruning: config.allow_null_pruning,
         };
 
-        self.main_sender.send(Message::StartSearch(config)).unwrap();
+        self.main_sender
+            .send(Message::StartSearch(config, board.clone()))
+            .unwrap();
         Ok(())
     }
 
@@ -136,7 +140,7 @@ impl Drop for LazySMP {
 }
 
 enum Message {
-    StartSearch(ThreadConfig),
+    StartSearch(ThreadConfig, Board),
     Quit,
 }
 
@@ -147,15 +151,37 @@ fn main_search_thread(
     rx: Receiver<Message>,
 ) {
     loop {
-        let message = rx.recv().unwrap();
-
-        match message {
-            Message::StartSearch(thread_config) => todo!(),
+        let (config, mut board) = match rx.recv().unwrap() {
+            Message::StartSearch(thread_config, board) => (thread_config, board),
             Message::Quit => {
                 println!("main thread quits");
                 break;
             }
+        };
+
+        let mut ctx = ABContext {
+            time_man: config.time_man,
+            stats: SearchStats::default(),
+            transposition_table: config.tp_table,
+            search_killers: config.search_killers.read().unwrap().clone(),
+            search_history: config.search_history.read().unwrap().clone(),
+            allow_null_pruning: config.allow_null_pruning,
+        };
+
+        let mut bestmove = ChessMove::default();
+        let mut iterative_deepening = IterativeDeepening::new(config.expected_eval, 1);
+
+        while let Some(stats) = iterative_deepening.next_depth(&mut board, &mut ctx) {
+            bestmove = stats.bestmove;
+            report_after_depth(config.report_mode, stats);
         }
+
+        ctx.stats.bestmove = bestmove; // TODO: Do we need this assignment?
+        report_after_search(config.report_mode, ctx.stats);
+
+        *config.search_killers.write().unwrap() = ctx.search_killers;
+        *config.search_history.write().unwrap() = ctx.search_history;
+        ctx.time_man.force_stop();
     }
 }
 
@@ -169,7 +195,7 @@ fn supporter_search_thread(
         let message = rx.recv().unwrap();
 
         match message {
-            Message::StartSearch(thread_config) => todo!(),
+            Message::StartSearch(thread_config, board) => todo!(),
             Message::Quit => {
                 println!("supporter thread quits");
                 break;
