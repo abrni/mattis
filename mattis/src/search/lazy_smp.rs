@@ -1,6 +1,6 @@
 use super::{alpha_beta, history::SearchHistory, killers::SearchKillers, report_after_search, ABContext, SearchStats};
 use crate::{
-    board::Board,
+    board::{movegen::MoveList, Board},
     chess_move::ChessMove,
     hashtable::TranspositionTable,
     search::{report_after_depth, IterativeDeepening, ReportMode},
@@ -304,7 +304,16 @@ fn search_as_main(
         report_after_depth(report_mode, stats);
     }
 
-    ctx.stats.bestmove = bestmove; // TODO: Do we need this assignment?
+    if bestmove == ChessMove::default() {
+        // Never report a nullmove, even under extreme time pressure
+        // Lets just return any move instead
+        let mut movelist = MoveList::new();
+        board.generate_all_moves(&mut movelist);
+        ctx.stats.bestmove = movelist.pop().expect("There is no valid move");
+    } else {
+        ctx.stats.bestmove = bestmove; // TODO: Do we need this assignment?
+    }
+
     report_after_search(report_mode, ctx.stats);
 
     *killers.write() = ctx.search_killers;
