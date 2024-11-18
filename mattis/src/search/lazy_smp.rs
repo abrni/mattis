@@ -19,8 +19,9 @@ use std::{
 
 pub type Shared<T> = Arc<RwLock<T>>;
 
-struct LazySMP {
-    main: JoinHandle<()>,
+pub struct LazySMP {
+    is_alive: Arc<AtomicBool>,
+    main: Option<JoinHandle<()>>,
     supporters: Vec<JoinHandle<()>>,
 }
 
@@ -28,13 +29,58 @@ impl LazySMP {
     pub fn create(threads: usize) -> Self {
         assert!(threads > 0, "At least 1 search thread is necessary.");
 
+        let is_alive = Arc::new(AtomicBool::new(true));
+
         // Spawn the main search thread
-        let main = std::thread::spawn(|| ());
+        let is_alive_clone = Arc::clone(&is_alive);
+        let main = Some(std::thread::spawn(|| main_search_thread(is_alive_clone)));
 
         // Spawn all the supporter threads
-        let supporters = (0..threads - 1).map(|_| std::thread::spawn(|| ())).collect();
+        let supporters = (0..threads - 1)
+            .map(|_| {
+                let is_alive_clone = Arc::clone(&is_alive);
+                std::thread::spawn(|| supporter_search_thread(is_alive_clone))
+            })
+            .collect();
 
-        Self { main, supporters }
+        Self {
+            is_alive,
+            main,
+            supporters,
+        }
+    }
+
+    pub fn start_search() -> Result<(), ()> {
+        todo!()
+    }
+}
+
+impl Drop for LazySMP {
+    fn drop(&mut self) {
+        // Tell the threads to die
+        self.is_alive.store(false, Ordering::Relaxed);
+
+        // Make sure, all threads finish execution
+        self.main.take().unwrap().join().unwrap();
+        self.supporters.drain(..).for_each(|h| h.join().unwrap());
+    }
+}
+
+fn main_search_thread(is_alive: Arc<AtomicBool>) {
+    loop {
+        if !is_alive.load(Ordering::Relaxed) {
+            println!("Kill main search thread");
+            break;
+        }
+    }
+}
+
+fn supporter_search_thread(is_alive: Arc<AtomicBool>) {
+    loop {
+        if !is_alive.load(Ordering::Relaxed) {
+            println!("Kill supporter search thread");
+            break;
+        }
     }
 }
 

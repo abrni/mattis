@@ -14,7 +14,7 @@ use mattis::{
         self,
         history::SearchHistory,
         killers::SearchKillers,
-        lazy_smp::{KillSwitch, SearchConfig},
+        lazy_smp::{KillSwitch, LazySMP, SearchConfig},
         ReportMode,
     },
 };
@@ -105,6 +105,7 @@ fn uci_loop() {
     let search_history = Arc::new(RwLock::new(SearchHistory::default()));
     let mut board = Board::from_fen(FEN_STARTPOS).unwrap();
     let mut active_search_kill: Option<KillSwitch> = None;
+    let _lazysmp = LazySMP::create(THREAD_COUNT as usize);
 
     let mut stdin = BufReader::new(std::io::stdin());
     let mut input = String::new();
