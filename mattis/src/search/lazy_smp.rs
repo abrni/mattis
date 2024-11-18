@@ -11,6 +11,7 @@ use mattis_uci as uci;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
+        mpsc::{Receiver, Sender},
         Arc, RwLock,
     },
     thread::JoinHandle,
@@ -20,9 +21,9 @@ use std::{
 pub type Shared<T> = Arc<RwLock<T>>;
 
 pub struct LazySMP {
-    is_alive: Arc<AtomicBool>,
     main: Option<JoinHandle<()>>,
-    supporters: Vec<JoinHandle<()>>,
+    main_sender: Sender<Message>,
+    supporters: Vec<(JoinHandle<()>, Sender<Message>)>,
     ttable: Arc<TranspositionTable>,
     history: Shared<SearchHistory>,
     killers: Shared<SearchKillers>,
@@ -32,36 +33,36 @@ impl LazySMP {
     pub fn create(threads: usize) -> Self {
         assert!(threads > 0, "At least 1 search thread is necessary.");
 
-        let is_alive = Arc::new(AtomicBool::new(true));
         let ttable = Arc::new(TranspositionTable::new(256)); // TODO: allow configuration
         let history = Arc::new(RwLock::new(SearchHistory::default()));
         let killers = Arc::new(RwLock::new(SearchKillers::default()));
 
         // Spawn the main search thread
-        let main = {
-            let is_alive = Arc::clone(&is_alive);
+        let (main, main_sender) = {
             let ttable = Arc::clone(&ttable);
             let history = Arc::clone(&history);
             let killers = Arc::clone(&killers);
-            Some(std::thread::spawn(|| {
-                main_search_thread(is_alive, ttable, history, killers)
-            }))
+            let (tx, rx) = std::sync::mpsc::channel();
+            let main = Some(std::thread::spawn(|| main_search_thread(ttable, history, killers, rx)));
+
+            (main, tx)
         };
 
         // Spawn all the supporter threads
         let supporters = (0..threads - 1)
             .map(|_| {
-                let is_alive = Arc::clone(&is_alive);
                 let ttable = Arc::clone(&ttable);
                 let history = Arc::clone(&history);
                 let killers = Arc::clone(&killers);
-                std::thread::spawn(|| supporter_search_thread(is_alive, ttable, history, killers))
+                let (tx, rx) = std::sync::mpsc::channel();
+                let handle = std::thread::spawn(|| supporter_search_thread(ttable, history, killers, rx));
+                (handle, tx)
             })
             .collect();
 
         Self {
-            is_alive,
             main,
+            main_sender,
             supporters,
             ttable,
             history,
@@ -69,46 +70,70 @@ impl LazySMP {
         }
     }
 
+    /// Starts a search. Fails, if a search is already running
     pub fn start_search(config: SearchConfig) -> Result<(), ()> {
+        todo!()
+    }
+
+    /// Stops the search. Fails, if no search is running.
+    pub fn stop_search() -> Result<(), ()> {
         todo!()
     }
 }
 
 impl Drop for LazySMP {
     fn drop(&mut self) {
-        // Tell the threads to die
-        self.is_alive.store(false, Ordering::Relaxed);
+        // Make the supporter threads quit
+        self.supporters.drain(..).for_each(|(h, tx)| {
+            tx.send(Message::Quit).unwrap();
+            h.join().unwrap();
+        });
 
-        // Make sure, all threads finish execution
+        // Make the main thread quit
+        self.main_sender.send(Message::Quit).unwrap();
         self.main.take().unwrap().join().unwrap();
-        self.supporters.drain(..).for_each(|h| h.join().unwrap());
     }
 }
 
+enum Message {
+    StartSearch(ThreadConfig),
+    Quit,
+}
+
 fn main_search_thread(
-    is_alive: Arc<AtomicBool>,
     _ttable: Arc<TranspositionTable>,
     _history: Shared<SearchHistory>,
     _killers: Shared<SearchKillers>,
+    rx: Receiver<Message>,
 ) {
     loop {
-        if !is_alive.load(Ordering::Relaxed) {
-            println!("Kill main search thread");
-            break;
+        let message = rx.recv().unwrap();
+
+        match message {
+            Message::StartSearch(thread_config) => todo!(),
+            Message::Quit => {
+                println!("main thread quits");
+                break;
+            }
         }
     }
 }
 
 fn supporter_search_thread(
-    is_alive: Arc<AtomicBool>,
     _ttable: Arc<TranspositionTable>,
     _history: Shared<SearchHistory>,
     _killers: Shared<SearchKillers>,
+    rx: Receiver<Message>,
 ) {
     loop {
-        if !is_alive.load(Ordering::Relaxed) {
-            println!("Kill supporter search thread");
-            break;
+        let message = rx.recv().unwrap();
+
+        match message {
+            Message::StartSearch(thread_config) => todo!(),
+            Message::Quit => {
+                println!("supporter thread quits");
+                break;
+            }
         }
     }
 }
