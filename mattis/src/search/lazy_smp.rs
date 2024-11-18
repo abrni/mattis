@@ -264,7 +264,6 @@ fn supporter_search_thread(
 pub struct SearchConfig<'a> {
     pub report_mode: ReportMode,
     pub allow_null_pruning: bool,
-    pub thread_count: u32,
     pub go: uci::Go,
     pub board: &'a Board,
 }

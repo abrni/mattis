@@ -77,7 +77,6 @@ fn single_search(startpos: &str, null_pruning: bool) {
     let search_config = SearchConfig {
         report_mode: ReportMode::Full,
         allow_null_pruning: null_pruning,
-        thread_count: THREAD_COUNT,
         go,
         board: &board,
     };
@@ -122,7 +121,6 @@ fn uci_loop() {
                 let config = SearchConfig {
                     report_mode: ReportMode::Uci,
                     allow_null_pruning: true,
-                    thread_count: THREAD_COUNT,
                     go,
                     board: &board,
                 };
