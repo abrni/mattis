@@ -104,7 +104,7 @@ fn uci_loop() {
         match message {
             GuiMessage::Uci => print_uci_info(),
             GuiMessage::Ucinewgame => {
-                lazysmp.reset_tables();
+                lazysmp.reset_ttable();
                 board = Board::from_fen(FEN_STARTPOS).unwrap();
                 lazysmp.stop_search();
             }

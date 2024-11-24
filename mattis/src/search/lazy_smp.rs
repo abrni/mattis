@@ -1,4 +1,4 @@
-use super::{alpha_beta, history::SearchHistory, killers::SearchKillers, report_after_search, ABContext, SearchStats};
+use super::{alpha_beta, report_after_search, ABContext, SearchStats};
 use crate::{
     board::{movegen::MoveList, Board},
     chess_move::ChessMove,
@@ -9,7 +9,7 @@ use crate::{
 use bus::{Bus, BusReader};
 use mattis_types::{Color, Eval};
 use mattis_uci as uci;
-use parking_lot::RwLock;
+
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -18,8 +18,6 @@ use std::{
     thread::JoinHandle,
     time::Duration,
 };
-
-type Shared<T> = Arc<RwLock<T>>;
 
 #[derive(Clone, Debug)]
 pub struct SearchConfig {
@@ -82,32 +80,24 @@ impl LazySMPSetup {
         assert!(self.thread_count > 0, "At least 1 search thread is necessary.");
 
         let ttable = Arc::new(TranspositionTable::new(self.ttable_size_mb));
-        let history = Arc::new(RwLock::new(SearchHistory::default()));
-        let killers = Arc::new(RwLock::new(SearchKillers::default()));
         let mut bus = Bus::new(1);
 
         // Spawn the main search thread
         let main = {
             let ttable = Arc::clone(&ttable);
-            let history = Arc::clone(&history);
-            let killers = Arc::clone(&killers);
             let rx = bus.add_rx();
 
-            Some(std::thread::spawn(|| {
-                search_thread(ThreadKind::Main, ttable, history, killers, rx)
-            }))
+            Some(std::thread::spawn(|| search_thread(ThreadKind::Main, ttable, rx)))
         };
 
         // Spawn all the supporter threads
         let supporters = (0..self.thread_count - 1)
             .map(|i| {
                 let ttable = Arc::clone(&ttable);
-                let history = Arc::clone(&history);
-                let killers = Arc::clone(&killers);
                 let thread_kind = ThreadKind::Supporter(i as u32);
                 let rx = bus.add_rx();
 
-                std::thread::spawn(move || search_thread(thread_kind, ttable, history, killers, rx))
+                std::thread::spawn(move || search_thread(thread_kind, ttable, rx))
             })
             .collect();
 
@@ -115,8 +105,6 @@ impl LazySMPSetup {
             main,
             supporters,
             ttable,
-            history,
-            killers,
             search_stop_flag: None,
             board: Board::startpos(),
             bus,
@@ -128,18 +116,14 @@ pub struct LazySMP {
     main: Option<JoinHandle<()>>,
     supporters: Vec<JoinHandle<()>>,
     ttable: Arc<TranspositionTable>,
-    history: Shared<SearchHistory>,
-    killers: Shared<SearchKillers>,
     search_stop_flag: Option<Arc<AtomicBool>>,
     board: Board,
     bus: Bus<Message>,
 }
 
 impl LazySMP {
-    pub fn reset_tables(&mut self) {
+    pub fn reset_ttable(&mut self) {
         self.ttable.reset();
-        *self.history.write() = SearchHistory::default();
-        *self.killers.write() = SearchKillers::default();
     }
 
     pub fn set_board(&mut self, board: Board) {
@@ -218,8 +202,8 @@ impl LazySMP {
             time_man: time_man.clone(),
             stats: SearchStats::default(),
             transposition_table: Arc::clone(&self.ttable),
-            search_killers: self.killers.read().clone(),
-            search_history: self.history.read().clone(),
+            search_killers: Default::default(),
+            search_history: Default::default(),
             allow_null_pruning: config.allow_null_pruning,
         };
 
@@ -247,13 +231,7 @@ impl Drop for LazySMP {
     }
 }
 
-fn search_thread(
-    kind: ThreadKind,
-    ttable: Arc<TranspositionTable>,
-    history: Shared<SearchHistory>,
-    killers: Shared<SearchKillers>,
-    mut rx: BusReader<Message>,
-) {
+fn search_thread(kind: ThreadKind, ttable: Arc<TranspositionTable>, mut rx: BusReader<Message>) {
     let mut board = Board::startpos();
 
     loop {
@@ -265,20 +243,13 @@ fn search_thread(
                     time_man: config.time_man.clone(),
                     stats: SearchStats::default(),
                     transposition_table: Arc::clone(&ttable),
-                    search_killers: killers.read().clone(),
-                    search_history: history.read().clone(),
+                    search_killers: Default::default(),
+                    search_history: Default::default(),
                     allow_null_pruning: config.allow_null_pruning,
                 };
 
                 match kind {
-                    ThreadKind::Main => search_as_main(
-                        config.expected_eval,
-                        config.report_mode,
-                        &mut board,
-                        ctx,
-                        &history,
-                        &killers,
-                    ),
+                    ThreadKind::Main => search_as_main(config.expected_eval, config.report_mode, &mut board, ctx),
                     ThreadKind::Supporter(thread_num) => {
                         search_as_supporter(thread_num, config.expected_eval, &mut board, ctx)
                     }
@@ -288,14 +259,7 @@ fn search_thread(
     }
 }
 
-fn search_as_main(
-    expected_eval: Eval,
-    report_mode: ReportMode,
-    board: &mut Board,
-    mut ctx: ABContext,
-    history: &Shared<SearchHistory>,
-    killers: &Shared<SearchKillers>,
-) {
+fn search_as_main(expected_eval: Eval, report_mode: ReportMode, board: &mut Board, mut ctx: ABContext) {
     let mut bestmove = ChessMove::default();
     let mut iterative_deepening = IterativeDeepening::new(expected_eval, 1);
 
@@ -315,9 +279,6 @@ fn search_as_main(
     }
 
     report_after_search(report_mode, ctx.stats);
-
-    *killers.write() = ctx.search_killers;
-    *history.write() = ctx.search_history;
     ctx.time_man.force_stop();
 }
 
