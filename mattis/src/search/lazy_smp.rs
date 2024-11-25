@@ -1,4 +1,4 @@
-use super::{alpha_beta, pv_line, report_after_search, ABContext, SearchStats};
+use super::{alpha_beta, report_after_search, ABContext, SearchStats};
 use crate::{
     board::Board,
     chess_move::ChessMove,
@@ -164,14 +164,14 @@ impl LazySMP {
         // Estimate a very rough evaluation result for the first aspiration window
         // TODO: maybe the main search thread should do this?
         // TODO: Or maybe test, if this is even worth it at all?
-        let estimate = self.estimate_search(&search_config);
+        let (estimate_eval, estimate_bestmove) = self.presearch(&search_config);
 
         // Create the Message for telling the threads to start searching
         let message = Message::StartSearch(Arc::new(ThreadConfig {
             report_mode: search_config.report_mode,
             time_man: time_man.clone(),
-            estimate_eval: estimate.score,
-            estimate_bestmove: estimate.bestmove,
+            estimate_eval,
+            estimate_bestmove,
             allow_null_pruning: search_config.allow_null_pruning,
         }));
 
@@ -199,7 +199,7 @@ impl LazySMP {
             .unwrap_or(false)
     }
 
-    fn estimate_search(&self, config: &SearchConfig) -> SearchStats {
+    fn presearch(&self, config: &SearchConfig) -> (Eval, ChessMove) {
         let mut ctx = ABContext {
             time_man: Limits::new().start_now(),
             stats: SearchStats::default(),
@@ -219,8 +219,7 @@ impl LazySMP {
             false,
         );
 
-        assert_eq!(score, ctx.stats.score);
-        ctx.stats
+        (score, self.ttable.load_move(self.board.position_key).unwrap())
     }
 }
 
@@ -288,7 +287,9 @@ fn search_as_main(
     // Return the estimated bestmove instead.
     if ctx.stats.bestmove.is_nomove() {
         ctx.stats.bestmove = estimate_bestmove;
-        ctx.stats.pv = pv_line(&ctx.transposition_table, board, Some(estimate_bestmove));
+        ctx.stats.pv = ctx
+            .transposition_table
+            .pv(board, ctx.stats.depth as usize, Some(estimate_bestmove));
     }
 
     report_after_search(report_mode, ctx.stats);

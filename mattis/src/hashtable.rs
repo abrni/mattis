@@ -1,6 +1,9 @@
 use crate::{board::Board, chess_move::ChessMove};
 use mattis_types::Eval;
+use smallvec::SmallVec;
 use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+
+pub type PrincipalVariation = SmallVec<[ChessMove; 10]>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum HEKind {
@@ -194,6 +197,31 @@ impl TranspositionTable {
 
     pub fn next_age(&self) {
         self.current_age.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn pv(&self, board: &mut Board, depth: usize, first: Option<ChessMove>) -> PrincipalVariation {
+        let mut pv = PrincipalVariation::new();
+
+        if depth == 0 {
+            return pv;
+        }
+
+        if let Some(first) = first {
+            pv.push(first);
+            assert!(board.make_move(first), "Invalid first move in pv line");
+        }
+
+        while pv.len() < depth {
+            let Some(m) = self.load_move(board.position_key) else { break };
+            board.make_move(m);
+            pv.push(m);
+        }
+
+        for _ in 0..pv.len() {
+            board.take_move();
+        }
+
+        pv
     }
 }
 

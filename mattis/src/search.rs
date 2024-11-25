@@ -2,7 +2,7 @@ use crate::{
     board::{movegen::MoveList, Board},
     chess_move::ChessMove,
     eval::evaluation,
-    hashtable::{HEKind, Probe, TranspositionTable},
+    hashtable::{HEKind, PrincipalVariation, Probe, TranspositionTable},
     time_man::TimeMan,
 };
 use history::SearchHistory;
@@ -10,7 +10,7 @@ use killers::SearchKillers;
 use mattis_types::{Eval, Piece, PieceType};
 use mattis_uci as uci;
 use mattis_uci::EngineMessage;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 pub mod history;
 pub mod killers;
@@ -27,14 +27,14 @@ struct ABContext {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SearchStats {
-    pub depth: u16,          // Search depth
-    pub score: Eval,         // Score in centipawns
-    pub nodes: u64,          // Total count of visited nodes
-    pub leaves: u64,         // Total count of visited leaf nodes
-    pub fh: u64,             // Count of fail-highs (beta cut off)
-    pub fhf: u64,            // Count of fail-highs at the first move
-    pub bestmove: ChessMove, // The best move
-    pub pv: Vec<ChessMove>,  // Principle Variation Line
+    pub depth: u16,             // Search depth
+    pub score: Eval,            // Score in centipawns
+    pub nodes: u64,             // Total count of visited nodes
+    pub leaves: u64,            // Total count of visited leaf nodes
+    pub fh: u64,                // Count of fail-highs (beta cut off)
+    pub fhf: u64,               // Count of fail-highs at the first move
+    pub bestmove: ChessMove,    // The best move
+    pub pv: PrincipalVariation, // Principle Variation Line
 }
 
 impl Default for SearchStats {
@@ -47,7 +47,7 @@ impl Default for SearchStats {
             fh: 0,
             fhf: 0,
             bestmove: ChessMove::default(),
-            pv: vec![],
+            pv: PrincipalVariation::new(),
         }
     }
 }
@@ -106,45 +106,11 @@ impl IterativeDeepening {
             None
         } else {
             ctx.stats.score = score;
-            ctx.stats.pv = pv_line(&ctx.transposition_table, board, None);
+            ctx.stats.pv = ctx.transposition_table.pv(board, ctx.stats.depth as usize, None);
             ctx.stats.bestmove = ctx.stats.pv.first().copied().unwrap_or_default();
             Some(ctx.stats.clone())
         }
     }
-}
-
-fn pv_line(tptable: &TranspositionTable, board: &mut Board, first: Option<ChessMove>) -> Vec<ChessMove> {
-    let mut pos_key_counts = HashMap::new();
-    let mut pvline = Vec::with_capacity(8);
-
-    if let Some(first) = first {
-        pvline.push(first);
-        assert!(board.make_move(first), "Invalid first move in pv line");
-    }
-
-    while let Some(cmove) = tptable.load_move(board.position_key) {
-        if cmove.is_nomove() {
-            break;
-        }
-
-        let kc_entry = pos_key_counts.entry(board.position_key).or_insert(0);
-        *kc_entry += 1;
-
-        if *kc_entry >= 3 {
-            // We have seen a position 3 times.
-            // Stop, because this is a threefold repetition and we'd be stuck in an infinite loop.
-            break;
-        }
-
-        board.make_move(cmove);
-        pvline.push(cmove);
-    }
-
-    for _ in 0..pvline.len() {
-        board.take_move();
-    }
-
-    pvline
 }
 
 fn take_next_move(
