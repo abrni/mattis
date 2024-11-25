@@ -1,6 +1,6 @@
-use super::{alpha_beta, report_after_search, ABContext, SearchStats};
+use super::{alpha_beta, pv_line, report_after_search, ABContext, SearchStats};
 use crate::{
-    board::{movegen::MoveList, Board},
+    board::Board,
     chess_move::ChessMove,
     hashtable::TranspositionTable,
     search::{report_after_depth, IterativeDeepening, ReportMode},
@@ -30,7 +30,8 @@ pub struct SearchConfig {
 struct ThreadConfig {
     report_mode: ReportMode,
     time_man: TimeMan,
-    expected_eval: Eval,
+    estimate_eval: Eval,
+    estimate_bestmove: ChessMove,
     allow_null_pruning: bool,
 }
 
@@ -163,13 +164,14 @@ impl LazySMP {
         // Estimate a very rough evaluation result for the first aspiration window
         // TODO: maybe the main search thread should do this?
         // TODO: Or maybe test, if this is even worth it at all?
-        let expected_eval = self.estimate_eval(&search_config, &time_man);
+        let estimate = self.estimate_search(&search_config);
 
         // Create the Message for telling the threads to start searching
         let message = Message::StartSearch(Arc::new(ThreadConfig {
             report_mode: search_config.report_mode,
             time_man: time_man.clone(),
-            expected_eval,
+            estimate_eval: estimate.score,
+            estimate_bestmove: estimate.bestmove,
             allow_null_pruning: search_config.allow_null_pruning,
         }));
 
@@ -197,9 +199,9 @@ impl LazySMP {
             .unwrap_or(false)
     }
 
-    fn estimate_eval(&self, config: &SearchConfig, time_man: &TimeMan) -> Eval {
+    fn estimate_search(&self, config: &SearchConfig) -> SearchStats {
         let mut ctx = ABContext {
-            time_man: time_man.clone(),
+            time_man: Limits::new().start_now(),
             stats: SearchStats::default(),
             transposition_table: Arc::clone(&self.ttable),
             search_killers: Default::default(),
@@ -207,7 +209,7 @@ impl LazySMP {
             allow_null_pruning: config.allow_null_pruning,
         };
 
-        alpha_beta(
+        let score = alpha_beta(
             -Eval::MAX,
             Eval::MAX,
             1,
@@ -215,7 +217,10 @@ impl LazySMP {
             &mut ctx,
             config.allow_null_pruning,
             false,
-        )
+        );
+
+        assert_eq!(score, ctx.stats.score);
+        ctx.stats
     }
 }
 
@@ -249,9 +254,15 @@ fn search_thread(kind: ThreadKind, ttable: Arc<TranspositionTable>, mut rx: BusR
                 };
 
                 match kind {
-                    ThreadKind::Main => search_as_main(config.expected_eval, config.report_mode, &mut board, ctx),
+                    ThreadKind::Main => search_as_main(
+                        config.estimate_eval,
+                        config.estimate_bestmove,
+                        config.report_mode,
+                        &mut board,
+                        ctx,
+                    ),
                     ThreadKind::Supporter(thread_num) => {
-                        search_as_supporter(thread_num, config.expected_eval, &mut board, ctx)
+                        search_as_supporter(thread_num, config.estimate_eval, &mut board, ctx)
                     }
                 }
             }
@@ -259,23 +270,25 @@ fn search_thread(kind: ThreadKind, ttable: Arc<TranspositionTable>, mut rx: BusR
     }
 }
 
-fn search_as_main(expected_eval: Eval, report_mode: ReportMode, board: &mut Board, mut ctx: ABContext) {
-    let mut bestmove = ChessMove::default();
-    let mut iterative_deepening = IterativeDeepening::new(expected_eval, 1);
+fn search_as_main(
+    estimate_eval: Eval,
+    estimate_bestmove: ChessMove,
+    report_mode: ReportMode,
+    board: &mut Board,
+    mut ctx: ABContext,
+) {
+    let mut iterative_deepening = IterativeDeepening::new(estimate_eval, 1);
 
     while let Some(stats) = iterative_deepening.next_depth(board, &mut ctx) {
-        bestmove = stats.bestmove;
         report_after_depth(report_mode, stats);
     }
 
-    if bestmove == ChessMove::default() {
-        // Never report a nullmove, even under extreme time pressure
-        // Lets just return any move instead
-        let mut movelist = MoveList::new();
-        board.generate_all_moves(&mut movelist);
-        ctx.stats.bestmove = movelist.pop().expect("There is no valid move");
-    } else {
-        ctx.stats.bestmove = bestmove; // TODO: Do we need this assignment?
+    // Under extreme time pressure, the iterative deepening can be stopped very early.
+    // In this case, the stats do not contain a valid bestmove.
+    // Return the estimated bestmove instead.
+    if ctx.stats.bestmove.is_nomove() {
+        ctx.stats.bestmove = estimate_bestmove;
+        ctx.stats.pv = pv_line(&ctx.transposition_table, board, Some(estimate_bestmove));
     }
 
     report_after_search(report_mode, ctx.stats);

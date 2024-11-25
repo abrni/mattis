@@ -106,16 +106,21 @@ impl IterativeDeepening {
             None
         } else {
             ctx.stats.score = score;
-            ctx.stats.pv = pv_line(&ctx.transposition_table, board);
+            ctx.stats.pv = pv_line(&ctx.transposition_table, board, None);
             ctx.stats.bestmove = ctx.stats.pv.first().copied().unwrap_or_default();
             Some(ctx.stats.clone())
         }
     }
 }
 
-fn pv_line(tptable: &TranspositionTable, board: &mut Board) -> Vec<ChessMove> {
+fn pv_line(tptable: &TranspositionTable, board: &mut Board, first: Option<ChessMove>) -> Vec<ChessMove> {
     let mut pos_key_counts = HashMap::new();
     let mut pvline = Vec::with_capacity(8);
+
+    if let Some(first) = first {
+        pvline.push(first);
+        assert!(board.make_move(first), "Invalid first move in pv line");
+    }
 
     while let Some(cmove) = tptable.load_move(board.position_key) {
         if cmove.is_nomove() {
