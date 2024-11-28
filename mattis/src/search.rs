@@ -2,7 +2,7 @@ use crate::{
     board::{movegen::MoveList, Board},
     chess_move::ChessMove,
     eval::evaluation,
-    hashtable::{HEKind, PrincipalVariation, Probe, TranspositionTable},
+    hashtable::{EntryType, PrincipalVariation, Probe, TranspositionTable},
     time_man::TimeMan,
 };
 use history::SearchHistory;
@@ -295,7 +295,7 @@ fn alpha_beta(
             }
 
             // Store the move in the hashtable and mark it as a beta-cutoff
-            ctx.transposition_table.store(board, beta, m, depth, HEKind::Beta);
+            ctx.transposition_table.store(board, beta, m, depth, EntryType::Beta);
 
             return beta; // fail hard beta-cutoff
         } else if score > alpha {
@@ -330,7 +330,11 @@ fn alpha_beta(
     // Store the best move we found in the hashtable.
     // If we have not improved alpha, we mark the best move as an alpha-cutoff.
     // Otherwise we can return the exact score.
-    let hashentry_kind = if alpha_changed { HEKind::Exact } else { HEKind::Alpha };
+    let hashentry_kind = if alpha_changed {
+        EntryType::Exact
+    } else {
+        EntryType::Alpha
+    };
     let score = if alpha_changed { alpha } else { best_score }; // TODO: I think, weh should be able to always use alpha here?
     ctx.transposition_table
         .store(board, score, best_move, depth, hashentry_kind);

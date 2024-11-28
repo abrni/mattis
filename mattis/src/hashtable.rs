@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 pub type PrincipalVariation = SmallVec<[ChessMove; 10]>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum HEKind {
+pub enum EntryType {
     #[default]
     Exact,
     Alpha,
@@ -30,11 +30,12 @@ pub struct Data {
     pub score: Eval,
     pub cmove: ChessMove,
     pub depth: u16,
-    pub kind: HEKind,
+    pub kind: EntryType,
     pub age: u8,
 }
 
 impl Entry {
+    /// Stores the given data in the the table entry.
     fn store(&self, key: u64, data: Data) {
         // Safety: Transmuting to a u64 is fine, because `Data` has a size of exactly 64 bits.
         let data: u64 = unsafe { std::mem::transmute(data) };
@@ -44,6 +45,10 @@ impl Entry {
         self.data.store(data, Ordering::Relaxed);
     }
 
+    /// Try to load the data from the table entry.
+    ///
+    /// Loading fails, if the given `key` does not match the stored key.
+    /// In that case, the entry is either empty or contains data associated with a different key.
     fn load(&self, key: u64) -> Option<Data> {
         // Load both key and data and decode the key.
         let encoded_key = self.key.load(Ordering::Relaxed);
@@ -124,7 +129,7 @@ impl TranspositionTable {
         self.load(key).map(|data| data.cmove)
     }
 
-    pub fn store(&self, board: &Board, score: Eval, cmove: ChessMove, depth: u16, kind: HEKind) {
+    pub fn store(&self, board: &Board, score: Eval, cmove: ChessMove, depth: u16, kind: EntryType) {
         // Load currently stored data
         let table_entry = self.entry(board.position_key);
         let entry_data = table_entry.load(board.position_key);
@@ -166,32 +171,31 @@ impl TranspositionTable {
 
     pub fn probe(&self, board: &Board, alpha: Eval, beta: Eval, depth: u16) -> Probe {
         // Try to load data from the table.
-        // Loading `None` means, there either is no data or the data has been corrupted.
+        // Loading `None` means, either there is no data or the data has been corrupted.
         // Either way, we just return `NoHit`.
         let Some(data) = self.load(board.position_key) else { return Probe::NoHit };
-        let Data { cmove, score, .. } = data;
 
-        // If the stored data is from a lower depth, than we are requesting, it cannot be used for a branch-cutoff.
+        // If the stored data is from a lower depth than we are requesting, it cannot be used for a branch-cutoff.
         // Just return the move as a pv move for move ordering.
         if data.depth < depth {
-            return Probe::Pv(cmove);
+            return Probe::Pv(data.cmove);
         }
 
         // Adjust the score, if its a mate score.
-        // See the corresping comment in the `store`-function for an explanation.
-        let score = if score.is_mate() {
-            score - board.ply as i16 * score.inner().signum()
+        // See the corresponding comment in the `store`-function for an explanation.
+        let score = if data.score.is_mate() {
+            data.score - board.ply as i16 * data.score.inner().signum()
         } else {
-            score
+            data.score
         };
 
         // Depending on the entry kind, we return a pv move or a cutoff. Exact entrys can always yield a cutoff.
         // Alpha and beta entries only yield cutoffs, if the score is outside the corresponding bound.
         match data.kind {
-            HEKind::Alpha if score <= alpha => Probe::CutOff(alpha),
-            HEKind::Beta if score >= beta => Probe::CutOff(beta),
-            HEKind::Exact => Probe::CutOff(score),
-            _ => Probe::Pv(cmove),
+            EntryType::Alpha if score <= alpha => Probe::CutOff(alpha),
+            EntryType::Beta if score >= beta => Probe::CutOff(beta),
+            EntryType::Exact => Probe::CutOff(score),
+            _ => Probe::Pv(data.cmove),
         }
     }
 
@@ -227,7 +231,7 @@ impl TranspositionTable {
 
 #[cfg(test)]
 mod test {
-    use super::HEKind;
+    use super::EntryType;
     use crate::{
         board::Board,
         chess_move::ChessMove,
@@ -275,7 +279,7 @@ mod test {
                     Eval::default(),
                     ChessMove::default(),
                     u16::default(),
-                    HEKind::default(),
+                    EntryType::default(),
                 );
             }
         }
@@ -288,7 +292,7 @@ mod test {
             score: rand::random(),
             cmove: ChessMove::default(),
             depth: rand::random(),
-            kind: HEKind::Alpha,
+            kind: EntryType::Alpha,
             age: rand::random(),
         };
 
@@ -307,7 +311,7 @@ mod test {
             score: rand::random(),
             cmove: ChessMove::default(),
             depth: rand::random(),
-            kind: HEKind::Alpha,
+            kind: EntryType::Alpha,
             age: rand::random(),
         };
 
