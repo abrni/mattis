@@ -20,12 +20,14 @@ pub enum Probe {
 }
 
 #[derive(Debug, Default)]
+#[repr(C)]
 struct Entry {
     key: AtomicU64,
     data: AtomicU64,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[repr(C)]
 pub struct Data {
     pub score: Eval,
     pub cmove: ChessMove,

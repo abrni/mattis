@@ -236,7 +236,7 @@ impl Display for EngineMessage {
 impl Display for Score {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(ply) = self.0.mate_ply() {
-            let moves = ((ply + 1) / 2) as i16;
+            let moves = ply.div_ceil(2) as i16;
             let moves = if self.0 > Eval::DRAW { moves } else { -moves };
             write!(f, "mate {}", moves)
         } else {
